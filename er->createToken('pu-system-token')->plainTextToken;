@@ -1,0 +1,21 @@
+[90m= [39m[34;4mApp\Models\LdapUser[39;24m {#6800
+    [34mid[39m: [35m9[39m,
+    [34mfullname[39m: "[32mRonachai Rodcham[39m",
+    [34musername[39m: "[32mR_ronachai[39m",
+    [34memployeecode[39m: "[32m24922[39m",
+    [34mdescription[39m: "",
+    [34mglpi_it_api[39m: "[32msB8VVSxm2PKfn6QbEGBHRf6UbnlRbfFCI8BZPl70[39m",
+    [34mglpi_en_api[39m: "[32mHVbrVz6Bzp8rORGxlBWDeLsCRQq03tKKOK0SW3N2[39m",
+    [34mdepartment[39m: "[32mInfromation Technology[39m",
+    [34mposition[39m: "[32mIT Support[39m",
+    [34memployee_type[39m: "[32mfull-time[39m",
+    [34mcard_issue_date[39m: [36mnull[39m,
+    [34mcard_expiry_date[39m: "[32m2028-08-08[39m",
+    [34mcard_status[39m: "[32mactive[39m",
+    [34mstatus[39m: "[32m1[39m",
+    [34mphoto_path[39m: "[32muser_9_1751356121.png[39m",
+    [34maccess_level[39m: [35m3[39m,
+    [34maccess_token[39m: "[32ma784ae17a54a472b3217ee5c01289754b008caa5[39m",
+    #[33mremember_token[39m: "[32mFItVVC55OWG1vZkKkkUiQqLg1dVkK2Svt8kjVZRyNLLjwdq9OmbaP7J3YZMn[39m",
+  }
+
