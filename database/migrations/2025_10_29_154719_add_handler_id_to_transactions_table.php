@@ -8,34 +8,31 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     *
-     * @return void
      */
-    public function up()
+    public function up(): void
     {
-        // คำสั่งสำหรับ "เพิ่ม" คอลัมน์
         Schema::table('transactions', function (Blueprint $table) {
-            // เพิ่มคอลัมน์ handler_id ให้เป็นตัวเลข (เหมือน user_id)
-            // กำหนดให้เป็น nullable() คือ "อนุญาตให้เว้นว่างได้" (เผื่อบาง transaction ไม่มี handler)
-            // และวางไว้หลังคอลัมน์ 'user_id' เพื่อความสวยงาม
-            $table->unsignedBigInteger('handler_id')->nullable()->after('user_id');
-            
-            // หมายเหตุ: เราไม่สร้าง Foreign Key constraint 
-            // เพราะ 'handler_id' อาจจะอ้างอิง ID จากตาราง users ที่อยู่คนละฐานข้อมูล (depart_it_db)
-            // $table->foreign('handler_id')->references('id')->on('users')->nullOnDelete();
+            // ✅ แก้ไข: เช็คก่อนว่ามีคอลัมน์ไหม ถ้ายังไม่มีค่อยสร้าง (ป้องกัน Error Duplicate)
+            if (!Schema::hasColumn('transactions', 'handler_id')) {
+                $table->unsignedBigInteger('handler_id')->nullable()->after('user_id');
+                
+                // เพิ่ม Foreign Key (ถ้าจำเป็น)
+                // $table->foreign('handler_id')->references('id')->on('users')->nullOnDelete();
+            }
         });
     }
 
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
-    public function down()
+    public function down(): void
     {
-        // คำสั่งสำหรับ "ย้อนกลับ" (ลบ) คอลัมน์ ถ้าต้องการ rollback
         Schema::table('transactions', function (Blueprint $table) {
-            $table->dropColumn('handler_id');
+            if (Schema::hasColumn('transactions', 'handler_id')) {
+                // ลบ Foreign Key ก่อน (ถ้ามีชื่อ index นี้)
+                // $table->dropForeign(['handler_id']);
+                $table->dropColumn('handler_id');
+            }
         });
     }
 };

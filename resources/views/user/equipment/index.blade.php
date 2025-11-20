@@ -5,7 +5,6 @@
 
 @push('styles')
 <style>
-    /* Styles เดิม - คงไว้ทั้งหมด */
     .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
     .tab-content.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
@@ -13,6 +12,7 @@
     .equipment-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
     @keyframes pulse-shadow-key { 0% { box-shadow: 0 0 15px 0px rgba(99, 102, 241, 0.0); } 50% { box-shadow: 0 0 15px 8px rgba(99, 102, 241, 0.4); } 100% { box-shadow: 0 0 15px 0px rgba(99, 102, 241, 0.0); } }
     .btn-pulse-shadow { animation: pulse-shadow-key 2.5s infinite ease-in-out; }
+    /* Select2 Custom Styles */
     .select2-container--default .select2-selection--single { background-color: #fff; border: 1px solid #d1d5db; border-radius: 0.5rem; height: 42px; padding: 0.5rem 0.75rem; }
     .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 28px; }
     .select2-container--default .select2-selection--single .select2-selection__arrow { height: 40px; }
@@ -42,13 +42,13 @@
         <p class="mt-3 text-sm font-medium text-gray-500 dark:text-gray-400">กำลังค้นหาในสต็อกทั้งหมด...</p>
     </div>
 
-    {{-- Results Container --}}
+    {{-- Results Container (AJAX) --}}
     <div id="search-results-container" class="space-y-8" style="display: none;">
         <div id="my-stock-results"></div>
         <div id="other-stock-results"></div>
     </div>
 
-    {{-- Default Content (Tabs & Initial Data) --}}
+    {{-- Default Content (Tabs) --}}
     <div id="default-catalog-content">
         <div class="border-b border-gray-200 dark:border-gray-700">
             <nav class="flex flex-wrap -mb-px space-x-1 sm:space-x-4" aria-label="Tabs">
@@ -64,6 +64,7 @@
         </div>
 
         @if (request()->filled('search') && isset($aggregatedResults))
+            {{-- Search Results (PHP Rendered) --}}
             <div class="space-y-6">
                 @forelse ($aggregatedResults as $result)
                     <div class="p-5 soft-card rounded-2xl gentle-shadow">
@@ -73,7 +74,6 @@
                                 @foreach ($result['items'] as $item)
                                     <div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800">
                                         <div class="relative flex items-center justify-center w-full h-32 overflow-hidden bg-gray-100 dark:bg-gray-700">
-                                            {{-- ✅ Fix Image URL --}}
                                             @php 
                                                 $imageFileName = $item->primary_image_file_name_manual ?? null;
                                                 $imageUrl = $imageFileName ? route('nas.image', ['deptKey' => $result['dept_key'], 'filename' => $imageFileName]) : asset('images/placeholder.webp');
@@ -93,11 +93,11 @@
                 @empty <div class="p-8 text-center text-gray-500 dark:text-gray-400 soft-card rounded-2xl gentle-shadow"><p>ไม่พบผลลัพธ์</p></div> @endforelse
             </div>
         @elseif ($equipments)
+            {{-- Normal List --}}
             <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                 @forelse ($equipments as $item)
                     <div class="flex flex-col overflow-hidden soft-card rounded-2xl gentle-shadow equipment-card bg-white dark:bg-gray-800">
                         <div class="relative flex items-center justify-center w-full h-48 overflow-hidden bg-gray-100 rounded-t-2xl dark:bg-gray-700">
-                            {{-- ✅ Fix Image URL --}}
                             @php 
                                 $imageFileName = $item->primary_image_file_name_manual ?? null;
                                 $imageUrl = $imageFileName ? route('nas.image', ['deptKey' => $currentDeptKey, 'filename' => $imageFileName]) : asset('images/placeholder.webp');
@@ -108,25 +108,40 @@
                             <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100" title="{{ $item->name }}">{{ Str::limit($item->name, 40) }}</h3>
                             <p class="text-sm text-gray-500 dark:text-gray-400">{{ $item->serial_number ?? 'N/A' }}</p>
                             
-                            {{-- ⭐ Star Display (Initial Load) ⭐ --}}
-                            @if(isset($item->transactions_avg_rating) && $item->transactions_avg_rating)
-                                <div class="flex items-center text-xs font-bold text-yellow-500 mt-1 bg-yellow-50 px-2 py-0.5 rounded-md inline-block w-auto self-start dark:bg-gray-700">
-                                    <span class="mr-1">{{ number_format($item->transactions_avg_rating, 2) }}</span> <i class="fas fa-star"></i>
-                                </div>
-                            @else
-                                <div class="text-xs text-gray-400 mt-1 px-2 py-0.5">ยังไม่มีคะแนน</div>
-                            @endif
+                            {{-- ⭐ PHP: แสดงดาวเหลือง 5 ดวง + จำนวนรีวิว ⭐ --}}
+                            @php
+                                $avgRating = $item->ratings_avg_rating ?? $item->ratings->avg('rating') ?? 0;
+                                $ratingCount = $item->ratings->count() ?? 0;
+                            @endphp
+                            <div class="flex items-center mt-2 space-x-0.5" title="คะแนนเฉลี่ย: {{ number_format($avgRating, 1) }}">
+                                @for ($i = 1; $i <= 5; $i++)
+                                    @if ($i <= $avgRating)
+                                        <i class="fas fa-star text-yellow-400 text-xs"></i>
+                                    @elseif ($i - 0.5 <= $avgRating)
+                                        <i class="fas fa-star-half-alt text-yellow-400 text-xs"></i>
+                                    @else
+                                        <i class="fas fa-star text-gray-300 dark:text-gray-600 text-xs"></i>
+                                    @endif
+                                @endfor
+                                <span class="text-xs text-gray-400 ml-1">({{ $ratingCount }} รีวิว)</span>
+                            </div>
 
                             <div class="flex-grow mt-2"><span class="text-sm font-semibold text-blue-600 dark:text-blue-400">คงเหลือ: {{ $item->quantity }} {{ optional($item->unit)->name }}</span></div>
                             <div class="pt-4 mt-auto space-y-2">
-                                {{-- (Button Logic - คงไว้เหมือนเดิม) --}}
                                 @php
-                                    $btnStates = [ 'consumable' => [ 'text' => 'เบิก (ไม่ต้องคืน)', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600', 'type' => 'consumable', ], 'returnable' => [ 'text' => 'ยืม (ต้องคืน)', 'icon' => 'fas fa-hand-holding-heart', 'class' => 'bg-purple-500 hover:bg-purple-600', 'type' => 'returnable', ], 'partial_return' => [ 'text' => 'เบิก (เหลือคืนได้)', 'icon' => 'fas fa-recycle', 'class' => 'bg-blue-500 hover:bg-blue-600', 'type' => 'partial_return', ], 'unset' => [ 'text' => 'ยังไม่กำหนดประเภท', 'icon' => 'fas fa-question-circle', 'class' => 'bg-green-100 hover:bg-green-300 opacity-90 cursor-not-allowed', 'type' => null, ] ];
-                                    $itemType = $item->withdrawal_type; $isUnsetType = is_null($itemType);
+                                    $btnStates = [ 
+                                        'consumable' => [ 'text' => 'เบิก (ไม่ต้องคืน)', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600', 'type' => 'consumable' ], 
+                                        'returnable' => [ 'text' => 'ยืม (ต้องคืน)', 'icon' => 'fas fa-hand-holding-heart', 'class' => 'bg-purple-500 hover:bg-purple-600', 'type' => 'returnable' ], 
+                                        'partial_return' => [ 'text' => 'เบิก (เหลือคืนได้)', 'icon' => 'fas fa-recycle', 'class' => 'bg-blue-500 hover:bg-blue-600', 'type' => 'partial_return' ], 
+                                        // ✅✅✅ แก้ตรงนี้: ใช้ => แทน : ✅✅✅
+                                        'unset' => [ 'text' => 'ยังไม่กำหนดประเภท', 'icon' => 'fas fa-question-circle', 'class' => 'bg-green-100 hover:bg-green-300 opacity-90 cursor-not-allowed', 'type' => null ] 
+                                    ];
+                                    $itemType = $item->withdrawal_type; 
+                                    $isUnsetType = is_null($itemType);
                                     if ($isUnsetType) { $btnData = $btnStates['unset']; } elseif (isset($btnStates[$itemType])) { $btnData = $btnStates[$itemType]; } else { $btnData = null; }
                                     
                                     if ($btnData) {
-                                        $btn_onclick = ''; $btn_disabled = false; $btn_title = ''; $btn_class = $btnData['class']; $add_animation_class = false;
+                                        $btn_disabled = false; $btn_title = ''; $btn_class = $btnData['class']; $add_animation_class = false;
                                         $isHardDisabled = ($unconfirmedCount ?? 0) > 0 || $item->quantity <= 0;
                                         $hardDisabledTitle = '';
                                         if ($item->quantity <= 0) $hardDisabledTitle = 'สินค้าหมดสต็อก';
@@ -135,25 +150,37 @@
                                         $isNotDefaultDept = ($currentDeptKey !== $defaultDeptKey);
                                         $currentDeptName = $departments[$currentDeptKey]['name'] ?? 'แผนกนี้';
                                         
+                                        $btn_onclick_attr = "";
+                                        $target_class = "";
+
                                         if ($isNotDefaultDept) {
-                                            $btn_onclick = "handleOtherDeptClick('".e($currentDeptName)."')";
+                                            // ต่างแผนก: ใช้ onclick แจ้งเตือน (และไม่ใส่ class พิเศษ)
+                                            $btn_onclick_attr = "onclick=\"handleOtherDeptClick('".e($currentDeptName)."')\""; 
                                             $btn_title = 'ไม่สามารถเบิกจากแผนกอื่นได้';
                                             $btn_class = str_replace('hover:bg-', 'bg-', $btnData['class']) . ' opacity-50 cursor-not-allowed';
                                         } elseif ($isUnsetType) {
-                                            $btn_onclick = "handleUnsetTypeClick()"; $btn_title = 'ยังไม่ได้กำหนดประเภทการเบิก';
+                                            $btn_onclick_attr = "onclick=\"handleUnsetTypeClick()\"";
+                                            $btn_title = 'ยังไม่ได้กำหนดประเภทการเบิก';
                                         } elseif ($isHardDisabled) {
                                             $btn_disabled = true; $btn_title = $hardDisabledTitle;
                                         } else {
-                                            // ✅ เรียกฟังก์ชัน async ที่เช็ค Block ก่อน
-                                            $btn_onclick = "handleTransaction({$item->id}, '{$btnData['type']}', '".e($item->name)."', {$item->quantity}, '".optional($item->unit)->name."', '".$currentDeptKey."')";
+                                            // ปกติ: ใส่ class พิเศษ ให้ JS ทำงาน (และไม่มี onclick)
+                                            $target_class = "live-search-withdraw-btn"; 
                                             $add_animation_class = true;
                                         }
                                     }
                                 @endphp
                                 @if ($btnData)
-                                    <button class="live-search-withdraw-btn inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed {{ $btn_class }} @if($add_animation_class) btn-pulse-shadow @endif"
-                                        onclick="{!! $btn_onclick !!}" @if($btn_disabled) disabled @endif title="{{ $btn_title }}"
-                                        data-equipment-id="{{ $item->id }}" data-type="{{ $btnData['type'] }}" data-name="{{ $item->name }}" data-quantity="{{ $item->quantity }}" data-unit="{{ optional($item->unit)->name }}" data-dept-key="{{ $currentDeptKey }}">
+                                    <button class="{{ $target_class }} inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed {{ $btn_class }} @if($add_animation_class) btn-pulse-shadow @endif"
+                                        {!! $btn_onclick_attr !!} 
+                                        @if($btn_disabled) disabled @endif 
+                                        title="{{ $btn_title }}"
+                                        data-equipment-id="{{ $item->id }}" 
+                                        data-type="{{ $btnData['type'] }}" 
+                                        data-name="{{ $item->name }}" 
+                                        data-quantity="{{ $item->quantity }}" 
+                                        data-unit="{{ optional($item->unit)->name }}" 
+                                        data-dept-key="{{ $currentDeptKey }}">
                                         <i class="mr-1 {{ $btnData['icon'] }}"></i> {{ $btnData['text'] }}
                                     </button>
                                 @endif
@@ -167,7 +194,7 @@
     </div> 
 </div>
 
-{{-- Transaction Modal --}}
+{{-- Modals --}}
 <div class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75" id="transaction-details-modal">
     <div class="w-full max-w-lg p-6 mx-4 bg-white rounded-2xl soft-card animate-slide-up-soft dark:bg-gray-800">
         <form id="transaction-details-form" onsubmit="event.preventDefault(); submitTransaction();">
@@ -201,7 +228,7 @@
 {{-- Scanner Modal --}}
 <div class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75" id="scanner-modal"><div class="w-full max-w-md p-6 mx-4 bg-white rounded-2xl soft-card animate-slide-up-soft dark:bg-gray-800"><div class="flex items-start justify-between pb-4 border-b border-gray-200 dark:border-gray-700"><h3 class="text-xl font-bold dark:text-gray-100">ค้นหาด้วย QR Code</h3><button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onclick="closeScannerModal()"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div><div class="py-5"><p class="mb-4 text-center text-gray-600 dark:text-gray-300">กรุณาหันกล้องไปที่ QR Code</p><div id="qr-reader" class="border rounded-lg overflow-hidden dark:border-gray-600" style="width: 100%;"></div></div><div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700"><button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-600 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-500" onclick="closeScannerModal()">ยกเลิก</button></div></div></div>
 
-{{-- ✅ Include Modal Rating (ใส่ที่นี่แล้วไม่ต้องใส่ใน Layout ซ้ำ) --}}
+{{-- ✅ Include Modal Rating --}}
 @include('partials.modals.rating-modal')
 
 @endsection
@@ -212,34 +239,42 @@
     function handleOtherDeptClick(deptName) { Swal.fire({ icon: 'error', title: 'ไม่สามารถเบิกจากแผนกนี้ได้', text: `รายการนี้เป็นของแผนก ${deptName}`, confirmButtonText: 'ตกลง' }); }
     function handleUnsetTypeClick() { Swal.fire({ icon: 'warning', title: 'ยังไม่ได้กำหนดประเภท', text: 'กรุณาติดต่อ Admin เพื่อระบุประเภท', confirmButtonText: 'ตกลง' }); }
 
-    // ✅ 1. ฟังก์ชันหลัก: เช็คสถานะก่อนเปิด Modal (Pre-check)
     async function handleTransaction(equipmentId, type, equipmentName, maxQuantity, unitName, deptKey) {
         console.log('Click:', equipmentName);
-        // 1. ยิง Ajax เช็คสถานะ
+
         try {
             console.log('📡 Checking block status...');
             const response = await fetch("{{ route('transactions.check_status') }}");
-            const data = await response.json();
             
+            if (!response.ok) {
+                throw new Error("Network/Server Error: " + response.status);
+            }
+
+            const data = await response.json();
             console.log('📥 Check status response:', data);
 
             if (data.blocked) {
                 console.warn('⛔ Blocked by Rating Logic');
-                // เรียกใช้ Modal Rating (จาก partials/modals/rating-modal.blade.php)
                 if (typeof openRatingModal === 'function') {
                     openRatingModal(data.unrated_items);
-                    Swal.fire({ icon: 'warning', title: 'ต้องประเมินก่อน', text: 'คุณมีรายการค้างประเมินความพึงพอใจ กรุณาให้คะแนนก่อนทำรายการใหม่', confirmButtonText: 'เข้าใจแล้ว' });
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'กรุณาประเมินความพึงพอใจ',
+                        text: 'คุณมีรายการอุปกรณ์ที่ใช้งานเสร็จสิ้นแล้วและยังไม่ได้ให้คะแนน กรุณาให้คะแนนก่อนทำรายการใหม่',
+                        confirmButtonText: 'ตกลง, ไปให้คะแนน'
+                    });
                 } else {
-                    alert("Rating Modal Not Found. Check layout include.");
+                    Swal.fire('Error', 'ไม่พบ Modal Rating กรุณารีเฟรชหน้าจอ', 'error');
                 }
-                return; // ⛔ Block
+                return; 
             }
+
         } catch (e) {
             console.error("Check status failed", e);
-            // ถ้าเช็คไม่ได้ ให้ทำงานต่อ (Fail safe) หรือจะ Block ก็ได้
+            Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: 'ไม่สามารถตรวจสอบสถานะรายการค้างได้ กรุณาลองใหม่ หรือติดต่อ Admin' });
+            return; 
         }
 
-        // 2. ถ้าผ่าน -> เปิด Modal ปกติ
         let typeText = '';
         if (type === 'consumable') typeText = 'เบิก (ไม่ต้องคืน)';
         if (type === 'returnable') typeText = 'ยืม (ต้องคืน)';
@@ -250,19 +285,26 @@
         document.getElementById('modal_dept_key').value = deptKey; 
         document.getElementById('modal_action_title').textContent = typeText;
         document.getElementById('modal_equipment_name').textContent = equipmentName;
+        
         const quantityInput = document.getElementById('modal_quantity');
-        quantityInput.value = 1; quantityInput.max = maxQuantity;
+        quantityInput.value = 1; 
+        quantityInput.max = maxQuantity;
+        
         document.getElementById('modal_max_quantity_text').textContent = `คงเหลือ: ${maxQuantity}`;
         document.getElementById('modal_unit_name').textContent = unitName || '';
-        $('#req_self').prop('checked', true); $('#other-requestor-container').hide(); $('#modal_requestor_id').val(null).trigger('change'); 
+        
+        $('#req_self').prop('checked', true); 
+        $('#other-requestor-container').hide(); 
+        $('#modal_requestor_id').val(null).trigger('change'); 
+        
         const form = document.getElementById('transaction-details-form');
-        form.querySelector('#modal_purpose').value = ''; form.querySelector('#modal_notes').value = '';
+        form.querySelector('#modal_purpose').value = ''; 
+        form.querySelector('#modal_notes').value = '';
+        
         showModal('transaction-details-modal');
     }
 
-    // (Logic submitTransaction เดิม - คงไว้เพื่อความปลอดภัย 2 ชั้น)
     async function submitTransaction() {
-        // ... (Logic เดิม) ...
         const requestorType = $('input[name="requestor_type"]:checked').val();
         const requestorId = $('#modal_requestor_id').val();
         const equipmentId = document.getElementById('modal_equipment_id').value;
@@ -281,7 +323,6 @@
         if (requestorType === 'other' && (!requestorId || requestorId === '')) return Swal.fire('ข้อมูลไม่ครบ!', 'กรุณาเลือกชื่อผู้ใช้ที่ต้องการเบิกให้', 'error');
 
         const equipmentName = document.getElementById('modal_equipment_name').textContent;
-        let requestorName = (requestorType === 'other') ? ($('#modal_requestor_id').select2('data')[0]?.text.split(' (')[0] || 'User') : '{{ Auth::user()->fullname }}';
 
         Swal.fire({ title: 'กำลังดำเนินการ...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
 
@@ -296,7 +337,6 @@
                 await Swal.fire({ title: 'สำเร็จ!', text: `เบิก ${equipmentName} จำนวน ${quantity} ${unitName}`, icon: 'success', timer: 3000, showConfirmButton: false });
                 const searchInput = document.getElementById('live-search-input'); if(searchInput && searchInput.value.length > 0) searchInput.dispatchEvent(new Event('keyup')); else location.reload(); 
             } else {
-                // Double Check Block (เผื่อหลุดมาถึงตรงนี้)
                 if (response.status === 403 && data.error_code === 'UNRATED_TRANSACTIONS') {
                      closeModal('transaction-details-modal');
                      if (typeof openRatingModal === 'function') openRatingModal(data.unrated_items);
@@ -330,7 +370,6 @@
         const searchInput = document.getElementById('live-search-input');
         if (searchInput) {
             $('#search-form').on('submit', (e) => e.preventDefault());
-            // ... (Live Search Logic) ...
             const myResultsDiv = document.getElementById('my-stock-results');
             const otherResultsDiv = document.getElementById('other-stock-results');
             const spinner = document.getElementById('loading-spinner');
@@ -353,37 +392,51 @@
                     .then(response => response.json())
                     .then(data => {
                         spinner.style.display = 'none';
-                        // 1. My Stock Render
+                        
+                        // 1. My Stock (ดาวเหลือง + JS)
                         if (data.myStock && data.myStock.length > 0) {
                             let myHtml = `<div class="p-5 soft-card rounded-2xl gentle-shadow"><h2 class="mb-4 text-xl font-bold text-gray-800 dark:text-gray-100"><i class="fas fa-store text-green-500"></i> สต็อกของคุณ (เบิกได้)</h2><div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">`;
                             data.myStock.forEach(item => {
                                 const unit = item.unit?.name || 'ชิ้น';
-                                // ✅ JS Fix Image URL (ใช้ URL ที่ Backend ส่งมา)
                                 let imgUrl = item.image_url ? item.image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
-
-                                // ⭐ Star Logic ⭐
-                                let starHtml = item.avg_rating ? `<div class="flex items-center text-xs font-bold text-yellow-500 mt-1 bg-yellow-50 px-2 py-0.5 rounded-md inline-block w-auto self-start dark:bg-gray-700"><span class="mr-1">${item.avg_rating}</span> <i class="fas fa-star"></i></div>` : `<div class="text-xs text-gray-400 mt-1 px-2 py-0.5">ยังไม่มีคะแนน</div>`;
+                                
+                                // ⭐ JS Logic: ดาว 5 ดวง สีเหลือง + ครึ่งดวง ⭐
+                                let avgRating = parseFloat(item.avg_rating) || 0;
+                                let ratingCount = item.rating_count || 0;
+                                let starsHtml = '<div class="flex items-center mt-2 space-x-0.5" title="คะแนนเฉลี่ย: '+avgRating.toFixed(1)+'">';
+                                for (let i = 1; i <= 5; i++) {
+                                    if (i <= avgRating) {
+                                        starsHtml += '<i class="fas fa-star text-yellow-400 text-xs"></i>';
+                                    } else if (i - 0.5 <= avgRating) {
+                                        starsHtml += '<i class="fas fa-star-half-alt text-yellow-400 text-xs"></i>';
+                                    } else {
+                                        starsHtml += '<i class="fas fa-star text-gray-300 dark:text-gray-600 text-xs"></i>';
+                                    }
+                                }
+                                starsHtml += `<span class="text-xs text-gray-400 ml-1">(${ratingCount} รีวิว)</span></div>`;
 
                                 const btnStates = { 'consumable': { 'text': 'เบิก', 'icon': 'fas fa-box-open', 'class': 'bg-orange-500 hover:bg-orange-600', 'type': 'consumable', }, 'returnable': { 'text': 'ยืม', 'icon': 'fas fa-hand-holding-heart', 'class': 'bg-purple-500 hover:bg-purple-600', 'type': 'returnable', }, 'partial_return': { 'text': 'เบิก (เหลือคืน)', 'icon': 'fas fa-recycle', 'class': 'bg-blue-500 hover:bg-blue-600', 'type': 'partial_return', }, 'unset': { 'text': 'ยังไม่กำหนด', 'icon': 'fas fa-question-circle', 'class': 'bg-green-100 hover:bg-green-300 opacity-90 cursor-not-allowed', 'type': null, } };
                                 const itemType = item.withdrawal_type; const btnData = btnStates[itemType] || btnStates['unset'];
                                 let btnDis = false, btnTit = '', btnCls = btnData.class, anim = false;
                                 const unconfirmed = {{ $unconfirmedCount ?? 0 }};
                                 if (unconfirmed > 0) { btnDis = true; btnTit = 'เคลียร์ของเก่าก่อน'; } else if (item.quantity <= 0) { btnDis = true; btnTit = 'หมด'; } else if (!btnData.type) { btnDis = true; btnTit = 'ยังไม่กำหนดประเภท'; btnCls = btnStates['unset'].class; } else { anim = true; }
-
+                                
+                                // My Stock: ใช้ class live-search-withdraw-btn
                                 myHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800">
                                     <div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700"><img src="${imgUrl}" class="object-contain max-w-full max-h-full" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=No+Image'"></div>
-                                    <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.serial_number||'N/A'}</p>${starHtml}<span class="block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">คงเหลือ: ${item.quantity} ${unit}</span></div>
+                                    <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.serial_number||'N/A'}</p>${starsHtml}<span class="block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">คงเหลือ: ${item.quantity} ${unit}</span></div>
                                     <div class="p-3 pt-0 mt-auto"><button type="button" class="live-search-withdraw-btn inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md ${btnDis?'disabled:opacity-50 disabled:cursor-not-allowed':''} ${btnCls} ${anim?'btn-pulse-shadow':''}" data-equipment-id="${item.id}" data-type="${btnData.type}" data-name="${item.name.replace(/"/g,'&quot;')}" data-quantity="${item.quantity}" data-unit="${unit.replace(/"/g,'&quot;')}" data-dept-key="${item.dept_key}" ${btnDis?'disabled':''} title="${btnTit}"><i class="mr-1 ${btnData.icon}"></i> ${btnData.text}</button></div></div>`;
                             });
                             myHtml += '</div></div>'; myResultsDiv.innerHTML = myHtml;
                         } else { myResultsDiv.innerHTML = '<p class="p-8 text-center text-gray-500 dark:text-gray-400">ไม่พบอุปกรณ์ในสต็อกของคุณ</p>'; }
 
+                        // 2. Other Stock (ไม่มีดาว + ปุ่มกดไม่ได้)
                         if (data.otherStock && data.otherStock.length > 0) {
-                             // ... (Other Stock Logic - Same as before) ...
                              let otherHtml = `<div class="p-5 soft-card rounded-2xl gentle-shadow"><h2 class="mb-4 text-xl font-bold text-gray-800 dark:text-gray-100">พบในแผนกอื่น</h2><div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">`;
                              data.otherStock.forEach(item => {
                                  const unit = item.unit?.name || 'ชิ้น'; const imgUrl = item.image_url ? item.image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
-                                 otherHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800 opacity-70"><div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700"><img src="${imgUrl}" class="object-contain max-w-full max-h-full" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=No+Image'"></div><div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.dept_name}</p><span class="block mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">มี: ${item.quantity} ${unit}</span></div><div class="p-3 pt-0 mt-auto"><button type="button" class="inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white border border-transparent rounded-md bg-gray-400 opacity-50 cursor-not-allowed" disabled><i class="mr-1 fas fa-ban"></i> เบิกไม่ได้</button></div></div>`;
+                                 // Other Stock: ไม่มี class live-search-withdraw-btn (กดแล้วไม่ trigger rating)
+                                 otherHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800 opacity-70"><div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700"><img src="${imgUrl}" class="object-contain max-w-full max-h-full" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=No+Image'"></div><div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.dept_name}</p><span class="block mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">มี: ${item.quantity} ${unit}</span></div><div class="p-3 pt-0 mt-auto"><button type="button" onclick="handleOtherDeptClick('${item.dept_name}')" class="inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white border border-transparent rounded-md bg-gray-400 opacity-50 cursor-not-allowed"><i class="mr-1 fas fa-ban"></i> เบิกไม่ได้</button></div></div>`;
                              });
                              otherHtml += '</div></div>'; otherResultsDiv.innerHTML = otherHtml;
                         }
@@ -391,15 +444,13 @@
                     .catch(err => { spinner.style.display = 'none'; console.error(err); });
                 }, 300);
             });
-            
-            // 3. Event Listener: Handle Click (เรียกฟังก์ชัน Async ใหม่)
             $(document).on('click', '.live-search-withdraw-btn', function() {
                 const type = $(this).data('type');
                 if(type === 'null' || type === null || type === 'unset') { handleUnsetTypeClick(); return; }
-                // เรียกฟังก์ชัน Async ที่จะเช็คสถานะก่อน
                 handleTransaction($(this).data('equipment-id'), type, $(this).data('name'), $(this).data('quantity'), $(this).data('unit'), $(this).data('dept-key'));
             });
         }
     });
 </script>
 @endpush
+

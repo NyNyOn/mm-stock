@@ -31,6 +31,7 @@ class InventorySearchController extends Controller
         }
         DB::purge($this->defaultConnection);
         Config::set('database.connections.' . $this->defaultConnection . '.database', $dbName);
+        DB::reconnect($this->defaultConnection);
     }
 
     private function switchToDefaultDb()
@@ -49,13 +50,23 @@ class InventorySearchController extends Controller
         }
 
         $departments = Config::get('department_stocks.departments', []);
-        $userDeptKey = Config::get('department_stocks.default_key', 'mm');
+        $user = Auth::user();
+        // ดึงแผนกของผู้ใช้ (ปรับ field ตามจริง เช่น department_code)
+        $userDeptKey = $user->department_code ?? Config::get('department_stocks.default_key', 'mm');
+        $defaultNasDeptKey = Config::get('department_stocks.default_nas_dept_key', 'mm');
 
         try {
             foreach ($departments as $key => $dept) {
                 
-                $this->switchToDb($dept['db_name']);
+                // 1. สลับ Database
+                try {
+                    $this->switchToDb($dept['db_name']);
+                } catch (\Exception $e) {
+                    Log::error("Cannot switch to DB {$dept['db_name']}: " . $e->getMessage());
+                    continue; // ข้ามแผนกนี้ถ้าต่อ Database ไม่ได้
+                }
 
+                // 2. สร้าง Query
                 $query = Equipment::with(['unit']) 
                     ->where(function ($q) use ($searchTerm) {
                         $q->where('name', 'LIKE', "%{$searchTerm}%")
@@ -65,45 +76,55 @@ class InventorySearchController extends Controller
                     ->where('quantity', '>', 0)
                     ->whereIn('status', ['available', 'low_stock']); 
 
-                // ✅✅✅ เพิ่ม: ดึงค่าคะแนนเฉลี่ย (Rating) ✅✅✅
+                // ✅ 3. เพิ่ม Rating (ใส่ try-catch ย่อย เพื่อกัน Error 500 ถ้าตารางไม่มี)
                 try {
-                    if (method_exists(Equipment::class, 'transactions')) {
-                        $query->withAvg('transactions', 'rating');
+                    if (method_exists(Equipment::class, 'ratings')) {
+                        $query->withAvg('ratings', 'rating');
+                        $query->withCount('ratings');
                     }
-                } catch (\Exception $e) { }
+                } catch (\Exception $e) {
+                    // ถ้า Error เรื่อง Rating ให้ปล่อยผ่าน (ดึงแค่ข้อมูลของ)
+                }
                 
-                $results = $query->get();
+                $results = $query->limit(20)->get();
 
                 if ($results->isNotEmpty()) {
                     $equipmentIds = $results->pluck('id')->toArray();
+                    // ดึงรูปภาพ
                     $images = EquipmentImage::whereIn('equipment_id', $equipmentIds)
                                             ->select('equipment_id', 'file_name', 'is_primary')
                                             ->get()
                                             ->groupBy('equipment_id');
 
-                    $results->each(function ($item) use ($images) {
+                    $results->each(function ($item) use ($images, $key, $defaultNasDeptKey) {
+                        // รูปภาพ
                         $itemImages = $images->get($item->id);
                         $primaryImage = null;
                         if ($itemImages) {
                             $primaryImage = $itemImages->firstWhere('is_primary', true) ?? $itemImages->first();
                         }
-                        $item->primary_image_file_name_manual = $primaryImage ? $primaryImage->file_name : null;
+                        $imageFileName = $primaryImage ? $primaryImage->file_name : null;
 
-                        // ✅✅✅ เพิ่ม: Format ค่า Rating ✅✅✅
-                        // (ค่าจาก DB จะชื่อ transactions_avg_rating)
-                        if (isset($item->transactions_avg_rating) && $item->transactions_avg_rating) {
-                            $item->avg_rating = number_format($item->transactions_avg_rating, 2);
+                        if ($imageFileName) {
+                            $item->image_url = route('nas.image', ['deptKey' => $key, 'filename' => $imageFileName]);
                         } else {
-                            $item->avg_rating = null; 
+                            $item->image_url = asset('images/placeholder.webp');
                         }
+
+                        // ✅ คะแนน (แปลงเป็น float เพื่อความชัวร์)
+                        $item->avg_rating = isset($item->ratings_avg_rating) ? (float)$item->ratings_avg_rating : 0;
+                        $item->rating_count = $item->ratings_count ?? 0;
+                        
+                        $item->dept_key = $key;
                     });
                 }
                 
+                // 4. แยกผลลัพธ์
                 foreach ($results as $equipment) {
-                    $equipment->dept_key = $key; 
                     $equipment->dept_name = $dept['name']; 
 
-                    if ($key === $userDeptKey) {
+                    // ถ้าเป็นแผนก User หรือ แผนก Default (MM) ถือเป็น My Stock
+                    if ($key === $userDeptKey || $key === $defaultNasDeptKey) {
                         $myStock[] = $equipment;
                     } else {
                         $otherStock[] = $equipment;
@@ -114,7 +135,7 @@ class InventorySearchController extends Controller
         } catch (\Exception $e) {
             Log::error('AJAX Search Failed: ' . $e->getMessage());
             $this->switchToDefaultDb();
-            return response()->json(['error' => 'เกิดข้อผิดพลาดในการค้นหา: ' . $e->getMessage()], 500);
+            return response()->json(['error' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
         }
 
         $this->switchToDefaultDb();

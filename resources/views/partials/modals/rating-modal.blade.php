@@ -1,191 +1,250 @@
 <!-- Rating Modal -->
 <div id="rating-modal" class="fixed inset-0 z-[200] hidden overflow-y-auto" role="dialog" aria-modal="true">
+    <!-- Backdrop -->
     <div class="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-90 backdrop-blur-sm"></div>
+
     <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="relative w-full max-w-2xl overflow-hidden bg-white rounded-2xl shadow-2xl transform transition-all">
+        <div class="relative w-full max-w-3xl overflow-hidden bg-white rounded-2xl shadow-2xl transform transition-all dark:bg-gray-800">
             
             <!-- Header -->
             <div class="px-6 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 border-b border-indigo-500">
                 <h3 class="text-xl font-bold text-white flex items-center gap-3">
                     <span class="bg-white/20 w-10 h-10 flex items-center justify-center rounded-full text-2xl shadow-inner">⭐</span> 
-                    <span>ให้คะแนนความพึงพอใจ</span>
+                    <span>ประเมินความพึงพอใจ</span>
                 </h3>
                 <p class="mt-1 text-indigo-100 text-sm">
-                    เพื่อสิทธิ์ในการเบิกครั้งถัดไป กรุณาประเมินรายการที่ใช้งานเสร็จสิ้น
+                    กรุณาให้คะแนนตามสภาพจริงของอุปกรณ์แต่ละประเภท
                 </p>
             </div>
 
             <!-- Body -->
-            <div class="px-6 py-6 bg-gray-50 max-h-[65vh] overflow-y-auto custom-scrollbar" id="rating-list-container">
-                <!-- Items injected here -->
+            <div class="px-6 py-6 bg-gray-50 max-h-[70vh] overflow-y-auto custom-scrollbar dark:bg-gray-900" id="rating-list-container">
+                <!-- Items จะถูกแทรกที่นี่ด้วย JavaScript -->
             </div>
 
             <!-- Footer -->
-            <div class="px-6 py-4 bg-white border-t border-gray-200 flex justify-between items-center">
-                <span class="text-xs text-gray-400"><i class="fas fa-info-circle"></i> ต้องให้คะแนนทุกรายการ</span>
-                <button type="button" onclick="closeRatingModal()" class="px-5 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors border border-gray-300">
-                    ปิดหน้าต่าง (ยังไม่เบิก)
+            <div class="px-6 py-4 bg-gray-100 border-t border-gray-200 flex justify-end dark:bg-gray-800 dark:border-gray-700">
+                <button type="button" class="text-gray-500 hover:text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700" onclick="closeRatingModal()">
+                    ปิดหน้าต่าง (ยังไม่ประเมิน)
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<style>
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 3px; }
-    .rating-btn-active { background-color: #4f46e5 !important; color: white !important; border-color: #4f46e5 !important; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3); }
-</style>
-
 <script>
-    // Prevent duplicate declaration
-    if (typeof RATING_MODAL_INITIALIZED === 'undefined') {
-        var RATING_MODAL_INITIALIZED = true;
+    // ✅ ฟังก์ชันเปิด Modal
+    function openRatingModal(unratedItems) {
+        const modal = document.getElementById('rating-modal');
+        const container = document.getElementById('rating-list-container');
         
-        function openRatingModal(unratedItems) {
-            const container = document.getElementById('rating-list-container');
-            const modal = document.getElementById('rating-modal');
-            container.innerHTML = ''; 
-            
-            if (!unratedItems || unratedItems.length === 0) { closeRatingModal(); return; }
+        // เคลียร์ข้อมูลเก่า
+        container.innerHTML = '';
 
-            unratedItems.forEach(item => {
-                // Image handling
-                let img = item.equipment && item.equipment.image_url ? item.equipment.image_url : 'https://placehold.co/150x150/e2e8f0/64748b?text=No+Image';
-                
-                // Type Label
-                const typeMap = {'consumable': 'เบิกเปลือง', 'returnable': 'ยืมคืน', 'partial_return': 'กึ่งยืม'};
-                const typeText = typeMap[item.type] || item.type;
+        // 🏷️ แยกชุดคำตามประเภทการเบิก (Type-Specific Labels)
+        const ratingConfig = {
+            // 1. เบิกใช้สิ้นเปลือง (เน้นคุณภาพวัสดุ)
+            'consumable': {
+                1: { text: 'คุณภาพแย่',    icon: '😫', color: 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' },
+                2: { text: 'พอใช้',        icon: '😐', color: 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' },
+                3: { text: 'ตามมาตรฐาน',   icon: '🙂', color: 'bg-yellow-50 text-yellow-600 border-yellow-200 hover:bg-yellow-100' },
+                4: { text: 'คุณภาพดี',     icon: '😀', color: 'bg-lime-50 text-lime-600 border-lime-200 hover:bg-lime-100' },
+                5: { text: 'ดีเยี่ยม',     icon: '✨', color: 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100' }
+            },
+            // 2. ยืม-คืน (เน้นสภาพเครื่องมือ/อุปกรณ์)
+            'returnable': {
+                1: { text: 'ชำรุด/พัง',    icon: '🛠️', color: 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' },
+                2: { text: 'สภาพเก่า',     icon: '🏚️', color: 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' },
+                3: { text: 'ใช้งานได้ปกติ', icon: '👌', color: 'bg-yellow-50 text-yellow-600 border-yellow-200 hover:bg-yellow-100' },
+                4: { text: 'สภาพดี',       icon: '🔨', color: 'bg-lime-50 text-lime-600 border-lime-200 hover:bg-lime-100' },
+                5: { text: 'สภาพใหม่',     icon: '💎', color: 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100' }
+            },
+            // 3. เบิกคืนได้/วัสดุคงทน (เน้นความสมบูรณ์)
+            'partial_return': {
+                1: { text: 'ต้องซ่อมแซม',  icon: '🔧', color: 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' },
+                2: { text: 'มีตำหนิ',      icon: '⚠️', color: 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' },
+                3: { text: 'ปานกลาง',     icon: '🆗', color: 'bg-yellow-50 text-yellow-600 border-yellow-200 hover:bg-yellow-100' },
+                4: { text: 'สมบูรณ์',      icon: '✅', color: 'bg-lime-50 text-lime-600 border-lime-200 hover:bg-lime-100' },
+                5: { text: 'ไร้ที่ติ',     icon: '🏆', color: 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100' }
+            },
+            // Fallback กรณีไม่ระบุประเภท
+            'default': {
+                1: { text: 'ต้องปรับปรุง', icon: '😞', color: 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' },
+                2: { text: 'พอใช้',       icon: '😐', color: 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100' },
+                3: { text: 'ปานกลาง',    icon: '🙂', color: 'bg-yellow-50 text-yellow-600 border-yellow-200 hover:bg-yellow-100' },
+                4: { text: 'ดี',          icon: '😀', color: 'bg-lime-50 text-lime-600 border-lime-200 hover:bg-lime-100' },
+                5: { text: 'ดีเยี่ยม',    icon: '😍', color: 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100' }
+            }
+        };
 
-                // Buttons HTML
-                let buttonsHtml = '';
-                for (let i = 1; i <= 5; i++) {
-                    let label = '';
-                    if(i==1) label='แย่'; if(i==5) label='ดีเยี่ยม';
-                    
-                    buttonsHtml += `
-                        <button type="button" 
-                            onclick="submitRatingItem(${item.id}, ${i}, this)"
-                            class="flex-1 py-3 px-1 border rounded-lg font-bold text-lg transition-all duration-200 hover:bg-indigo-50 border-gray-200 text-gray-600 bg-white group relative"
-                            data-val="${i}">
-                            ${i}
-                            ${label ? `<span class="absolute -bottom-5 left-0 right-0 text-[10px] font-normal text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">${label}</span>` : ''}
-                        </button>
-                    `;
-                }
+        if (!unratedItems || unratedItems.length === 0) return;
 
-                const html = `
-                    <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-200 mb-6 relative overflow-hidden" id="rating-card-${item.id}">
-                        <div class="flex gap-5 items-start">
-                            <div class="w-20 h-20 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0">
-                                <img src="${img}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/150x150/e2e8f0/64748b?text=Error'">
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div>
-                                        <h4 class="text-base font-bold text-gray-800 truncate pr-2">${item.equipment ? item.equipment.name : 'Unknown Item'}</h4>
-                                        <p class="text-xs text-gray-500 mt-0.5">TXN: #${item.id} • <span class="text-indigo-600 font-medium bg-indigo-50 px-1.5 py-0.5 rounded">${typeText}</span></p>
-                                    </div>
-                                    <span class="text-[10px] text-gray-400 whitespace-nowrap">${new Date(item.transaction_date).toLocaleDateString('th-TH')}</span>
-                                </div>
-                                
-                                <div class="mt-3">
-                                    <div class="flex gap-2 mb-2 items-center justify-between">
-                                        ${buttonsHtml}
-                                    </div>
-                                    <div class="text-center h-6 mt-3" id="desc-${item.id}">
-                                         <span class="text-xs text-gray-400">แตะตัวเลขเพื่อโหวต</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+        unratedItems.forEach((item, index) => {
+            // เลือกชุดคำตามประเภท
+            const typeKey = item.type && ratingConfig[item.type] ? item.type : 'default';
+            const currentLabels = ratingConfig[typeKey];
+
+            // สร้าง Card
+            const itemDiv = document.createElement('div');
+            itemDiv.className = `mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 relative overflow-hidden animate-fade-in-up dark:bg-gray-800 dark:border-gray-700`;
+            itemDiv.style.animationDelay = `${index * 100}ms`;
+            itemDiv.id = `rating-card-${item.id}`;
+
+            // Badge ประเภทสินค้า
+            let typeBadge = '';
+            if(item.type === 'consumable') typeBadge = '<span class="text-orange-600 bg-orange-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">วัสดุสิ้นเปลือง</span>';
+            else if(item.type === 'returnable') typeBadge = '<span class="text-purple-600 bg-purple-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">ยืม-คืน</span>';
+            else typeBadge = '<span class="text-blue-600 bg-blue-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">เบิกคืนได้</span>';
+
+            // ส่วนหัว
+            const itemHeader = `
+                <div class="flex items-start gap-4 mb-4">
+                    <div class="w-20 h-20 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 dark:bg-gray-700 dark:border-gray-600 relative group">
+                        <img src="${item.equipment_image_url || '/images/placeholder.webp'}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Equipment">
+                        <div class="absolute top-0 right-0 m-1 shadow-sm">${typeBadge}</div>
                     </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-lg font-bold text-gray-800 truncate dark:text-gray-100" title="${item.equipment?.name}">${item.equipment?.name || 'Unknown Item'}</h4>
+                            <span class="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded dark:bg-gray-700">#${item.id}</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1 dark:text-gray-400"><i class="fas fa-calendar-alt mr-1 opacity-70"></i> วันที่: ${new Date(item.transaction_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400"><i class="fas fa-cubes mr-1 opacity-70"></i> จำนวน: ${Math.abs(item.quantity_change)} ${item.equipment?.unit?.name || 'ชิ้น'}</p>
+                    </div>
+                </div>
+            `;
+
+            // ปุ่มประเมิน (ใช้ labels ตามประเภท)
+            let buttonsHtml = `<div class="grid grid-cols-5 gap-2 mb-3">`;
+            for (let i = 1; i <= 5; i++) {
+                const label = currentLabels[i];
+                buttonsHtml += `
+                    <button type="button" 
+                        class="rating-btn group relative flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-200 ${label.color} dark:bg-opacity-10 dark:border-opacity-20 h-20"
+                        onclick="submitRating(${item.id}, ${i}, this)"
+                        data-score="${i}">
+                        <span class="text-2xl mb-1 group-hover:scale-125 transition-transform filter drop-shadow-sm">${label.icon}</span>
+                        <span class="text-[10px] sm:text-xs font-bold whitespace-nowrap overflow-hidden text-ellipsis w-full text-center leading-tight">${label.text}</span>
+                        <div class="absolute inset-0 rounded-xl ring-2 ring-offset-2 ring-indigo-500 opacity-0 scale-95 transition-all duration-200 pointer-events-none selection-ring"></div>
+                    </button>
                 `;
-                container.insertAdjacentHTML('beforeend', html);
-            });
+            }
+            buttonsHtml += `</div>`;
 
-            modal.classList.remove('hidden');
+            // ส่วนคอมเมนต์
+            const commentSection = `
+                <div class="relative group">
+                    <input type="text" id="comment-${item.id}" 
+                        class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" 
+                        placeholder="ความคิดเห็นเพิ่มเติม (ถ้ามี)...">
+                    <div class="absolute left-3 top-2.5 text-gray-400 group-focus-within:text-indigo-500 transition-colors"><i class="fas fa-pen"></i></div>
+                </div>
+                <div id="rating-status-${item.id}" class="mt-2 h-5 text-xs font-medium text-center opacity-0 transition-opacity"></div>
+            `;
+
+            itemDiv.innerHTML = itemHeader + buttonsHtml + commentSection;
+            container.appendChild(itemDiv);
+        });
+
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; 
+    }
+
+    function closeRatingModal() {
+        const modal = document.getElementById('rating-modal');
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+        
+        if (window.hasRated) {
+            window.location.reload();
         }
+    }
 
-        function closeRatingModal() {
-            document.getElementById('rating-modal').classList.add('hidden');
-        }
+    // ✅ ฟังก์ชันส่งคะแนน
+    async function submitRating(transactionId, score, btnElement) {
+        const card = document.getElementById(`rating-card-${transactionId}`);
+        const commentInput = document.getElementById(`comment-${transactionId}`);
+        const statusText = document.getElementById(`rating-status-${transactionId}`);
+        const comment = commentInput.value;
 
-        function submitRatingItem(id, rating, btn) {
-            console.log(`[Rating] ID: ${id}, Score: ${rating}`);
-            const card = document.getElementById(`rating-card-${id}`);
-            const btns = card.querySelectorAll(`button`);
-            const descEl = document.getElementById(`desc-${id}`);
+        // Lock Buttons
+        const allBtns = card.querySelectorAll('.rating-btn');
+        allBtns.forEach(b => {
+            b.disabled = true;
+            b.classList.add('opacity-40', 'cursor-not-allowed', 'grayscale');
+            b.querySelector('.selection-ring').classList.remove('opacity-100', 'scale-100');
+        });
+        
+        // Highlight Selected
+        btnElement.classList.remove('opacity-40', 'cursor-not-allowed', 'grayscale');
+        btnElement.classList.add('ring-2', 'ring-offset-2', 'ring-indigo-500', 'transform', 'scale-105', 'z-10', 'bg-white', 'shadow-md');
+        btnElement.querySelector('.selection-ring').classList.add('opacity-100', 'scale-100');
 
-            // Disable UI
-            btns.forEach(b => {
-                b.disabled = true;
-                b.classList.add('opacity-40', 'cursor-not-allowed');
-                if (b === btn) {
-                    b.classList.remove('opacity-40', 'border-gray-200', 'text-gray-600', 'bg-white');
-                    b.classList.add('rating-btn-active');
-                }
-            });
-            
-            descEl.innerHTML = '<i class="fas fa-circle-notch fa-spin text-indigo-500"></i> กำลังส่งข้อมูล...';
+        statusText.innerHTML = '<span class="text-indigo-600"><i class="fas fa-circle-notch fa-spin"></i> กำลังบันทึก...</span>';
+        statusText.classList.remove('opacity-0');
 
-            // API Call
-            fetch(`/transactions/${id}/rate`, {
+        try {
+            const response = await fetch(`/transactions/${transactionId}/rate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 },
-                body: JSON.stringify({ rating: parseInt(rating) }) // Ensure integer
-            })
-            .then(res => {
-                if (!res.ok) throw new Error(res.statusText);
-                return res.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    descEl.innerHTML = '<span class="text-green-600 font-bold text-sm"><i class="fas fa-check-circle"></i> เรียบร้อย</span>';
+                body: JSON.stringify({ rating: score, rating_comment: comment })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.hasRated = true;
+                statusText.innerHTML = '<span class="text-green-600"><i class="fas fa-check-circle"></i> บันทึกสำเร็จ</span>';
+                
+                // Success Animation & Collapse
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+                    card.style.transform = 'translateX(100%)';
+                    card.style.opacity = '0';
+                    card.style.maxHeight = '0';
+                    card.style.padding = '0';
+                    card.style.margin = '0';
+                    card.style.border = 'none';
                     
-                    // Animate removal
                     setTimeout(() => {
-                        card.style.transition = 'all 0.5s ease';
-                        card.style.transform = 'translateX(50px)';
-                        card.style.opacity = '0';
-                        setTimeout(() => { 
-                            card.remove(); 
-                            // Check if all cleared
-                            if (data.remaining_count === 0) {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'ขอบคุณครับ!',
-                                    text: 'บันทึกคะแนนครบถ้วนแล้ว สามารถทำรายการต่อได้เลย',
-                                    timer: 2000,
-                                    showConfirmButton: false
-                                }).then(() => {
-                                    closeRatingModal();
-                                    // Optional: Trigger click on original button again if needed
-                                });
-                            } else {
-                                // Show toast for remaining
-                                const container = document.getElementById('rating-list-container');
-                                if(container.children.length === 0) closeRatingModal(); 
-                            }
-                        }, 500);
+                        card.remove();
+                        const container = document.getElementById('rating-list-container');
+                        if (container.children.length === 0) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'ขอบคุณสำหรับการประเมิน',
+                                text: 'ระบบบันทึกข้อมูลเรียบร้อยแล้ว',
+                                timer: 2000,
+                                showConfirmButton: false,
+                                backdrop: `rgba(0,0,0,0.4)`
+                            }).then(() => {
+                                closeRatingModal();
+                            });
+                        }
                     }, 600);
-                } else {
-                    throw new Error(data.message);
-                }
-            })
-            .catch(err => {
-                console.error('[Rating Error]', err);
-                descEl.innerHTML = `<span class="text-red-500 text-xs"><i class="fas fa-exclamation-circle"></i> ${err.message || 'เกิดข้อผิดพลาด'}</span>`;
-                btns.forEach(b => {
-                    b.disabled = false;
-                    b.classList.remove('opacity-40', 'cursor-not-allowed', 'rating-btn-active');
-                    b.classList.add('bg-white', 'text-gray-600');
-                });
+                }, 800);
+            } else {
+                throw new Error(data.message || 'บันทึกไม่สำเร็จ');
+            }
+        } catch (error) {
+            console.error('Rating Error:', error);
+            statusText.innerHTML = `<span class="text-red-600"><i class="fas fa-exclamation-circle"></i> ${error.message}</span>`;
+            allBtns.forEach(b => {
+                b.disabled = false;
+                b.classList.remove('opacity-40', 'cursor-not-allowed', 'grayscale');
             });
         }
     }
 </script>
+
+<style>
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f9fafb; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+    @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in-up { animation: fade-in-up 0.4s ease-out forwards; }
+</style>
