@@ -230,33 +230,3 @@ Route::middleware('auth')->group(function () {
 
 // Public AJAX Routes
 Route::post('/ajax-handler', [AjaxController::class, 'handleRequest'])->name('ajax.handler');
-
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Artisan;
-
-// Route สำหรับซ่อมฐานข้อมูลทุกแผนก
-Route::get('/fix-databases-tables', function () {
-    $departments = Config::get('department_stocks.departments', []);
-    $results = [];
-
-    foreach ($departments as $key => $dept) {
-        try {
-            $dbName = $dept['db_name'];
-            
-            // สลับ Connection ไปที่ฐานข้อมูลแผนกนั้น
-            DB::purge('mysql');
-            Config::set('database.connections.mysql.database', $dbName);
-            DB::reconnect('mysql');
-
-            // สั่ง Migrate (จะสร้างตารางที่ขาดอยู่ให้เอง โดยดูจากไฟล์ใน database/migrations)
-            Artisan::call('migrate', ['--force' => true]);
-
-            $results[] = "<span style='color:green'>✅ แผนก {$key} ($dbName): อัปเดตตารางสำเร็จ</span>";
-        } catch (\Exception $e) {
-            $results[] = "<span style='color:red'>❌ แผนก {$key}: " . $e->getMessage() . "</span>";
-        }
-    }
-
-    return implode('<br>', $results);
-});
