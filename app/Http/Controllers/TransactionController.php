@@ -113,11 +113,20 @@ class TransactionController extends Controller
         return response()->json(['success' => true, 'data' => $transaction]);
     }
 
+    // ✅ แก้ไข: searchItems (เพิ่ม Rating + สร้าง Image URL จาก Server)
     public function searchItems(Request $request)
     {
         $term = $request->input('q', '');
         $query = Equipment::whereIn('status', ['available', 'low_stock'])
                             ->where('quantity', '>', 0); // Only show items with quantity > 0
+        
+        // ✅ เพิ่ม: ดึงคะแนนเฉลี่ย (Average Rating)
+        try { 
+            if (method_exists(Equipment::class, 'transactions')) {
+                $query->withAvg('transactions', 'rating');
+            }
+        } catch (\Throwable $e) { }
+
         if ($term) {
             $query->where(function($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
@@ -126,7 +135,7 @@ class TransactionController extends Controller
             });
         }
         $items = $query->with('images', 'unit')->orderBy('name')->paginate(10);
-        $defaultDeptKey = config('department_stocks.default_nas_dept_key', 'it');
+        $defaultDeptKey = config('department_stocks.default_nas_dept_key', 'mm');
         $items->getCollection()->transform(function ($item) use ($defaultDeptKey) {
             $primaryImage = $item->images->firstWhere('is_primary', true) ?? $item->images->first();
             $imageFileName = $primaryImage->file_name ?? null;
@@ -137,6 +146,10 @@ class TransactionController extends Controller
                 $item->image_url = asset('images/placeholder.webp'); // Fallback
             }
             $item->unit_name = $item->unit->name ?? 'N/A';
+
+            // ✅ เพิ่ม: ส่งค่า Rating กลับไปหน้าบ้าน (ทศนิยม 2 ตำแหน่ง)
+            $item->avg_rating = $item->transactions_avg_rating ? number_format($item->transactions_avg_rating, 2) : null;
+
             return $item;
         });
         return response()->json($items);
@@ -338,7 +351,7 @@ class TransactionController extends Controller
         }
     }
 
-    // ✅✅✅ START: Updated handleUserTransaction (FIXED + Add GLPI Name + Requestor ID) ✅✅✅
+    // ✅✅✅ Updated handleUserTransaction (FIXED + Add GLPI Name + Requestor ID + Rating Block) ✅✅✅
     // นี่คือฟังก์ชันที่รับการเบิก/ยืม/คืนได้ จากหน้า User
     public function handleUserTransaction(Request $request)
     {
@@ -349,6 +362,23 @@ class TransactionController extends Controller
         $loggedInUser = Auth::user();
         $canAutoConfirm = $loggedInUser->can('transaction:auto_confirm');
         Log::debug("[handleUserTransaction] Checking 'transaction:auto_confirm' permission for User ID: {$loggedInUser->id}. Result: " . ($canAutoConfirm ? 'Yes' : 'No'));
+
+        // 🌟 1. Logic บล็อกการเบิก ถ้ามีรายการค้างประเมิน (Server Side Block) 🌟
+        $requestorType = $request->input('requestor_type');
+        $targetUserId = ($requestorType === 'other' && $request->filled('requestor_id')) 
+                        ? (int)$request->input('requestor_id') : $loggedInUser->id;
+
+        $unratedTransactions = $this->getUnratedTransactions($targetUserId);
+
+        if ($unratedTransactions->count() > 0) {
+            // ส่ง 403 กลับไป พร้อมข้อมูลรายการที่ค้าง เพื่อให้ JS เปิด Modal
+            return response()->json([
+                'success' => false,
+                'message' => 'คุณมีรายการอุปกรณ์ที่ยังไม่ได้ให้คะแนน กรุณาประเมินความพึงพอใจก่อนทำรายการใหม่',
+                'error_code' => 'UNRATED_TRANSACTIONS',
+                'unrated_items' => $unratedTransactions
+            ], 403);
+        }
 
         // ✅✅✅ FIX: อัปเดต Validation Rule (เพิ่ม requestor_type และ requestor_id) ✅✅✅
         $validator = Validator::make($request->all(), [
@@ -386,16 +416,11 @@ class TransactionController extends Controller
         Log::debug('[handleUserTransaction] Validation passed.');
 
         // --- ✅ START: ตรรกะกำหนด User ID ที่จะบันทึก ---
-        $requestorType = $request->input('requestor_type');
-        $userIdToAssign = $loggedInUser->id; // ค่าเริ่มต้นคือตัวเราเอง (self)
-
-        if ($requestorType === 'other' && $request->filled('requestor_id')) {
-            // ถ้าเลือก 'other' และมี ID ส่งมา
-            $userIdToAssign = (int)$request->input('requestor_id');
+        $userIdToAssign = $targetUserId; // ใช้ค่าที่หาไว้ข้างบนแล้ว
+        
+        if ($requestorType === 'other') {
             Log::debug("[handleUserTransaction] Request is 'for_other'. Assigning TXN to User ID: {$userIdToAssign}");
         } else {
-            // กรณี 'self' หรือกรณี 'other' แต่ ID เป็นค่าว่าง (ซึ่งไม่ควรเกิดถ้า Validation ทำงาน)
-            $userIdToAssign = $loggedInUser->id;
             Log::debug("[handleUserTransaction] Request is 'for_self'. Assigning TXN to User ID: {$userIdToAssign}");
         }
         // --- ✅ END: ตรรกะกำหนด User ID ---
@@ -838,7 +863,7 @@ class TransactionController extends Controller
 
             return back()->with('success', 'ยกเลิกรายการเบิกเรียบร้อยแล้ว');
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) { // เปลี่ยนเป็น Throwable ตามคำแนะนำก่อนหน้า
             DB::rollBack();
             Log::error("[userCancel] EXCEPTION CAUGHT for TXN ID {$transaction->id}: " . $e->getMessage());
             return back()->with('error', 'เกิดข้อผิดพลาดในการยกเลิก: ' . $e->getMessage());
@@ -936,7 +961,7 @@ class TransactionController extends Controller
 
             return back()->with('success', 'ยกเลิกรายการ (Completed) และคืนสต็อกเรียบร้อยแล้ว');
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) { // เปลี่ยนเป็น Throwable
             DB::rollBack();
             Log::error("[adminCancel] EXCEPTION CAUGHT for TXN ID {$transaction->id}: " . $e->getMessage());
             return back()->with('error', 'เกิดข้อผิดพลาดในการยกเลิก: ' . $e->getMessage());
@@ -944,5 +969,80 @@ class TransactionController extends Controller
     }
     // 🌟🌟🌟 END: 2. อัปเดตฟังก์ชันนี้ (adminCancelTransaction) 🌟🌟🌟
 
+    // ✅✅✅ Helper & API for Rating (เพิ่มใหม่ท้ายไฟล์) ✅✅✅
 
+    // (เพิ่มใหม่) API เช็คสถานะก่อนกดเบิก
+    public function checkBlockStatus(Request $request)
+    {
+        $userId = Auth::id();
+        $unratedTransactions = $this->getUnratedTransactions($userId);
+
+        if ($unratedTransactions->count() > 0) {
+            return response()->json([
+                'blocked' => true,
+                'message' => 'มีรายการค้างประเมิน',
+                'unrated_items' => $unratedTransactions
+            ]);
+        }
+        return response()->json(['blocked' => false]);
+    }
+
+    private function getUnratedTransactions($userId)
+    {
+        // ดึงรายการที่ค้าง
+        $items = Transaction::where('user_id', $userId)
+            ->where('status', 'completed')
+            ->whereIn('type', ['consumable', 'returnable', 'partial_return'])
+            ->whereNull('rating')
+            ->orderBy('transaction_date', 'desc')
+            ->with(['equipment.latestImage'])
+            ->get();
+
+        // ✅ Fix Image URL (สร้าง Full URL จาก Backend เลย)
+        $defaultDeptKey = config('department_stocks.default_nas_dept_key', 'mm');
+        $items->transform(function ($tx) use ($defaultDeptKey) {
+            if ($tx->equipment) {
+                $imgName = $tx->equipment->latestImage ? $tx->equipment->latestImage->file_name : null;
+                $tx->equipment->image_url = $imgName ? route('nas.image', ['deptKey' => $defaultDeptKey, 'filename' => $imgName]) : asset('images/placeholder.webp');
+            }
+            return $tx;
+        });
+        
+        return $items;
+    }
+
+    public function rateTransaction(Request $request, Transaction $transaction)
+    {
+        // เช็คสิทธิ์
+        if (Auth::id() !== $transaction->user_id) return response()->json(['success' => false, 'message' => 'No Permission'], 403);
+        if ($transaction->status !== 'completed' || !is_null($transaction->rating)) return response()->json(['success' => false, 'message' => 'Cannot rate'], 400);
+
+        // Validation (เช็คว่ามีค่าส่งมาจริงไหม)
+        $validator = Validator::make($request->all(), [
+            'rating' => 'required|integer|min:1|max:5'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            // บันทึกข้อมูล
+            $transaction->rating = $request->input('rating');
+            $transaction->rating_comment = $request->input('rating_comment');
+            $transaction->rated_at = now();
+            $transaction->save();
+            
+            DB::commit();
+            Log::info("[RateTransaction] Success - Rating saved: " . $transaction->rating);
+
+            $remainingCount = $this->getUnratedTransactions(Auth::id())->count();
+            return response()->json(['success' => true, 'message' => 'บันทึกคะแนนแล้ว', 'remaining_count' => $remainingCount]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("[RateTransaction] Error saving: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Save failed'], 500);
+        }
+    }
 } // <-- End Class

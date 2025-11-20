@@ -81,19 +81,31 @@ async function searchEquipmentForSelection(page = 1) {
         const result = await response.json();
 
         if(listContainer) listContainer.innerHTML = '';
-        if (result.success && result.data.length > 0) {
+        if (result.data && result.data.length > 0) {
             result.data.forEach(item => {
                 const isAdded = withdrawalItems.some(reqItem => reqItem.id === item.id);
+                
+                // 🌟 ADD: Star Rating Display 🌟
+                let starHtml = '';
+                if (item.avg_rating) {
+                    starHtml = `<div class="flex items-center text-xs text-yellow-500 font-medium mt-1 bg-yellow-50 px-2 py-0.5 rounded-md inline-block w-auto self-start">
+                                    <span class="mr-1">${item.avg_rating}</span> <i class="fas fa-star"></i>
+                                </div>`;
+                } else {
+                    starHtml = `<div class="text-xs text-gray-400 mt-1 px-2 py-0.5">ยังไม่มีคะแนน</div>`;
+                }
+
                 const card = document.createElement('div');
                 card.className = `soft-card p-3 rounded-lg flex items-center space-x-4 transition-all ${isAdded ? 'opacity-50 bg-gray-100' : 'cursor-pointer hover:shadow-md hover:scale-[1.02]'}`;
                 if (!isAdded) {
                     card.onclick = () => handleSelectItem(item);
                 }
                 card.innerHTML = `
-                    <img src="${item.image || 'https://placehold.co/100x100'}" class="w-16 h-16 object-cover rounded-lg gentle-shadow flex-shrink-0" alt="${item.name}">
-                    <div class="flex-grow min-w-0">
-                        <p class="font-bold text-gray-800 truncate">${item.name}</p>
-                        <p class="text-sm text-gray-500 font-mono">${item.serial_number || 'N/A'}</p>
+                    <img src="${item.image_url || '/images/placeholder.webp'}" class="w-16 h-16 object-cover rounded-lg gentle-shadow flex-shrink-0" alt="${item.name}">
+                    <div class="flex-grow min-w-0 flex flex-col justify-center">
+                        <p class="font-bold text-gray-800 truncate text-sm">${item.name}</p>
+                        <p class="text-xs text-gray-500 font-mono">${item.serial_number || 'N/A'}</p>
+                        ${starHtml}
                     </div>
                     <div class="text-right flex-shrink-0">
                         <p class="text-lg font-bold text-blue-600">${item.quantity}</p>
@@ -144,7 +156,7 @@ function updateWithdrawalUI() {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'flex items-center p-2 bg-white border rounded-lg';
             itemDiv.innerHTML = `
-                <img src="${item.image || 'https://placehold.co/100x100'}" alt="${item.name}" class="w-10 h-10 object-cover rounded-md mr-3">
+                <img src="${item.image_url || '/images/placeholder.webp'}" alt="${item.name}" class="w-10 h-10 object-cover rounded-md mr-3">
                 <div class="flex-grow">
                     <p class="font-medium text-sm text-gray-800">${item.name}</p>
                     <p class="text-xs text-gray-500">คงเหลือ: ${item.quantity}</p>
@@ -196,7 +208,25 @@ async function submitWithdrawal() {
         return showToast('กรุณาเพิ่มรายการอุปกรณ์', 'error');
     }
 
+    // เตรียมข้อมูล
     const itemsToSubmit = withdrawalItems.map(item => ({ id: item.id, quantity: item.withdraw_quantity }));
+
+    // ✅ เปลี่ยน Route เป็น /ajax/user/transact เพื่อใช้ Rating Block Logic
+    const apiEndpoint = '/ajax/user/transact'; 
+
+    const payload = {
+        // Field สำหรับ handleUserTransaction
+        equipment_id: itemsToSubmit[0].id,   
+        quantity: itemsToSubmit[0].quantity, 
+        type: transactionType === 'borrow' ? 'returnable' : 'consumable',
+        requestor_type: 'self', // สมมติเบิกให้ตัวเอง
+        
+        // Field เดิม
+        requestor_name: requestorName,
+        purpose: purpose,
+        notes: notes,
+        items: itemsToSubmit // เผื่อไว้
+    };
 
     const submitButton = document.getElementById('submit-withdrawal-btn');
     const originalButtonText = submitButton.innerHTML;
@@ -204,7 +234,7 @@ async function submitWithdrawal() {
     submitButton.disabled = true;
 
     try {
-        const response = await fetch('/ajax/withdrawal', {
+        const response = await fetch(apiEndpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -212,15 +242,7 @@ async function submitWithdrawal() {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: JSON.stringify({
-                type: transactionType,
-                requestor_name: requestorName,
-                purpose: purpose,
-                notes: notes,
-                items: itemsToSubmit,
-                // ✅ Add this field to be sent to the controller
-                return_condition: 'allowed'
-            })
+            body: JSON.stringify(payload)
         });
 
         const data = await response.json();
@@ -230,6 +252,24 @@ async function submitWithdrawal() {
             closeModal('withdrawal-modal');
             setTimeout(() => window.location.reload(), 1500);
         } else {
+            // ⛔ ดักจับ Rating Block (Error 403)
+            if (response.status === 403 && data.error_code === 'UNRATED_TRANSACTIONS') {
+                closeModal('withdrawal-modal');
+                
+                if (typeof openRatingModal === 'function') {
+                    openRatingModal(data.unrated_items);
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'ติดเงื่อนไข',
+                        text: data.message,
+                        confirmButtonText: 'ตกลง'
+                    });
+                } else {
+                    alert(data.message + "\n(Please check layout include)");
+                }
+                return;
+            }
+
             showToast(data.message || 'เกิดข้อผิดพลาด', 'error');
         }
     } catch (error) {

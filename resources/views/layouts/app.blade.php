@@ -303,5 +303,6 @@
                 </div>
             </div>
         </div>
+    @include('partials.modals.rating-modal')    
     </body>
 </html>

@@ -45,7 +45,8 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/transactions/{transaction}/user-confirm', [TransactionController::class, 'userConfirmReceipt'])->name('transactions.userConfirmReceipt');
     Route::post('/transactions/{transaction}/admin-confirm', [TransactionController::class, 'adminConfirmShipment'])->name('transactions.adminConfirmShipment')->middleware('can:permission:manage');
-    
+    Route::get('/transactions/check-status', [TransactionController::class, 'checkBlockStatus'])->name('transactions.check_status');
+
     // (สำหรับ User ยกเลิกรายการ 'Pending')
     Route::patch('/transactions/{transaction}/user-cancel', [TransactionController::class, 'userCancel'])->name('transactions.userCancel');
     
@@ -88,17 +89,6 @@ Route::middleware('auth')->group(function () {
     // Route ค้นหาเก่า (ที่เราทำไว้)
     Route::get('/inventory/search', [InventorySearchController::class, 'search'])->name('inventory.search');
 
-    // 
-    // 📍 (ลบออก) เราไม่ใช้หน้านี้แล้ว เพราะเราจะย้ายไปรวมกับ user.equipment.index
-    // Route::get('/new-search', [InventorySearchController::class, 'showPage'])
-    //      ->name('inventory.show_search_page')
-    //      ->middleware('can:equipment:borrow'); 
-
-
-    // 
-    // 📍 (คงไว้) Route นี้ยังสำคัญมากสำหรับ Live Search
-    // ย้ายออกจาก group 'ajax.' เพื่อให้ชื่อ 'inventory.ajax_search' ใช้งานได้
-    // 
     Route::get('/ajax/inventory-live-search', [InventorySearchController::class, 'ajaxSearch'])
         ->name('inventory.ajax_search') // <-- 🌟 ชื่อนี้จะถูกต้องแล้ว
         ->middleware('can:equipment:borrow');
@@ -106,6 +96,8 @@ Route::middleware('auth')->group(function () {
 
     // --- Admin & Staff Routes ---
     Route::resource('equipment', EquipmentController::class)->middleware('can:equipment:view');
+    Route::post('/transactions/{transaction}/rate', [TransactionController::class, 'rateTransaction'])
+        ->name('transactions.rate');
 
     // --- Receive Management (Updated for Cloning Approach) ---
     Route::get('/receive', [ReceiveController::class, 'index'])
@@ -222,10 +214,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/items', [TransactionController::class, 'searchItems'])->name('items.search');
         Route::post('/withdrawal', [TransactionController::class, 'storeWithdrawal'])->name('withdrawal.store');
         Route::post('/user/transact', [TransactionController::class, 'handleUserTransaction'])->name('user.transact')->middleware('can:equipment:borrow');
-
-        // 
-        // 📍 (ย้ายออกไปแล้ว) Route 'inventory.ajax_search' ไม่ได้อยู่ในนี้แล้ว
-        // 
 
         Route::post('/find-by-scan', [AjaxController::class, 'findEquipmentByScan'])->name('find-by-scan');
         Route::get('/dashboard-charts', [DashboardController::class, 'getChartData'])->name('dashboard.charts');

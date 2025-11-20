@@ -33,7 +33,10 @@ class Transaction extends Model
         'user_confirmed_at',
         'confirmed_at', // Added confirmed_at
         'returned_quantity', // Added returned_quantity
-        'glpi_ticket_id' // Added glpi_ticket_id
+        'glpi_ticket_id', // Added glpi_ticket_id
+        'rating',
+        'rating_comment',
+        'rated_at',
     ];
 
     /**
@@ -46,6 +49,8 @@ class Transaction extends Model
         'confirmed_at' => 'datetime', // ✅ Cast confirmed_at
         'quantity_change' => 'integer',
         'returned_quantity' => 'integer', // ✅ Cast returned_quantity
+        'rated_at' => 'datetime',
+        'rating' => 'decimal:2', // บังคับให้ออกมาเป็นทศนิยม 2 ตำแหน่งเสมอ (เช่น 4.00)
     ];
 
     /**
