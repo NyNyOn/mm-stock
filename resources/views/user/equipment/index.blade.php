@@ -73,12 +73,18 @@
                             <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                                 @foreach ($result['items'] as $item)
                                     <div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800">
-                                        <div class="relative flex items-center justify-center w-full h-32 overflow-hidden bg-gray-100 dark:bg-gray-700">
+                                        <div class="relative flex items-center justify-center w-full h-32 overflow-hidden bg-gray-100 dark:bg-gray-700 group">
                                             @php 
                                                 $imageFileName = $item->primary_image_file_name_manual ?? null;
                                                 $imageUrl = $imageFileName ? route('nas.image', ['deptKey' => $result['dept_key'], 'filename' => $imageFileName]) : asset('images/placeholder.webp');
                                             @endphp
-                                            <img src="{{ $imageUrl }}" alt="{{ $item->name }}" class="object-contain max-w-full max-h-full" onerror="this.src='{{ asset('images/placeholder.webp') }}'">
+                                            {{-- ✅ รูปภาพคลิกได้ --}}
+                                            <img src="{{ $imageUrl }}" alt="{{ $item->name }}" 
+                                                 class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" 
+                                                 onclick="openImageViewer('{{ $imageUrl }}')">
+                                            <div class="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                <i class="fas fa-search-plus"></i>
+                                            </div>
                                         </div>
                                         <div class="p-3">
                                             <h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100" title="{{ $item->name }}">{{ $item->name }}</h3>
@@ -97,18 +103,24 @@
             <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                 @forelse ($equipments as $item)
                     <div class="flex flex-col overflow-hidden soft-card rounded-2xl gentle-shadow equipment-card bg-white dark:bg-gray-800">
-                        <div class="relative flex items-center justify-center w-full h-48 overflow-hidden bg-gray-100 rounded-t-2xl dark:bg-gray-700">
+                        <div class="relative flex items-center justify-center w-full h-48 overflow-hidden bg-gray-100 rounded-t-2xl dark:bg-gray-700 group">
                             @php 
                                 $imageFileName = $item->primary_image_file_name_manual ?? null;
                                 $imageUrl = $imageFileName ? route('nas.image', ['deptKey' => $currentDeptKey, 'filename' => $imageFileName]) : asset('images/placeholder.webp');
                             @endphp
-                            <img src="{{ $imageUrl }}" alt="{{ $item->name }}" class="object-contain max-w-full max-h-full" onerror="this.src='{{ asset('images/placeholder.webp') }}'">
+                            {{-- ✅ รูปภาพคลิกได้ --}}
+                            <img src="{{ $imageUrl }}" alt="{{ $item->name }}" 
+                                 class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" 
+                                 onclick="openImageViewer('{{ $imageUrl }}')">
+                            <div class="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                <i class="fas fa-search-plus"></i> ดูรูป
+                            </div>
                         </div>
                         <div class="flex flex-col flex-grow p-4">
                             <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100" title="{{ $item->name }}">{{ Str::limit($item->name, 40) }}</h3>
                             <p class="text-sm text-gray-500 dark:text-gray-400">{{ $item->serial_number ?? 'N/A' }}</p>
                             
-                            {{-- ⭐ PHP: แสดงดาวเหลือง 5 ดวง + จำนวนรีวิว ⭐ --}}
+                            {{-- แสดงดาวเหลือง 5 ดวง + จำนวนรีวิว --}}
                             @php
                                 $avgRating = $item->ratings_avg_rating ?? $item->ratings->avg('rating') ?? 0;
                                 $ratingCount = $item->ratings->count() ?? 0;
@@ -133,7 +145,6 @@
                                         'consumable' => [ 'text' => 'เบิก (ไม่ต้องคืน)', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600', 'type' => 'consumable' ], 
                                         'returnable' => [ 'text' => 'ยืม (ต้องคืน)', 'icon' => 'fas fa-hand-holding-heart', 'class' => 'bg-purple-500 hover:bg-purple-600', 'type' => 'returnable' ], 
                                         'partial_return' => [ 'text' => 'เบิก (เหลือคืนได้)', 'icon' => 'fas fa-recycle', 'class' => 'bg-blue-500 hover:bg-blue-600', 'type' => 'partial_return' ], 
-                                        // ✅✅✅ แก้ตรงนี้: ใช้ => แทน : ✅✅✅
                                         'unset' => [ 'text' => 'ยังไม่กำหนดประเภท', 'icon' => 'fas fa-question-circle', 'class' => 'bg-green-100 hover:bg-green-300 opacity-90 cursor-not-allowed', 'type' => null ] 
                                     ];
                                     $itemType = $item->withdrawal_type; 
@@ -154,7 +165,6 @@
                                         $target_class = "";
 
                                         if ($isNotDefaultDept) {
-                                            // ต่างแผนก: ใช้ onclick แจ้งเตือน (และไม่ใส่ class พิเศษ)
                                             $btn_onclick_attr = "onclick=\"handleOtherDeptClick('".e($currentDeptName)."')\""; 
                                             $btn_title = 'ไม่สามารถเบิกจากแผนกอื่นได้';
                                             $btn_class = str_replace('hover:bg-', 'bg-', $btnData['class']) . ' opacity-50 cursor-not-allowed';
@@ -164,7 +174,6 @@
                                         } elseif ($isHardDisabled) {
                                             $btn_disabled = true; $btn_title = $hardDisabledTitle;
                                         } else {
-                                            // ปกติ: ใส่ class พิเศษ ให้ JS ทำงาน (และไม่มี onclick)
                                             $target_class = "live-search-withdraw-btn"; 
                                             $add_animation_class = true;
                                         }
@@ -194,7 +203,15 @@
     </div> 
 </div>
 
-{{-- Modals --}}
+{{-- ✅ Image Viewer Modal (เพิ่มใหม่) --}}
+<div id="image-viewer-modal" class="fixed inset-0 z-[300] hidden bg-black bg-opacity-95 flex items-center justify-center p-0 sm:p-4 backdrop-blur-sm transition-opacity duration-300" onclick="closeImageViewer()">
+    <button class="absolute top-4 right-4 text-white/80 hover:text-white z-50 focus:outline-none bg-black/20 rounded-full p-2 backdrop-blur-md transition-colors" onclick="closeImageViewer()">
+        <svg class="w-8 h-8 drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+    </button>
+    <img id="image-viewer-img" src="" alt="Full Size" class="max-w-full max-h-[100vh] sm:max-h-[90vh] object-contain shadow-2xl transform transition-transform duration-300 scale-100" onclick="event.stopPropagation()">
+</div>
+
+{{-- Transaction Modal (ลบหมายเหตุออกแล้ว) --}}
 <div class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75" id="transaction-details-modal">
     <div class="w-full max-w-lg p-6 mx-4 bg-white rounded-2xl soft-card animate-slide-up-soft dark:bg-gray-800">
         <form id="transaction-details-form" onsubmit="event.preventDefault(); submitTransaction();">
@@ -215,7 +232,7 @@
                         @if(isset($allOpenTickets) && $allOpenTickets->isNotEmpty()) <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI - IT)" class="dark:bg-gray-600"> @forelse ($allOpenTickets->where('source', 'it') as $ticket) <option value="glpi-it-{{ $ticket->id }}">[IT] #{{ $ticket->id }}: {{ Str::limit($ticket->name, 50) }}</option> @empty <option disabled>ไม่พบใบงาน IT</option> @endforelse </optgroup> <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI - EN)" class="dark:bg-gray-600"> @forelse ($allOpenTickets->where('source', 'en') as $ticket) <option value="glpi-en-{{ $ticket->id }}">[EN] #{{ $ticket->id }}: {{ Str::limit($ticket->name, 50) }}</option> @empty <option disabled>ไม่พบใบงาน EN</option> @endforelse </optgroup> @else <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI)" class="dark:bg-gray-600"><option disabled>ไม่พบใบงาน</option></optgroup> @endif
                     </select>
                 </div>
-                <div><label for="modal_notes" class="block mb-1 font-medium text-gray-700 dark:text-gray-300">หมายเหตุ</label><textarea id="modal_notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"></textarea></div>
+                {{-- ❌ ลบช่องหมายเหตุ (Notes) ออกแล้ว --}}
             </div>
             <div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700 space-x-3">
                 <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-600 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-500" onclick="closeModal('transaction-details-modal')">ยกเลิก</button>
@@ -236,42 +253,44 @@
 @push('scripts')
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script>
+    // ✅ ฟังก์ชันสำหรับดูรูป (Lightbox)
+    function openImageViewer(url) {
+        const modal = document.getElementById('image-viewer-modal');
+        const img = document.getElementById('image-viewer-img');
+        img.src = url;
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; // ล็อกไม่ให้เลื่อนฉากหลัง
+    }
+
+    function closeImageViewer() {
+        const modal = document.getElementById('image-viewer-modal');
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+        // เคลียร์รูปหลังปิดเพื่อประหยัด Mem และกันรูปเก่าโผล่แวบนึง
+        setTimeout(() => { document.getElementById('image-viewer-img').src = ''; }, 200);
+    }
+
     function handleOtherDeptClick(deptName) { Swal.fire({ icon: 'error', title: 'ไม่สามารถเบิกจากแผนกนี้ได้', text: `รายการนี้เป็นของแผนก ${deptName}`, confirmButtonText: 'ตกลง' }); }
     function handleUnsetTypeClick() { Swal.fire({ icon: 'warning', title: 'ยังไม่ได้กำหนดประเภท', text: 'กรุณาติดต่อ Admin เพื่อระบุประเภท', confirmButtonText: 'ตกลง' }); }
 
     async function handleTransaction(equipmentId, type, equipmentName, maxQuantity, unitName, deptKey) {
         console.log('Click:', equipmentName);
-
         try {
-            console.log('📡 Checking block status...');
             const response = await fetch("{{ route('transactions.check_status') }}");
-            
-            if (!response.ok) {
-                throw new Error("Network/Server Error: " + response.status);
-            }
-
+            if (!response.ok) throw new Error("Network Error");
             const data = await response.json();
-            console.log('📥 Check status response:', data);
-
             if (data.blocked) {
-                console.warn('⛔ Blocked by Rating Logic');
                 if (typeof openRatingModal === 'function') {
                     openRatingModal(data.unrated_items);
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'กรุณาประเมินความพึงพอใจ',
-                        text: 'คุณมีรายการอุปกรณ์ที่ใช้งานเสร็จสิ้นแล้วและยังไม่ได้ให้คะแนน กรุณาให้คะแนนก่อนทำรายการใหม่',
-                        confirmButtonText: 'ตกลง, ไปให้คะแนน'
-                    });
+                    Swal.fire({ icon: 'warning', title: 'กรุณาประเมินความพึงพอใจ', text: 'คุณมีรายการอุปกรณ์ที่ใช้งานเสร็จสิ้นแล้ว กรุณาให้คะแนนก่อนทำรายการใหม่', confirmButtonText: 'ไปให้คะแนน' });
                 } else {
-                    Swal.fire('Error', 'ไม่พบ Modal Rating กรุณารีเฟรชหน้าจอ', 'error');
+                    Swal.fire('Error', 'ไม่พบหน้าต่างประเมิน', 'error');
                 }
                 return; 
             }
-
         } catch (e) {
-            console.error("Check status failed", e);
-            Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: 'ไม่สามารถตรวจสอบสถานะรายการค้างได้ กรุณาลองใหม่ หรือติดต่อ Admin' });
+            console.error(e);
+            Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: 'ตรวจสอบสถานะไม่สำเร็จ' });
             return; 
         }
 
@@ -299,7 +318,7 @@
         
         const form = document.getElementById('transaction-details-form');
         form.querySelector('#modal_purpose').value = ''; 
-        form.querySelector('#modal_notes').value = '';
+        // ไม่มี modal_notes แล้ว ไม่ต้องเคลียร์
         
         showModal('transaction-details-modal');
     }
@@ -311,7 +330,7 @@
         const type = document.getElementById('modal_transaction_type').value;
         const deptKey = document.getElementById('modal_dept_key').value; 
         const purpose = document.getElementById('modal_purpose').value;
-        const notes = document.getElementById('modal_notes').value;
+        // const notes = document.getElementById('modal_notes').value; // ❌ ลบออก
         const quantityInput = document.getElementById('modal_quantity');
         const quantity = parseInt(quantityInput.value);
         const maxQuantity = parseInt(quantityInput.max);
@@ -329,7 +348,16 @@
         try {
             const response = await fetch("{{ route('ajax.user.transact') }}", {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                body: JSON.stringify({ equipment_id: equipmentId, type: type, purpose: purpose, notes: notes, quantity: quantity, requestor_type: requestorType, requestor_id: requestorId, dept_key: deptKey })
+                body: JSON.stringify({ 
+                    equipment_id: equipmentId, 
+                    type: type, 
+                    purpose: purpose, 
+                    notes: '', // ส่งค่าว่างไปแทน
+                    quantity: quantity, 
+                    requestor_type: requestorType, 
+                    requestor_id: requestorId, 
+                    dept_key: deptKey 
+                })
             });
             const data = await response.json();
             if (response.ok && data.success) {
@@ -421,9 +449,12 @@
                                 const unconfirmed = {{ $unconfirmedCount ?? 0 }};
                                 if (unconfirmed > 0) { btnDis = true; btnTit = 'เคลียร์ของเก่าก่อน'; } else if (item.quantity <= 0) { btnDis = true; btnTit = 'หมด'; } else if (!btnData.type) { btnDis = true; btnTit = 'ยังไม่กำหนดประเภท'; btnCls = btnStates['unset'].class; } else { anim = true; }
                                 
-                                // My Stock: ใช้ class live-search-withdraw-btn
+                                // ✅ My Stock: ใส่ onclick=openImageViewer ในรูป
                                 myHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800">
-                                    <div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700"><img src="${imgUrl}" class="object-contain max-w-full max-h-full" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=No+Image'"></div>
+                                    <div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700 group">
+                                        <img src="${imgUrl}" class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" onclick="openImageViewer('${imgUrl}')">
+                                        <div class="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"><i class="fas fa-search-plus"></i></div>
+                                    </div>
                                     <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.serial_number||'N/A'}</p>${starsHtml}<span class="block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">คงเหลือ: ${item.quantity} ${unit}</span></div>
                                     <div class="p-3 pt-0 mt-auto"><button type="button" class="live-search-withdraw-btn inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md ${btnDis?'disabled:opacity-50 disabled:cursor-not-allowed':''} ${btnCls} ${anim?'btn-pulse-shadow':''}" data-equipment-id="${item.id}" data-type="${btnData.type}" data-name="${item.name.replace(/"/g,'&quot;')}" data-quantity="${item.quantity}" data-unit="${unit.replace(/"/g,'&quot;')}" data-dept-key="${item.dept_key}" ${btnDis?'disabled':''} title="${btnTit}"><i class="mr-1 ${btnData.icon}"></i> ${btnData.text}</button></div></div>`;
                             });
@@ -435,8 +466,13 @@
                              let otherHtml = `<div class="p-5 soft-card rounded-2xl gentle-shadow"><h2 class="mb-4 text-xl font-bold text-gray-800 dark:text-gray-100">พบในแผนกอื่น</h2><div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">`;
                              data.otherStock.forEach(item => {
                                  const unit = item.unit?.name || 'ชิ้น'; const imgUrl = item.image_url ? item.image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
-                                 // Other Stock: ไม่มี class live-search-withdraw-btn (กดแล้วไม่ trigger rating)
-                                 otherHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800 opacity-70"><div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700"><img src="${imgUrl}" class="object-contain max-w-full max-h-full" onerror="this.src='https://placehold.co/400x300/e2e8f0/64748b?text=No+Image'"></div><div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.dept_name}</p><span class="block mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">มี: ${item.quantity} ${unit}</span></div><div class="p-3 pt-0 mt-auto"><button type="button" onclick="handleOtherDeptClick('${item.dept_name}')" class="inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white border border-transparent rounded-md bg-gray-400 opacity-50 cursor-not-allowed"><i class="mr-1 fas fa-ban"></i> เบิกไม่ได้</button></div></div>`;
+                                 // ✅ Other Stock: ใส่ onclick=openImageViewer ในรูป (ดูได้แต่เบิกไม่ได้)
+                                 otherHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800 opacity-70">
+                                 <div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700 group">
+                                     <img src="${imgUrl}" class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" onclick="openImageViewer('${imgUrl}')">
+                                     <div class="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"><i class="fas fa-search-plus"></i></div>
+                                 </div>
+                                 <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.dept_name}</p><span class="block mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">มี: ${item.quantity} ${unit}</span></div><div class="p-3 pt-0 mt-auto"><button type="button" onclick="handleOtherDeptClick('${item.dept_name}')" class="inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white border border-transparent rounded-md bg-gray-400 opacity-50 cursor-not-allowed"><i class="mr-1 fas fa-ban"></i> เบิกไม่ได้</button></div></div>`;
                              });
                              otherHtml += '</div></div>'; otherResultsDiv.innerHTML = otherHtml;
                         }
@@ -453,4 +489,3 @@
     });
 </script>
 @endpush
-

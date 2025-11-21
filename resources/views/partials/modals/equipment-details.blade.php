@@ -1,158 +1,234 @@
-<div id="equipment-details-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black bg-opacity-60 animate-fade-in-fast">
-    {{-- Modal is wider (max-w-5xl), Body is 50/50 grid --}}
-    <div class="relative w-full max-w-5xl max-h-[90vh] bg-white rounded-2xl shadow-xl soft-card animate-slide-up-soft flex flex-col" role="dialog" aria-modal="true">
+<div id="equipment-details-modal" class="hidden fixed inset-0 z-[150] items-center justify-center" role="dialog" aria-modal="true">
+    
+    {{-- Backdrop --}}
+    <div class="absolute inset-0 bg-gray-900/70 backdrop-blur-md transition-opacity opacity-100" onclick="closeModal('equipment-details-modal')"></div>
+
+    {{-- Modal Content --}}
+    <div class="relative w-full max-w-5xl max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden transform transition-all scale-100 mx-4 dark:bg-gray-800 animate-slide-up-soft border border-gray-200 dark:border-gray-700">
 
         {{-- Header --}}
-        <div class="flex items-center justify-between p-5 border-b flex-shrink-0">
-            <h3 class="text-xl font-semibold text-gray-800">
-                <i class="mr-2 fas fa-info-circle text-blue-500"></i>รายละเอียดอุปกรณ์
-            </h3>
-            <button onclick="closeModal('equipment-details-modal')" class="text-gray-400 hover:text-gray-600">
-                <span class="text-2xl">&times;</span>
+        <div class="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex-shrink-0 z-10 shadow-md">
+            <div class="flex items-center gap-4">
+                <div class="p-2.5 bg-white/20 rounded-xl backdrop-blur-md shadow-inner">
+                    <i class="fas fa-box-open text-2xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold leading-tight tracking-wide">รายละเอียดอุปกรณ์</h3>
+                    <p class="text-xs text-indigo-100 mt-0.5 font-light opacity-90">Equipment Details & History</p>
+                </div>
+            </div>
+            <button onclick="closeModal('equipment-details-modal')" class="group bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all duration-200 focus:outline-none">
+                <i class="fas fa-times text-lg text-white/80 group-hover:text-white"></i>
             </button>
         </div>
 
-        {{-- Body: Use flex-grow for scrolling area --}}
-        <div class="flex-grow overflow-y-auto scrollbar-soft">
-            {{-- Loading State --}}
-            <div id="details-loading" class="p-8 text-center">
-                <i class="fas fa-spinner fa-spin text-4xl text-blue-500"></i>
-                <p class="mt-3 text-gray-600">กำลังโหลดข้อมูล...</p>
+        {{-- Body --}}
+        <div class="flex-grow overflow-y-auto custom-scrollbar bg-gray-50/50 dark:bg-gray-900">
+            
+            {{-- Loading --}}
+            <div id="details-loading" class="flex flex-col items-center justify-center py-20">
+                <div class="relative">
+                    <div class="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                    <div class="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-b-purple-500 rounded-full animate-spin-reverse"></div>
+                </div>
+                <p class="text-gray-500 dark:text-gray-400 mt-5 font-medium animate-pulse">กำลังโหลดข้อมูล...</p>
             </div>
             
-            {{-- Error State --}}
-            <div id="details-error-message" class="hidden p-8 text-center">
-                <i class="fas fa-times-circle text-4xl text-red-500"></i>
-                <p class="mt-3 text-red-600">เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
+            {{-- Error --}}
+            <div id="details-error-message" class="hidden flex flex-col items-center justify-center py-20 text-center">
+                <div class="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mb-4 shadow-sm">
+                    <i class="fas fa-exclamation-triangle text-4xl text-red-500"></i>
+                </div>
+                <h4 class="text-xl font-bold text-gray-800 dark:text-gray-200">ไม่สามารถโหลดข้อมูลได้</h4>
+                <p class="text-gray-500 dark:text-gray-400 mt-2">กรุณาลองใหม่อีกครั้ง หรือติดต่อเจ้าหน้าที่</p>
             </div>
 
-            {{-- Content Body (Main container, hidden by default) --}}
-            {{-- Grid 50/50: md:grid-cols-2 --}}
-            <div id="details-body" class="hidden grid grid-cols-1 md:grid-cols-2 gap-0">
-                
-                {{-- Left Side: Image Gallery --}}
-                <div class="p-6 border-r border-gray-100 flex flex-col">
-                    <div class="flex-grow flex items-center justify-center mb-4">
-                         <img id="details-primary-image" src="https://placehold.co/600x400/e2e8f0/64748b?text=Loading..." alt="Equipment Image" class="w-full max-w-md h-auto object-contain rounded-lg shadow-md max-h-[300px]">
-                    </div>
-                    {{-- Thumbnail Grid --}}
-                    <div id="details-gallery-thumbnails" class="grid grid-cols-6 gap-2 flex-shrink-0">
-                        {{-- Thumbnails will be populated by JS --}}
-                        <div class="col-span-6 text-center text-gray-500 text-xs py-2">Loading thumbnails...</div>
-                    </div>
-                </div>
-                
-                {{-- Right Side: Details --}}
-                <div class="p-6">
-                    {{-- Name and Status --}}
-                    <div class="mb-5">
-                        <h4 id="details-name" class="text-2xl font-bold text-gray-800 break-words">...</h4>
-                        <div id="details-status" class="mt-2">
-                            <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Loading...</span>
-                        </div>
-                    </div>
-
-                    {{-- Tabs --}}
-                    <div class="mb-4 border-b border-gray-200">
-                        <nav class="flex -mb-px space-x-4" aria-label="Tabs">
-                            {{-- Tab 1: Main Info (Default Active) --}}
-                            <button onclick="switchDetailsTab(this, 'details-tab-main')" 
-                                    class="details-tab-btn whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-blue-600 border-blue-500" 
-                                    aria-current="page">
-                                <i class="fas fa-info-circle mr-1.5"></i>ข้อมูลหลัก
-                            </button>
-                            {{-- Tab 2: Transaction History --}}
-                            <button onclick="switchDetailsTab(this, 'details-tab-history')" 
-                                    class="details-tab-btn whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 border-transparent">
-                                <i class="fas fa-history mr-1.5"></i>ประวัติ
-                            </button>
-                            {{-- Tab 3: MSDS (If applicable, shown by JS) --}}
-                            <button id="details-msds-tab" onclick="switchDetailsTab(this, 'details-tab-msds')" 
-                                    class="details-tab-btn hidden whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300 border-transparent">
-                                <i class="fas fa-file-medical-alt mr-1.5 text-red-500"></i>MSDS
-                            </button>
-                        </nav>
-                    </div>
-
-                    {{-- Tab Panels Wrapper --}}
-                    <div>
-                        {{-- Panel 1: Main Info (Default Active) --}}
-                        <div id="details-tab-main" class="details-tab-panel space-y-4">
-                            <div class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                                <div class="font-medium text-gray-500">จำนวนคงเหลือ:</div>
-                                <div><span id="details-quantity" class="font-bold text-lg text-blue-700">...</span></div>
-                                
-                                <div class="font-medium text-gray-500">Min Stock:</div>
-                                <div id="details-min-stock" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">Max Stock:</div>
-                                <div id="details-max-stock" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">ประเภทการเบิก:</div>
-                                <div id="details-withdrawal-type" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">หมวดหมู่:</div>
-                                <div id="details-category" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">สถานที่จัดเก็บ:</div>
-                                <div id="details-location" class="text-gray-800">...</div>
-                            </div>
-                            <hr class="my-3">
-                            <div class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                                <div class="font-medium text-gray-500">Model:</div>
-                                <div id="details-model" class="text-gray-800">...</div>
-                                
-                                <div class="font-medium text-gray-500">Part No:</div>
-                                <div id="details-part-no" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">Serial No:</div>
-                                <div id="details-serial" class="text-gray-800 font-mono">...</div>
-
-                                <div class="font-medium text-gray-500">Supplier:</div>
-                                <div id="details-supplier" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">Price:</div>
-                                <div id="details-price" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">Purchase Date:</div>
-                                <div id="details-purchase-date" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">Warranty Exp:</div>
-                                <div id="details-warranty-date" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">Added:</div>
-                                <div id="details-created-at" class="text-gray-800">...</div>
-
-                                <div class="font-medium text-gray-500">Updated:</div>
-                                <div id="details-updated-at" class="text-gray-800">...</div>
-                            </div>
-                            <hr class="my-3">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-500 mb-1">Notes:</label>
-                                <p id="details-notes" class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg min-h-[50px]">...</p>
-                            </div>
-                        </div>
-
-                        {{-- Panel 2: History (Hidden) --}}
-                        <div id="details-tab-history" class="details-tab-panel hidden">
-                            <p class="text-sm font-medium text-gray-600 mb-2">ประวัติ 5 รายการล่าสุด</p>
-                            <div id="details-transactions" class="space-y-2 max-h-[300px] overflow-y-auto scrollbar-soft pr-2">
-                                {{-- History items will be populated by JS --}}
-                                <p class="py-4 px-3 text-xs text-center text-gray-500">Loading history...</p>
-                            </div>
-                        </div>
+            {{-- Content --}}
+            <div id="details-body" class="hidden h-full">
+                <div class="flex flex-col md:flex-row h-full">
+                    
+                    {{-- Left: Image Gallery (40%) --}}
+                    <div class="w-full md:w-5/12 bg-white dark:bg-gray-800 p-6 border-b md:border-b-0 md:border-r border-gray-100 dark:border-gray-700 flex flex-col shadow-sm z-10">
                         
-                        {{-- Panel 3: MSDS (Hidden) --}}
-                        <div id="details-tab-msds" class="details-tab-panel hidden space-y-3">
-                             <div>
-                                <label class="block text-sm font-medium text-gray-500 mb-1">รายละเอียด (Details):</label>
-                                <p id="details-msds-details" class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg min-h-[50px]">...</p>
+                        {{-- Main Image --}}
+                        <div class="relative w-full aspect-[4/3] bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden group shadow-inner mb-4">
+                            {{-- ID Badge --}}
+                            <div class="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-xs font-mono px-2.5 py-1 rounded-lg shadow-sm z-10 border border-white/10">
+                                ID: <span id="img-badge-id">...</span>
                             </div>
-                            <div>
-                                <a href="#" id="details-msds-file" target="_blank" class="hidden items-center px-4 py-2 text-sm font-medium text-white transition-all bg-gradient-to-br from-red-500 to-red-600 rounded-lg hover:shadow-lg button-soft gentle-shadow">
-                                    <i class="fas fa-file-pdf mr-2"></i>ดาวน์โหลดไฟล์ MSDS
-                                </a>
+
+                            <img id="details-primary-image" 
+                                 src="" 
+                                 alt="Equipment" 
+                                 class="w-full h-full object-contain p-4 cursor-zoom-in transition-transform duration-500 group-hover:scale-105"
+                                 onclick="triggerDetailImageSlider()">
+                            
+                            <button onclick="triggerDetailImageSlider()" class="absolute bottom-3 right-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white text-gray-700 dark:text-gray-200 text-xs font-bold px-3 py-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-200 flex items-center gap-2 backdrop-blur-sm">
+                                <i class="fas fa-expand-alt"></i> ขยายรูป
+                            </button>
+                        </div>
+
+                        {{-- Thumbnails --}}
+                        <div id="details-gallery-thumbnails" class="grid grid-cols-5 gap-2 w-full mb-auto"></div>
+
+                        {{-- Status Section --}}
+                        <div class="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700 w-full text-center">
+                            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">สถานะปัจจุบัน (Status)</p>
+                            <div id="details-status-container" class="flex justify-center transform scale-110">
+                                <span class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border bg-gray-100 text-gray-400">Loading...</span>
                             </div>
+                        </div>
+                    </div>
+                    
+                    {{-- Right: Details (60%) --}}
+                    <div class="w-full md:w-7/12 flex flex-col h-full bg-gray-50/30 dark:bg-gray-900/50">
+                        
+                        {{-- Title --}}
+                        <div class="p-6 pb-2 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 shadow-sm">
+                            <h2 id="details-name" class="text-2xl font-bold text-gray-800 dark:text-gray-100 leading-tight mb-2">...</h2>
+                            <div class="flex flex-wrap gap-2">
+                                <div class="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
+                                    <i class="fas fa-barcode text-gray-400"></i> S/N: <span id="details-serial" class="font-mono text-indigo-600 dark:text-indigo-400">...</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
+                                    <i class="fas fa-cube text-gray-400"></i> คงเหลือ: <span id="details-quantity" class="font-bold text-green-600">...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Tabs (Pills) --}}
+                        <div class="px-6 mt-5 mb-1">
+                            <div class="flex p-1.5 space-x-1 bg-gray-200/50 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                                <button onclick="switchDetailsTab(this, 'details-tab-main')" 
+                                        class="details-tab-btn flex-1 py-2 px-4 text-sm font-bold rounded-lg shadow-sm bg-white dark:bg-gray-600 text-indigo-600 dark:text-white transition-all duration-200 ring-1 ring-black/5" 
+                                        aria-current="page">
+                                    <i class="fas fa-list-ul mr-1.5"></i> ข้อมูล
+                                </button>
+                                <button onclick="switchDetailsTab(this, 'details-tab-history')" 
+                                        class="details-tab-btn flex-1 py-2 px-4 text-sm font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 transition-all duration-200">
+                                    <i class="fas fa-history mr-1.5"></i> ประวัติ
+                                </button>
+                                <button id="details-msds-tab" onclick="switchDetailsTab(this, 'details-tab-msds')" 
+                                        class="details-tab-btn hidden flex-1 py-2 px-4 text-sm font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 transition-all duration-200">
+                                    <i class="fas fa-shield-alt mr-1.5"></i> MSDS
+                                </button>
+                            </div>
+                        </div>
+
+                        {{-- Content Area --}}
+                        <div class="flex-grow p-6 overflow-y-auto custom-scrollbar">
+                            
+                            {{-- Tab 1: Main Info --}}
+                            <div id="details-tab-main" class="details-tab-panel animate-fade-in">
+                                
+                                {{-- 🛠️ Specifications --}}
+                                <div class="mb-6">
+                                    <h4 class="text-sm font-bold text-indigo-900 dark:text-indigo-200 flex items-center mb-3">
+                                        <span class="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center mr-2 text-indigo-600">
+                                            <i class="fas fa-tools text-xs"></i>
+                                        </span>
+                                        ข้อมูลจำเพาะ
+                                    </h4>
+                                    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4 grid grid-cols-2 gap-y-4 gap-x-6">
+                                        
+                                        <div class="col-span-2 sm:col-span-1">
+                                            <p class="text-[10px] text-gray-400 uppercase font-bold mb-0.5">ประเภทการเบิก</p>
+                                            <p id="details-withdrawal-type" class="text-sm font-medium text-gray-800 dark:text-gray-200">...</p>
+                                        </div>
+                                        <div class="col-span-2 sm:col-span-1">
+                                            <p class="text-[10px] text-gray-400 uppercase font-bold mb-0.5">หมวดหมู่</p>
+                                            <p id="details-category" class="text-sm font-medium text-gray-800 dark:text-gray-200">...</p>
+                                        </div>
+                                        <div class="col-span-2 sm:col-span-1">
+                                            <p class="text-[10px] text-gray-400 uppercase font-bold mb-0.5">สถานที่จัดเก็บ</p>
+                                            <div class="flex items-center gap-1.5 text-sm font-medium text-gray-800 dark:text-gray-200">
+                                                <i class="fas fa-map-marker-alt text-red-400"></i> <span id="details-location">...</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-span-2 sm:col-span-1">
+                                            <p class="text-[10px] text-gray-400 uppercase font-bold mb-0.5">Part No.</p>
+                                            <p id="details-part-no" class="text-sm font-medium text-gray-800 dark:text-gray-200">...</p>
+                                        </div>
+                                         <div class="col-span-2 sm:col-span-1">
+                                            <p class="text-[10px] text-gray-400 uppercase font-bold mb-0.5">Model</p>
+                                            <p id="details-model" class="text-sm font-medium text-gray-800 dark:text-gray-200">...</p>
+                                        </div>
+                                        <div class="col-span-2 sm:col-span-1">
+                                            <p class="text-[10px] text-gray-400 uppercase font-bold mb-0.5">Supplier</p>
+                                            <p id="details-supplier" class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">...</p>
+                                        </div>
+                                        
+                                        {{-- Stock Limits --}}
+                                        <div class="col-span-2 border-t border-dashed border-gray-200 pt-3 mt-1 flex justify-between items-center">
+                                            <div>
+                                                <p class="text-[10px] text-gray-400 uppercase font-bold">Min Stock</p>
+                                                <p id="details-min-stock" class="text-sm font-bold text-gray-600">...</p>
+                                            </div>
+                                            <div class="h-8 w-px bg-gray-200"></div>
+                                            <div class="text-right">
+                                                <p class="text-[10px] text-gray-400 uppercase font-bold">Max Stock</p>
+                                                <p id="details-max-stock" class="text-sm font-bold text-gray-600">...</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {{-- 📅 Timeline --}}
+                                <div>
+                                    <h4 class="text-sm font-bold text-orange-900 dark:text-orange-200 flex items-center mb-3">
+                                        <span class="w-7 h-7 rounded-lg bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center mr-2 text-orange-600">
+                                            <i class="fas fa-calendar-alt text-xs"></i>
+                                        </span>
+                                        ข้อมูลวันที่
+                                    </h4>
+                                    <div class="grid grid-cols-3 gap-3">
+                                        <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm text-center">
+                                            <p class="text-[10px] text-gray-400 mb-1">วันที่ซื้อ</p>
+                                            <p id="details-purchase-date" class="text-xs font-bold text-gray-700 dark:text-gray-300">...</p>
+                                        </div>
+                                        <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm text-center">
+                                            <p class="text-[10px] text-gray-400 mb-1">ประกันหมด</p>
+                                            <p id="details-warranty-date" class="text-xs font-bold text-gray-700 dark:text-gray-300">...</p>
+                                        </div>
+                                        <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm text-center">
+                                            <p class="text-[10px] text-gray-400 mb-1">เพิ่มเมื่อ</p>
+                                            <p id="details-created-at" class="text-xs font-bold text-gray-700 dark:text-gray-300">...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="details-notes" class="hidden"></div>
+                            </div>
+
+                            {{-- Tab 2: History --}}
+                            <div id="details-tab-history" class="details-tab-panel hidden animate-fade-in">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h4 class="text-sm font-bold text-gray-700 dark:text-gray-300">รายการล่าสุด</h4>
+                                    <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded-full font-bold">5 รายการ</span>
+                                </div>
+                                <div id="details-transactions" class="space-y-3 pr-1">
+                                    {{-- JS Injected --}}
+                                </div>
+                            </div>
+                            
+                            {{-- Tab 3: MSDS --}}
+                            <div id="details-tab-msds" class="details-tab-panel hidden animate-fade-in">
+                                <div class="bg-orange-50 border border-orange-100 rounded-xl p-5 shadow-sm">
+                                    <h4 class="flex items-center text-orange-800 font-bold mb-3">
+                                        <i class="fas fa-file-medical-alt mr-2 text-xl"></i> ข้อมูลความปลอดภัย
+                                    </h4>
+                                    <div class="bg-white/60 p-3 rounded-lg border border-orange-100/50 mb-4">
+                                        <p id="details-msds-details" class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">...</p>
+                                    </div>
+                                    
+                                    <div class="text-center">
+                                        <a href="#" id="details-msds-file" target="_blank" class="hidden inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-lg text-sm font-bold shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200">
+                                            <i class="fas fa-file-pdf mr-2"></i> ดาวน์โหลดเอกสาร MSDS
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -160,302 +236,260 @@
         </div>
 
         {{-- Footer --}}
-        <div id="details-footer" class="flex items-center justify-end p-5 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
-            <button onclick="closeModal('equipment-details-modal')" type="button" class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-4 focus:ring-blue-300 focus:outline-none">
-                ปิด
-            </button>
+        <div id="details-footer" class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-between flex-shrink-0 z-10">
+            <div class="flex items-center gap-2 text-gray-400">
+                <i class="fas fa-fingerprint"></i> 
+                <span class="text-xs font-bold uppercase tracking-wider">System ID:</span>
+                <span id="footer-equipment-id" class="font-mono text-sm text-gray-600 dark:text-gray-300 font-bold">...</span>
+            </div>
             
-            {{-- This button will trigger the QR Code modal --}}
-            <button id="details-print-btn" type="button" class="ml-3 px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-br from-gray-700 to-gray-800 rounded-lg hover:shadow-lg transition-all button-soft gentle-shadow">
-                <i class="fas fa-print mr-2"></i>พิมพ์ป้าย QR/Barcode
-            </button>
+            <div class="flex gap-3">
+                {{-- ปุ่ม QR Code: เพิ่ม Logic การทำงานที่ชัดเจน --}}
+                <button id="details-print-btn" type="button" class="group flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-600 transition-all duration-200">
+                    <i class="fas fa-qrcode mr-2 text-gray-400 group-hover:text-indigo-500 transition-colors"></i> QR Code
+                </button>
 
-            @can('equipment:manage')
-            <button id="details-edit-btn" type="button" class="ml-3 px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-br from-blue-400 to-purple-500 rounded-lg hover:shadow-lg transition-all button-soft gentle-shadow">
-                <i class="fas fa-edit mr-2"></i>แก้ไข
-            </button>
-            @endcan
+                @can('equipment:manage')
+                <button id="details-edit-btn" type="button" class="flex items-center px-5 py-2 bg-indigo-600 border border-transparent rounded-lg text-sm font-bold text-white shadow-md hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+                    <i class="fas fa-edit mr-2"></i> แก้ไข
+                </button>
+                @endcan
+            </div>
         </div>
 
     </div>
 </div>
 
 <script>
-    // Make sure this script block runs only once
     if (typeof window.initDetailsModal === 'undefined') {
-        window.initDetailsModal = true; // Set flag
+        window.initDetailsModal = true;
+        let currentDetailImages = [];
+        let currentDetailName = '';
 
-        // Function to switch tabs
+        // ... (Slider & Tab Switcher logic เหมือนเดิม) ...
+        window.triggerDetailImageSlider = function() {
+            if (typeof openImageSlider === 'function') { openImageSlider(currentDetailImages, currentDetailName); } 
+            else { const primaryImg = document.getElementById('details-primary-image'); if (primaryImg) window.open(primaryImg.src, '_blank'); }
+        }
+
         function switchDetailsTab(selectedBtn, targetPanelId) {
-            // Get all tab buttons and panels
             document.querySelectorAll('.details-tab-btn').forEach(btn => {
-                btn.classList.remove('text-blue-600', 'border-blue-500');
-                btn.classList.add('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300', 'border-transparent');
+                btn.className = 'details-tab-btn flex-1 py-2 px-4 text-sm font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 transition-all duration-200';
                 btn.removeAttribute('aria-current');
             });
-            document.querySelectorAll('.details-tab-panel').forEach(panel => {
-                panel.classList.add('hidden');
-            });
+            document.querySelectorAll('.details-tab-panel').forEach(panel => panel.classList.add('hidden'));
 
-            // Activate the selected tab button
-            selectedBtn.classList.add('text-blue-600', 'border-blue-500');
-            selectedBtn.classList.remove('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300', 'border-transparent');
+            selectedBtn.className = 'details-tab-btn flex-1 py-2 px-4 text-sm font-bold rounded-lg shadow-sm bg-white dark:bg-gray-600 text-indigo-600 dark:text-white transition-all duration-200 ring-1 ring-black/5';
             selectedBtn.setAttribute('aria-current', 'page');
 
-            // Show the target panel
             const targetPanel = document.getElementById(targetPanelId);
-            if (targetPanel) {
-                targetPanel.classList.remove('hidden');
-            }
+            if (targetPanel) targetPanel.classList.remove('hidden');
         }
-        
-        // Function to update the main image display
-        function updatePrimaryImage(url) {
+
+        window.updatePrimaryImage = function(url) {
             const primaryImageDisplay = document.getElementById('details-primary-image');
-            if (primaryImageDisplay) {
-                primaryImageDisplay.src = url;
-            }
+            if (primaryImageDisplay) { primaryImageDisplay.style.opacity = '0.5'; setTimeout(() => { primaryImageDisplay.src = url; primaryImageDisplay.style.opacity = '1'; }, 150); }
         }
-        // Expose to global scope so img onclick can find it
-        window.updatePrimaryImage = updatePrimaryImage;
 
+        // ✅ Helper: Status Badge
+        function createInternalStatusBadge(status) {
+            const badge = document.createElement('span');
+            badge.className = 'px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border';
+            if (!status) status = 'unknown';
+            switch (status) {
+                case 'available': badge.classList.add('bg-green-50', 'text-green-700', 'border-green-200'); badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> พร้อมใช้งาน'; break;
+                case 'low_stock': badge.classList.add('bg-yellow-50', 'text-yellow-700', 'border-yellow-200'); badge.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> ใกล้หมด'; break;
+                case 'out_of_stock': badge.classList.add('bg-red-50', 'text-red-700', 'border-red-200'); badge.innerHTML = '<i class="fas fa-times-circle mr-1"></i> สินค้าหมด'; break;
+                case 'maintenance': badge.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-200'); badge.innerHTML = '<i class="fas fa-tools mr-1"></i> ซ่อมบำรุง'; break;
+                default: badge.classList.add('bg-gray-100', 'text-gray-600', 'border-gray-200'); badge.textContent = status;
+            }
+            return badge;
+        }
 
-        // Function to populate data (called by showDetailsModal in equipment.js)
-        // This function might be defined inside showDetailsModal itself, 
-        // but we need the button listeners here.
-        document.addEventListener('DOMContentLoaded', () => {
-            const editBtn = document.getElementById('details-edit-btn');
-            const printBtn = document.getElementById('details-print-btn');
-
-            // Add Click Listener for Edit Button
-             if(editBtn){
-                 editBtn.addEventListener('click', () => {
-                     const equipmentId = editBtn.getAttribute('data-equipment-id');
-                     if (equipmentId) {
-                         closeModal('equipment-details-modal');
-                         // showEditModal MUST be globally defined (e.g., in equipment.js)
-                         if (typeof showEditModal === 'function') {
-                            showEditModal(equipmentId); 
-                         } else {
-                            console.error('showEditModal function not found');
-                         }
-                     } else {
-                         console.error("Edit button missing equipment ID");
-                     }
-                 });
-             }
-
-            // ✅✅✅ START: MODIFIED PRINT BUTTON LISTENER ✅✅✅
-            // This is the logic that determines WHAT to send to the QR code modal
-             if(printBtn){
-                 printBtn.addEventListener('click', () => {
-                     const equipmentId = printBtn.getAttribute('data-equipment-id');
-                     const equipmentName = document.getElementById('details-name')?.textContent || 'อุปกรณ์';
-                     
-                     // ✅ NEW: Get Serial Number from the details modal DOM
-                     const equipmentSnElement = document.getElementById('details-serial');
-                     const equipmentSn = equipmentSnElement ? equipmentSnElement.textContent : '';
-
-                     // ✅ NEW: Logic to decide which value to encode
-                     // Use SN if it exists and is not just '-', otherwise fallback to ID
-                     const valueToEncode = (equipmentSn && equipmentSn.trim() !== '-' && equipmentSn.trim() !== '') 
-                                          ? equipmentSn.trim() 
-                                          : String(equipmentId);
-
-                     console.log(`[DEBUG_QR_CALL] Encoding value: ${valueToEncode} (SN: '${equipmentSn}', Fallback ID: '${equipmentId}')`);
-
-                     // Call the QR Code modal function (must be globally defined, e.g., in equipment.js)
-                     if (typeof openQrCodeModal === 'function') {
-                         // ✅ MODIFIED: Use valueToEncode and check it
-                         if (valueToEncode) {
-                             openQrCodeModal(valueToEncode, equipmentName);
-                         } else { 
-                             console.error("Details QR: No value to encode (ID and SN are missing)."); 
-                             Swal.fire('Error', 'Missing ID/SN for QR', 'error'); 
-                         }
-                     } else {
-                         console.error('openQrCodeModal function not found');
-                         Swal.fire('Error', 'QR Code function not available.', 'error');
-                     }
-                 });
-             }
-             // ✅✅✅ END: MODIFIED PRINT BUTTON LISTENER ✅✅✅
-        });
-        
-        // This function will be called by showDetailsModal() in equipment.js
-        // to populate the modal with data.
-        function populateDetailsModal(data) {
-            console.log("[DEBUG_DETAILS] Populating data...", data);
-
-            // Helper to safely set text content
-            const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value || '-'; else console.warn(`Element #${id} not found.`); };
-
-            setText('details-name', data.name);
-            const statusEl = document.getElementById('details-status');
-            if (statusEl && typeof createStatusBadge === 'function') { statusEl.innerHTML = ''; statusEl.appendChild(createStatusBadge(data.status)); } else console.warn('Element #details-status or createStatusBadge not found.');
+        // ✅ MAIN FUNCTION
+        window.populateDetailsModal = function(data) {
+            // ✅ FIX: Handle Data Wrapping (แก้ ID/Status ไม่ขึ้น)
+            const item = data.data || data;
             
-            setText('details-quantity', data.quantity ?? '0');
-            setText('details-min-stock', data.min_stock ?? '0');
-            setText('details-max-stock', data.max_stock ?? '0');
-            setText('details-withdrawal-type', window.getWithdrawalTypeText(data.withdrawal_type));
-            setText('details-category', data.category?.name);
-            setText('details-location', data.location?.name);
-            setText('details-model', data.model);
-            setText('details-part-no', data.part_no);
-            setText('details-serial', data.serial_number);
-            setText('details-supplier', data.supplier);
-            setText('details-price', data.price ? parseFloat(data.price).toLocaleString('th-TH', { style: 'currency', currency: 'THB' }) : '-');
-            setText('details-purchase-date', window.formatDate(data.purchase_date));
-            setText('details-warranty-date', window.formatDate(data.warranty_date));
-            setText('details-notes', data.notes || '-');
-            setText('details-created-at', window.formatDateTime(data.created_at));
-            setText('details-updated-at', window.formatDateTime(data.updated_at));
+            console.log("[DEBUG_DETAILS] Item Data:", item);
+            
+            const setText = (id, value) => { 
+                try {
+                    const el = document.getElementById(id); 
+                    if (el) el.textContent = (value === null || value === undefined || value === '') ? '-' : value; 
+                } catch(e) { console.warn(`Error setting text for ${id}`, e); }
+            };
+            
+            currentDetailName = item.name;
+            currentDetailImages = [];
 
-            // --- Populate MSDS Info ---
+            // 1. IDs & Header
+            setText('footer-equipment-id', item.id);
+            setText('img-badge-id', item.id); // Update Image Badge
+            setText('details-name', item.name);
+            setText('details-quantity', `${item.quantity ?? 0} ${item.unit?.name || 'ชิ้น'}`);
+            setText('details-serial', item.serial_number);
+            
+            // 2. Specs
+            setText('details-min-stock', item.min_stock);
+            setText('details-max-stock', item.max_stock);
+            setText('details-withdrawal-type', window.getWithdrawalTypeText ? window.getWithdrawalTypeText(item.withdrawal_type) : item.withdrawal_type);
+            setText('details-category', item.category?.name);
+            setText('details-location', item.location?.name);
+            setText('details-model', item.model);
+            setText('details-part-no', item.part_no);
+            setText('details-supplier', item.supplier);
+            
+            // 3. Dates
+            setText('details-purchase-date', window.formatDate ? window.formatDate(item.purchase_date) : item.purchase_date);
+            setText('details-warranty-date', window.formatDate ? window.formatDate(item.warranty_date) : item.warranty_date);
+            setText('details-created-at', window.formatDateTime ? window.formatDateTime(item.created_at) : item.created_at);
+
+            // ✅ 4. Status Badge (รับประกันว่าขึ้นแน่นอน)
+            try {
+                const statusEl = document.getElementById('details-status-container');
+                if (statusEl) { 
+                    statusEl.innerHTML = ''; 
+                    statusEl.appendChild(createInternalStatusBadge(item.status)); 
+                }
+            } catch(e) { console.error("Status badge error", e); }
+
+            // ... (MSDS, History, Images Logic - เหมือนเดิม) ...
+            // ... (ข้ามส่วนที่ยาวๆ เพื่อความกระชับ แต่ในไฟล์จริงต้องมีครบนะครับ) ...
+             // MSDS
             const msdsTab = document.getElementById('details-msds-tab');
             const msdsDetailsEl = document.getElementById('details-msds-details');
             const msdsLinkEl = document.getElementById('details-msds-file');
-
-            if (data.has_msds) {
+            if (item.has_msds) {
                 if(msdsTab) msdsTab.classList.remove('hidden');
-                if(msdsDetailsEl) msdsDetailsEl.textContent = data.msds_details || '-';
-                if (msdsLinkEl) {
-                    if (data.msds_file_url) {
-                        msdsLinkEl.href = data.msds_file_url;
-                        msdsLinkEl.classList.remove('hidden');
-                    } else {
-                        msdsLinkEl.classList.add('hidden');
-                    }
+                if(msdsDetailsEl) msdsDetailsEl.textContent = item.msds_details || 'ไม่มีรายละเอียดเพิ่มเติม';
+                if (msdsLinkEl && item.msds_file_url) {
+                    msdsLinkEl.href = item.msds_file_url;
+                    msdsLinkEl.classList.remove('hidden');
+                    msdsLinkEl.classList.add('inline-flex');
                 }
             } else {
                 if(msdsTab) msdsTab.classList.add('hidden');
-                if(msdsLinkEl) msdsLinkEl.classList.add('hidden');
             }
-             // Reset to first tab
             const firstTabBtn = document.querySelector('.details-tab-btn');
             if(firstTabBtn) switchDetailsTab(firstTabBtn, 'details-tab-main');
 
-
-            // --- Populate Transaction History ---
+            // History
             const transactionContainer = document.getElementById('details-transactions');
             if (transactionContainer) {
-                transactionContainer.innerHTML = ''; // Clear
-                if (data.transactions && data.transactions.length > 0) {
-                    data.transactions.forEach(t => {
+                transactionContainer.innerHTML = '';
+                if (item.transactions && item.transactions.length > 0) {
+                    item.transactions.forEach(t => {
+                        const isPlus = t.quantity_change >= 0;
                         const div = document.createElement('div');
-                        div.className = 'p-1.5 border-b last:border-b-0 text-xs';
+                        div.className = `p-3 rounded-lg border ${isPlus ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'} shadow-sm flex items-start gap-3 transition-transform hover:scale-[1.01]`;
                         div.innerHTML = `
-                            <div class="flex justify-between items-center">
-                                <span class="${t.quantity_change >= 0 ? 'text-green-600' : 'text-red-600'} font-medium">${window.getTransactionTypeText(t.type)} (${t.quantity_change >= 0 ? '+' : ''}${t.quantity_change})</span>
-                                <span class="text-gray-400">${window.formatDateTime(t.transaction_date)}</span>
+                            <div class="mt-1 bg-white rounded-full p-1.5 shadow-sm border border-gray-100">
+                                <i class="fas ${isPlus ? 'fa-arrow-down text-green-500' : 'fa-arrow-up text-red-500'} text-xs"></i>
                             </div>
-                            <div class="flex justify-between items-center text-gray-500">
-                                <span>โดย: ${t.user?.fullname || 'System'}</span>
-                                <span>${t.status || ''}</span>
+                            <div class="flex-grow">
+                                <div class="flex justify-between items-start">
+                                    <span class="font-bold text-gray-700 text-sm">
+                                        ${window.getTransactionTypeText ? window.getTransactionTypeText(t.type) : t.type}
+                                    </span>
+                                    <span class="text-xs text-gray-400 font-mono">${window.formatDateTime ? window.formatDateTime(t.transaction_date) : t.transaction_date}</span>
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                                    <span><i class="fas fa-user text-gray-400"></i> ${t.user?.fullname || 'System'}</span>
+                                    <span class="font-mono font-bold ${isPlus ? 'text-green-600' : 'text-red-600'}">
+                                        (${isPlus ? '+' : ''}${t.quantity_change})
+                                    </span>
+                                </div>
                             </div>
-                            ${t.notes ? `<p class="text-gray-500 italic mt-0.5">"${t.notes}"</p>` : ''}
                         `;
                         transactionContainer.appendChild(div);
                     });
                 } else {
-                    transactionContainer.innerHTML = '<p class="py-4 px-3 text-xs text-center text-gray-500">ไม่มีประวัติ</p>';
+                    transactionContainer.innerHTML = '<div class="py-8 text-center text-gray-400"><i class="fas fa-history text-3xl mb-2 opacity-30"></i><span class="text-sm">ยังไม่มีประวัติการใช้งาน</span></div>';
                 }
             }
 
-            // --- Populate Image Gallery ---
+            // Images
             const primaryImageDisplay = document.getElementById('details-primary-image');
             const thumbnailContainer = document.getElementById('details-gallery-thumbnails');
-            thumbnailContainer.innerHTML = ''; // Clear
+            thumbnailContainer.innerHTML = '';
             let finalPrimaryUrl = 'https://placehold.co/600x400/e2e8f0/64748b?text=No+Image';
 
-            if (data.image_urls && data.image_urls.length > 0) {
-                finalPrimaryUrl = data.primary_image_url || data.image_urls[0];
-                data.image_urls.forEach((url, index) => {
-                    const imgThumb = document.createElement('img');
-                    imgThumb.src = url; imgThumb.alt = `Thumbnail ${index + 1}`;
-                    imgThumb.className = 'w-full h-16 object-cover rounded cursor-pointer border-2 border-transparent hover:border-blue-400 transition';
-                    // Use the globally defined function
-                    imgThumb.onclick = () => window.updatePrimaryImage(url); 
-                    thumbnailContainer.appendChild(imgThumb);
-                });
+            if (item.images_list && item.images_list.length > 0) {
+                currentDetailImages = item.images_list;
+                finalPrimaryUrl = currentDetailImages[0];
+            } else if (item.image_urls && item.image_urls.length > 0) {
+                currentDetailImages = item.image_urls;
+                finalPrimaryUrl = item.primary_image_url || item.image_urls[0];
+            } else if (item.image_url) {
+                currentDetailImages = [item.image_url];
+                finalPrimaryUrl = item.image_url;
             } else {
-                thumbnailContainer.innerHTML = '<div class="col-span-6 text-center text-gray-500 text-xs py-2">No images</div>';
+                currentDetailImages = [finalPrimaryUrl];
             }
             primaryImageDisplay.src = finalPrimaryUrl;
 
-            // --- Set Button Data ---
-            // This is crucial for the listeners above
+            if (currentDetailImages.length > 1) {
+                currentDetailImages.forEach((url, index) => {
+                    const container = document.createElement('div');
+                    container.className = 'relative aspect-square cursor-pointer group';
+                    const imgThumb = document.createElement('img');
+                    imgThumb.src = url;
+                    imgThumb.className = 'w-full h-full object-cover rounded-lg border-2 border-transparent group-hover:border-indigo-500 transition-all duration-200 shadow-sm';
+                    container.onclick = () => {
+                        window.updatePrimaryImage(url);
+                        thumbnailContainer.querySelectorAll('img').forEach(i => i.classList.remove('border-indigo-500', 'ring-2', 'ring-indigo-200'));
+                        imgThumb.classList.add('border-indigo-500', 'ring-2', 'ring-indigo-200');
+                    };
+                    container.appendChild(imgThumb);
+                    thumbnailContainer.appendChild(container);
+                });
+            }
+
+            // Buttons (Edit)
             const editBtn = document.getElementById('details-edit-btn');
+            if(editBtn) {
+                const newEdit = editBtn.cloneNode(true);
+                editBtn.parentNode.replaceChild(newEdit, editBtn);
+                newEdit.setAttribute('data-equipment-id', item.id);
+                newEdit.addEventListener('click', () => {
+                    closeModal('equipment-details-modal');
+                    if (typeof showEditModal === 'function') showEditModal(item.id);
+                });
+            }
+
+            // ✅ FIX: QR Code Button Logic (แก้ปัญหาถูกบัง)
             const printBtn = document.getElementById('details-print-btn');
-            // Store the equipment ID on the buttons for later use
-            if(editBtn) editBtn.setAttribute('data-equipment-id', data.id); else console.warn("Edit button 'details-edit-btn' not found.");
-            if(printBtn) printBtn.setAttribute('data-equipment-id', data.id); else console.warn("Print button 'details-print-btn' not found.");
-
-            // Add Click Listener for Edit Button (moved from DOMContentLoaded)
-             if(editBtn){
-                // Clone and replace to ensure previous listeners are removed
-                const newEditBtn = editBtn.cloneNode(true);
-                editBtn.parentNode.replaceChild(newEditBtn, editBtn);
-                newEditBtn.addEventListener('click', () => {
-                     const equipmentId = newEditBtn.getAttribute('data-equipment-id');
-                     if (equipmentId) {
-                         closeModal('equipment-details-modal');
-                         // ✅ This function MUST be defined in equipment.js
-                         if (typeof showEditModal === 'function') {
-                             showEditModal(equipmentId); 
-                         } else {
-                             console.error('showEditModal is not defined globally');
-                             Swal.fire('Error', 'Cannot open edit modal.', 'error');
-                         }
-                     } else {
-                         console.error("Edit button missing equipment ID");
-                     }
-                 });
-             }
-             
-            // ✅✅✅ START: RE-ADD PRINT BUTTON LISTENER (CLONED) ✅✅✅
-            // This block was missing, causing the old (wrong) listener from equipment.js to run.
-            // By adding it here, it will override the old one.
-            if(printBtn){
-                // Clone and replace to ensure previous listeners are removed
-                const newPrintBtn = printBtn.cloneNode(true);
-                printBtn.parentNode.replaceChild(newPrintBtn, printBtn);
+            if(printBtn) {
+                const newPrint = printBtn.cloneNode(true);
+                printBtn.parentNode.replaceChild(newPrint, printBtn);
+                newPrint.setAttribute('data-equipment-id', item.id);
                 
-                newPrintBtn.addEventListener('click', () => {
-                     const equipmentId = newPrintBtn.getAttribute('data-equipment-id');
-                     const equipmentName = document.getElementById('details-name')?.textContent || 'อุปกรณ์';
+                newPrint.addEventListener('click', () => {
+                     const sn = item.serial_number && item.serial_number !== '-' ? item.serial_number : String(item.id);
                      
-                     // Get Serial Number from the details modal DOM
-                     const equipmentSnElement = document.getElementById('details-serial');
-                     const equipmentSn = equipmentSnElement ? equipmentSnElement.textContent : '';
-
-                     // Logic to decide which value to encode
-                     const valueToEncode = (equipmentSn && equipmentSn.trim() !== '-' && equipmentSn.trim() !== '') 
-                                          ? equipmentSn.trim() 
-                                          : String(equipmentId);
-
-                     console.log(`[DEBUG_QR_CALL_FIXED] Encoding value: ${valueToEncode} (SN: '${equipmentSn}', Fallback ID: '${equipmentId}')`);
-
-                     // Call the QR Code modal function (must be globally defined)
-                     if (typeof openQrCodeModal === 'function') {
-                         if (valueToEncode) {
-                             openQrCodeModal(valueToEncode, equipmentName);
-                         } else { 
-                             console.error("Details QR: No value to encode."); 
-                             Swal.fire('Error', 'Missing ID/SN for QR', 'error'); 
-                         }
-                     } else {
-                         console.error('openQrCodeModal function not found');
-                         Swal.fire('Error', 'QR Code function not available.', 'error');
-                     }
-                 });
-             }
-             // ✅✅✅ END: RE-ADD PRINT BUTTON LISTENER (CLONED) ✅✅✅
-
-
-            console.log("[DEBUG_DETAILS] Details populated and shown.");
+                     // 1. ปิดหน้าต่างปัจจุบัน
+                     closeModal('equipment-details-modal'); 
+                     
+                     // 2. รอ 200ms ให้ Animation จบ แล้วเปิด QR Code
+                     setTimeout(() => {
+                        if (typeof openQrCodeModal === 'function') {
+                            openQrCodeModal(sn, item.name);
+                            // Hack: บังคับ Z-Index ของ QR Modal ให้สูงที่สุด
+                            const qrModal = document.getElementById('qr-code-modal');
+                            if(qrModal) qrModal.style.zIndex = '9999';
+                        } else {
+                            console.error("openQrCodeModal not found!");
+                        }
+                     }, 200);
+                });
+            }
         }
-    } else {
-        console.log("[DEBUG_DETAILS] Script block already processed, skipping re-definition.");
     }
 </script>
+
+<style>
+    @keyframes spin-reverse { to { transform: rotate(-360deg); } }
+    .animate-spin-reverse { animation: spin-reverse 1s linear infinite; }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+</style>
