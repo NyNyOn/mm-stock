@@ -110,6 +110,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index')->middleware('can:report:view');
     Route::post('/reports/generate', [ReportController::class, 'generate'])->name('reports.generate')->middleware('can:report:view');
     Route::post('/reports/export-pdf', [ReportController::class, 'exportPdf'])->name('reports.exportPdf');
+    Route::get('/deadstock', [App\Http\Controllers\DeadstockController::class, 'index'])->name('deadstock.index')->middleware('can:report:view'); 
     
     // (Original routes for Equipment Maintenance)
     Route::get('/maintenance', [MaintenanceController::class, 'index'])->name('maintenance.index')->middleware('can:maintenance:view'); // Note: same controller, different route group
@@ -129,7 +130,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/{stockCheck}', [StockCheckController::class, 'show'])->name('show');
         Route::get('/{stockCheck}/perform', [StockCheckController::class, 'perform'])->name('perform');
         Route::put('/{stockCheck}', [StockCheckController::class, 'update'])->name('update');
-                
+               
     });
 
     // Purchase Order by Job

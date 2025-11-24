@@ -11,7 +11,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-// ✅ เพิ่ม Use Statement
 use Illuminate\Support\Facades\Artisan; 
 use Illuminate\Support\Facades\Log;
 
@@ -146,18 +145,25 @@ class StockCheckController extends Controller
 
         DB::beginTransaction();
         try {
+            // 1. บันทึกค่าที่กรอกเข้ามาก่อน (Updated_at ของ Item จะเปลี่ยนตรงนี้)
             foreach ($request->items as $itemId => $data) {
                 $item = StockCheckItem::find($itemId);
                 if ($item && $item->stock_check_id === $stockCheck->id) {
                     $counted = $data['counted_quantity'] ?? 0;
-                    $item->counted_quantity = $counted;
-                    $item->discrepancy = $counted - $item->expected_quantity;
-                    $item->save();
+                    
+                    // เช็คว่ามีการเปลี่ยนแปลงค่าหรือไม่ เพื่อให้ updated_at ทำงานแน่นอน
+                    if ($item->counted_quantity !== $counted) {
+                        $item->counted_quantity = $counted;
+                        $item->discrepancy = $counted - $item->expected_quantity;
+                        $item->save(); // timestamp 'updated_at' จะอัปเดตเป็นเวลาปัจจุบัน
+                    }
                 }
             }
 
+            // เช็คว่านับครบทุกรายการหรือยัง
             $isComplete = $stockCheck->items()->whereNull('counted_quantity')->count() === 0;
 
+            // 2. ถ้ากดปุ่ม "ปิดงาน" (Complete)
             if ($request->has('complete_check') && $isComplete) {
                 
                 $stockCheck->status = 'completed';
@@ -171,8 +177,9 @@ class StockCheckController extends Controller
                     $equipment = $checkItem->equipment;
                     
                     if ($equipment) {
-                        // อัปเดตวันที่นับล่าสุด และ ปลดล็อก Frozen
-                        $equipment->last_stock_check_at = now();
+                        // ✅✅✅ FIX: ใช้เวลาที่กรอกข้อมูลจริง ($checkItem->updated_at) แทนเวลาปิดงาน (now())
+                        // ถ้าไม่มี updated_at ให้ใช้ now() สำรอง
+                        $equipment->last_stock_check_at = $checkItem->updated_at ?? now(); 
 
                         // ถ้าเคย Frozen -> คำนวณสถานะใหม่ตามจำนวน
                         if ($equipment->status === 'frozen') {
@@ -203,18 +210,16 @@ class StockCheckController extends Controller
                     }
                 }
 
-                DB::commit(); // ✅ บันทึกข้อมูลงานนี้ลง DB ก่อน
+                DB::commit(); 
 
-                // ✅✅✅ เพิ่มส่วนนี้: สั่งแช่แข็งประเภทอื่นที่หมดอายุทันทีหลังปิดงานนี้ ✅✅✅
                 try {
                     Artisan::call('stock:check-expiration');
                     Log::info("Triggered stock expiration check after completing StockCheck #{$stockCheck->id}");
                 } catch (\Throwable $e) {
                     Log::warning("Failed to trigger stock expiration check: " . $e->getMessage());
                 }
-                // ✅✅✅ จบส่วนเพิ่ม ✅✅✅
 
-                return redirect()->route('stock-checks.show', $stockCheck)->with('success', 'บันทึกและปิดงานตรวจนับเรียบร้อยแล้ว ระบบได้ทำการตรวจสอบรายการหมดอายุอื่นๆ เพิ่มเติม');
+                return redirect()->route('stock-checks.show', $stockCheck)->with('success', 'บันทึกและปิดงานตรวจนับเรียบร้อยแล้ว');
 
             } elseif ($request->has('complete_check') && !$isComplete) {
                 DB::rollBack();

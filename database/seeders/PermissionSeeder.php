@@ -4,7 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use App\Models\Permission; // ใช้ Model Path ตามไฟล์ที่คุณอัปโหลดมา
+use App\Models\Permission; 
 
 class PermissionSeeder extends Seeder
 {
@@ -14,7 +14,7 @@ class PermissionSeeder extends Seeder
     public function run(): void
     {
         //
-        // ✅✅✅ START: อัปเดตรายการสิทธิ์ 29 รายการ (จัดหมวดหมู่แล้ว) ✅✅✅
+        // ✅✅✅ START: อัปเดตรายการสิทธิ์ (จัดหมวดหมู่แล้ว) ✅✅✅
         //
         $permissions = [
             // === Dashboard ===
@@ -28,6 +28,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'equipment:borrow', 'description' => 'เบิก/ยืมอุปกรณ์ (สำหรับผู้ใช้ทั่วไป)'],
             ['name' => 'equipment:manage', 'description' => 'สิทธิ์ในการใช้งานปุ่มเพิ่มและแก้ไขข้อมูลอุปกรณ์'],
             ['name' => 'receive:view', 'description' => 'สิทธิ์ในการมองเห็นและเข้าถึงหน้า รับเข้าอุปกรณ์'],
+            ['name' => 'receive:manage', 'description' => 'ดำเนินการรับเข้าอุปกรณ์'],
             ['name' => 'stock-check:manage', 'description' => 'จัดการระบบตรวจนับสต็อก'],
             ['name' => 'transaction:auto_confirm', 'description' => 'สิทธ์ข้ามการยืนยัน'],
 
@@ -51,8 +52,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'disposal:view', 'description' => 'สิทธิ์ในการมองเห็นรายการรอตัดจำหน่าย'],
             ['name' => 'disposal:manage', 'description' => 'สิทธิ์ในการจัดการรายการรอตัดจำหน่าย'],
 
-            // === Reports (รายงาน) ===
-            ['name' => 'report:view', 'description' => 'สิทธิ์ในการเข้าถึงและสร้างรายงาน'],
+            // === Reports (รายงาน และ Deadstock) ===
+            ['name' => 'report:view', 'description' => 'สิทธิ์ในการเข้าถึงรายงานและ Deadstock'],
 
             // === System Management (การจัดการระบบ) ===
             ['name' => 'user:manage', 'description' => 'สิทธิ์ในการจัดการผู้ใช้และกำหนดกลุ่ม'],
@@ -61,18 +62,15 @@ class PermissionSeeder extends Seeder
             ['name' => 'token:manage', 'description' => 'จัดการ API Tokens (สร้าง/ลบ)'],
             ['name' => 'master-data:manage', 'description' => 'สิทธิ์ในการจัดการข้อมูลหลัก (ประเภท, สถานที่, หน่วยนับ)'],
 
-            // ✅✅✅ START: เพิ่มสิทธิ์สำหรับ Maintenance Mode ✅✅✅
-            ['name' => 'maintenance:mode', 'description' => 'Enable or disable maintenance mode'],
-            // ✅✅✅ END: เพิ่มสิทธิ์สำหรับ Maintenance Mode ✅✅✅
+            // === System Maintenance ===
+            ['name' => 'maintenance:mode', 'description' => 'เปิด/ปิด Maintenance Mode ของระบบ'],
         ];
         //
         // ✅✅✅ END: อัปเดตรายการสิทธิ์ ✅✅✅
         //
 
 
-        // วนลูปสร้าง Permission โดยใช้ firstOrCreate (ตามโค้ดเดิมของคุณ)
-        // วิธีนี้จะค้นหาสิทธิ์จาก 'name' ก่อน ถ้าไม่เจอก็จะสร้างใหม่พร้อม 'description'
-        // ทำให้สามารถรันซ้ำได้โดยไม่เกิดข้อผิดพลาด
+        // วนลูปสร้าง Permission
         foreach ($permissions as $permission) {
             Permission::firstOrCreate(
                 ['name' => $permission['name']],
@@ -81,4 +79,3 @@ class PermissionSeeder extends Seeder
         }
     }
 }
-

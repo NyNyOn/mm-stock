@@ -1,49 +1,77 @@
 @extends('layouts.app')
 
 @section('header', '📊 รายงาน')
-@section('subtitle', 'รายงานทั้งหมด')
+@section('subtitle', 'ศูนย์รวมข้อมูลและการวิเคราะห์ระบบ')
 
 @section('content')
 <div class="space-y-6 page animate-slide-up-soft">
 
-    {{-- Filter Section (โค้ดเดิมของคุณ) --}}
+    {{-- Filter Section --}}
     <div id="report-filters-card" class="p-6 soft-card rounded-2xl gentle-shadow">
         <div class="flex items-center mb-4">
-            <i class="mr-4 text-2xl text-blue-500 fas fa-filter"></i>
+            <div class="flex items-center justify-center w-10 h-10 mr-4 bg-blue-100 rounded-full">
+                <i class="text-blue-600 fas fa-chart-pie"></i>
+            </div>
             <div>
-                <h3 class="text-xl font-bold text-gray-800">ตัวกรองรายงาน</h3>
-                <p class="text-sm text-gray-500">เลือกเงื่อนไขเพื่อดูข้อมูลที่ต้องการ</p>
+                <h3 class="text-xl font-bold text-gray-800">สร้างรายงาน</h3>
+                <p class="text-sm text-gray-500">เลือกประเภทรายงานและเงื่อนไขที่ต้องการวิเคราะห์</p>
             </div>
         </div>
         <form id="report-form" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
             @csrf
-            <div>
-                <label for="report_type" class="block mb-1 text-sm font-medium text-gray-700">ประเภทรายงาน</label>
-                <select id="report_type" name="report_type" required class="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-transparent border-0 soft-card rounded-xl focus:ring-2 focus:ring-blue-300 gentle-shadow">
-                    <option value="">-- เลือกรายงาน --</option>
-                    <option value="stock_summary" @selected(old('report_type', $initialReportType) == 'stock_summary')>สรุปสต๊อกคงคลัง</option>
-                    <option value="transaction_history" @selected(old('report_type', $initialReportType) == 'transaction_history')>ประวัติธุรกรรม</option>
-                    <option value="borrow_report" @selected(old('report_type', $initialReportType) == 'borrow_report')>รายการที่กำลังยืม</option>
-                    <option value="low_stock" @selected(old('report_type', $initialReportType) == 'low_stock')>รายงานสินค้าใกล้หมดสต๊อก</option>
-                    <option value="warranty" @selected(old('report_type', $initialReportType) == 'warranty')>รายงานประกัน</option>
-                    <option value="maintenance_report" @selected(old('report_type', $initialReportType) == 'maintenance_report')>รายงานการซ่อมบำรุง</option>
-                    <option value="po_report" @selected(old('report_type', $initialReportType) == 'po_report')>รายงานใบสั่งซื้อ (PO)</option>
-                    <option value="disposal_report" @selected(old('report_type', $initialReportType) == 'disposal_report')>รายงานการตัดจำหน่าย</option>
-                    <option value="consumable_return_report" @selected(old('report_type', $initialReportType) == 'consumable_return_report')>รายงานการคืนพัสดุสิ้นเปลือง</option>
-                    <option value="user_activity_report" @selected(old('report_type', $initialReportType) == 'user_activity_report')>รายงานกิจกรรมผู้ใช้งาน</option>
+            
+            {{-- 1. ประเภทรายงาน (จัดกลุ่มใหม่ตามที่คุณต้องการ) --}}
+            <div class="lg:col-span-1">
+                <label for="report_type" class="block mb-1 text-sm font-bold text-gray-700">📑 ประเภทรายงาน</label>
+                <select id="report_type" name="report_type" required class="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-transparent gentle-shadow">
+                    <option value="">-- กรุณาเลือก --</option>
+                    
+                    <optgroup label="📦 คลังสินค้าและอุปกรณ์">
+                        <option value="stock_summary" @selected(old('report_type', $initialReportType) == 'stock_summary')>📊 สรุปสต๊อกคงคลัง (Stock Balance)</option>
+                        <option value="low_stock" @selected(old('report_type', $initialReportType) == 'low_stock')>⚠️ สินค้าใกล้หมด/หมด (Low Stock)</option>
+                        <option value="dead_stock" @selected(old('report_type', $initialReportType) == 'dead_stock')>🕸️ สินค้าไม่เคลื่อนไหว (Deadstock)</option>
+                        <option value="warranty" @selected(old('report_type', $initialReportType) == 'warranty')>🛡️ รายงานประกันใกล้หมด (Warranty)</option>
+                    </optgroup>
+
+                    <optgroup label="💰 การเงินและต้นทุน">
+                        <option value="inventory_valuation" @selected(old('report_type', $initialReportType) == 'inventory_valuation')>💵 มูลค่าสินค้าคงคลังรวม (Valuation)</option>
+                        <option value="department_cost" @selected(old('report_type', $initialReportType) == 'department_cost')>🏢 สรุปยอดเบิกแยกตามแผนก/ผู้ใช้ (Cost Usage)</option>
+                    </optgroup>
+
+                    <optgroup label="📈 สถิติและการใช้งาน">
+                        <option value="transaction_history" @selected(old('report_type', $initialReportType) == 'transaction_history')>🔄 ประวัติธุรกรรมทั้งหมด (All Logs)</option>
+                        <option value="top_movers" @selected(old('report_type', $initialReportType) == 'top_movers')>🔥 10 อันดับสินค้าเบิกสูงสุด (Top Movers)</option>
+                        <option value="borrow_report" @selected(old('report_type', $initialReportType) == 'borrow_report')>⏳ รายการที่กำลังถูกยืม (Active Borrow)</option>
+                        <option value="user_activity_report" @selected(old('report_type', $initialReportType) == 'user_activity_report')>👤 พฤติกรรมการใช้งานรายบุคคล</option>
+                    </optgroup>
+
+                    <optgroup label="🛠️ การจัดการและซ่อมบำรุง">
+                        <option value="maintenance_report" @selected(old('report_type', $initialReportType) == 'maintenance_report')>🔧 ประวัติการซ่อมบำรุง</option>
+                        <option value="po_report" @selected(old('report_type', $initialReportType) == 'po_report')>🛒 รายงานใบสั่งซื้อ (Purchasing)</option>
+                        <option value="disposal_report" @selected(old('report_type', $initialReportType) == 'disposal_report')>🗑️ รายการตัดจำหน่าย (Disposal)</option>
+                        <option value="consumable_return_report" @selected(old('report_type', $initialReportType) == 'consumable_return_report')>📥 รายงานคืนวัสดุสิ้นเปลือง</option>
+                    </optgroup>
+
+                    <optgroup label="👮 ความปลอดภัยและตรวจสอบ">
+                        <option value="audit_logs" @selected(old('report_type', $initialReportType) == 'audit_logs')>📝 ประวัติการแก้ไขข้อมูล (Audit Logs)</option>
+                    </optgroup>
                 </select>
             </div>
+
+            {{-- 2. ตัวกรองวันที่ --}}
             <div>
                 <label for="start_date" class="block mb-1 text-sm font-medium text-gray-700">วันที่เริ่มต้น</label>
-                <input type="date" id="start_date" name="start_date" class="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-transparent border-0 soft-card rounded-xl focus:ring-2 focus:ring-blue-300 gentle-shadow">
+                <input type="date" id="start_date" name="start_date" class="w-full px-4 py-3 text-sm text-gray-700 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400">
             </div>
             <div>
                 <label for="end_date" class="block mb-1 text-sm font-medium text-gray-700">วันที่สิ้นสุด</label>
-                <input type="date" id="end_date" name="end_date" class="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-transparent border-0 soft-card rounded-xl focus:ring-2 focus:ring-blue-300 gentle-shadow">
+                <input type="date" id="end_date" name="end_date" class="w-full px-4 py-3 text-sm text-gray-700 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400">
             </div>
+
+            {{-- 3. ตัวกรองอื่นๆ --}}
             <div>
                 <label for="category_id" class="block mb-1 text-sm font-medium text-gray-700">ประเภท</label>
-                <select id="category_id" name="category_id" class="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-transparent border-0 soft-card rounded-xl focus:ring-2 focus:ring-blue-300 gentle-shadow">
+                <select id="category_id" name="category_id" class="w-full px-4 py-3 text-sm text-gray-700 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400">
                     <option value="">-- ทุกประเภท --</option>
                     @foreach($categories as $category)
                         <option value="{{ $category->id }}">{{ $category->name }}</option>
@@ -52,92 +80,87 @@
             </div>
             <div>
                 <label for="location_id" class="block mb-1 text-sm font-medium text-gray-700">สถานที่</label>
-                <select id="location_id" name="location_id" class="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-transparent border-0 soft-card rounded-xl focus:ring-2 focus:ring-blue-300 gentle-shadow">
+                <select id="location_id" name="location_id" class="w-full px-4 py-3 text-sm text-gray-700 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400">
                     <option value="">-- ทุกสถานที่ --</option>
                     @foreach($locations as $location)
                         <option value="{{ $location->id }}">{{ $location->name }}</option>
                     @endforeach
                 </select>
             </div>
-            {{-- User Filter (ซ่อนไว้ก่อน) --}}
-            <div id="user-filter-container" style="display: none;">
-                <label for="user_id" class="block mb-1 text-sm font-medium text-gray-700">ผู้ใช้งาน</label>
-                <select id="user_id" name="user_id" class="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-transparent border-0 soft-card rounded-xl focus:ring-2 focus:ring-blue-300 gentle-shadow">
+
+            {{-- User Filter (Hidden by default) --}}
+            <div id="user-filter-container" style="display: none;" class="md:col-span-2 lg:col-span-1">
+                <label for="user_id" class="block mb-1 text-sm font-medium text-gray-700">ผู้ใช้งาน (เฉพาะเจาะจง)</label>
+                <select id="user_id" name="user_id" class="w-full px-4 py-3 text-sm text-gray-700 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400">
                     <option value="">-- เลือกผู้ใช้งาน --</option>
                     @foreach($users as $user)
                         <option value="{{ $user->id }}">{{ $user->fullname }}</option>
                     @endforeach
                 </select>
             </div>
+
             {{-- Submit Button --}}
-            <div class="flex items-end md:col-span-2 lg:col-span-1">
-                <button type="submit" class="w-full px-6 py-3 font-medium text-blue-700 transition-all bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl hover:shadow-lg button-soft gentle-shadow">
+            <div class="flex items-end md:col-span-2 lg:col-span-5">
+                <button type="submit" class="w-full px-6 py-3 font-bold text-white transition-all shadow-lg bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0">
                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="display: none;"></span>
-                    <i class="mr-2 fas fa-search"></i>สร้างรายงาน
+                    <i class="mr-2 fas fa-search"></i> ออกรายงาน (Generate Report)
                 </button>
             </div>
         </form>
     </div>
 
-    {{-- Report Display Section (อัปเดตแล้ว) --}}
+    {{-- Report Display Section --}}
     <div id="report-results-container" class="soft-card rounded-2xl gentle-shadow" style="display: none;">
          
-         <div class="flex flex-wrap items-center justify-between p-5 bg-gradient-to-r from-blue-50 to-purple-50">
+         <div class="flex flex-wrap items-center justify-between p-5 border-b border-gray-100 bg-gray-50 rounded-t-2xl">
             <div>
                 <h3 id="report-title" class="text-xl font-bold text-gray-800">ผลลัพธ์รายงาน</h3>
-                <p id="report-subtitle" class="text-sm text-gray-600">กรุณาเลือกเงื่อนไขและกด "สร้างรายงาน"</p>
+                <p id="report-subtitle" class="text-sm text-gray-500">ข้อมูล ณ ปัจจุบัน</p>
             </div>
             
             <div class="mt-2 md:mt-0">
-                <button id="export-pdf-button" type="button" class="px-4 py-3 font-medium text-red-700 transition-all bg-gradient-to-br from-red-100 to-red-200 rounded-xl hover:shadow-lg button-soft gentle-shadow" style="display: none;">
-                    <i class="mr-2 fas fa-file-pdf"></i> Export PDF
-                </button>
+                {{-- เงื่อนไขจำกัดสิทธิ์ปุ่ม Export PDF --}}
+                @php
+                    $user = Auth::user();
+                    $superAdminId = (int)config('app.super_admin_id', 9);
+                    $userGroupSlug = strtolower($user->serviceUserRole?->userGroup?->slug ?? '');
+                    $canExportPdf = ($user->id === $superAdminId) || in_array($userGroupSlug, ['it', 'admin', 'administrator']);
+                @endphp
+
+                @if($canExportPdf)
+                    <button id="export-pdf-button" type="button" class="px-4 py-2 font-medium text-white transition-all bg-red-500 rounded-lg shadow hover:bg-red-600 hover:shadow-md" style="display: none;">
+                        <i class="mr-2 fas fa-file-pdf"></i> Download PDF
+                    </button>
+                @endif
             </div>
          </div>
          
-        <div class="p-5 overflow-x-auto scrollbar-soft">
+        <div class="p-5 overflow-x-auto">
             <table class="w-full text-sm text-left text-gray-500" id="report-table">
-                {{-- Content will be injected by reports.js --}}
+                {{-- Content from JS --}}
             </table>
         </div>
     </div>
 </div>
 @endsection
 
-{{-- 
-    ================================================================
-    ✅ (อัปเดต) ส่วน SCRIPT ทั้งหมด (ใช้ PDFMAKE พร้อมการจัดรูปแบบมาตรฐาน)
-    ================================================================
---}}
 @push('scripts')
-    {{-- (โค้ดเดิมของคุณ) ส่งค่า $initialReportType ไปให้ JavaScript --}}
     <script>
         window.initialReportType = @json($initialReportType ?? null);
     </script>
     
-    {{-- 1. เรียกใช้ PDFMAKE (เหมือนเดิม) --}}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js"></script>
 
-    {{-- 2. LOGIC สำหรับการ EXPORT ด้วย PDFMAKE (อัปเดตแล้ว) --}}
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const pdfButton = document.getElementById('export-pdf-button');
             const reportResultsContainer = document.getElementById('report-results-container');
             
-            if (!pdfButton || !reportResultsContainer) {
-                console.error('PDF Button หรือ Report Container not found!');
-                return;
-            }
-            
-            if (typeof pdfMake === 'undefined') {
-                console.error('pdfMake is not loaded! Check library links.');
-                return;
-            }
+            if (typeof pdfMake === 'undefined') { console.error('pdfMake is not loaded!'); return; }
 
-            // --- (สำคัญ!) 1. กำหนดค่าฟอนต์จาก /public/fonts/ ---
             pdfMake.fonts = {
-                THSarabun: { // นี่คือชื่อที่เราจะใช้เรียกในสไตล์
+                THSarabun: {
                     normal: '{{ asset('fonts/THSarabunNew.ttf') }}',
                     bold: '{{ asset('fonts/THSarabunNew Bold.ttf') }}',
                     italics: '{{ asset('fonts/THSarabunNew Italic.ttf') }}',
@@ -145,167 +168,146 @@
                 }
             };
 
-            // --- 2. (อัปเดต) Function ดึงข้อมูลจากตาราง HTML ---
-            // (จะคืนค่าเป็น object ที่มีทั้ง body และ widths)
+            // --- Helper Functions for PDF ---
             function parseHtmlTable() {
                 const table = document.getElementById('report-table');
                 if (!table) return { body: [], widths: [] };
 
                 const tableBody = [];
                 const colWidths = [];
-                const headerData = []; // เก็บ text ของ header ไว้เช็ค
-                
-                // คำที่บ่งบอกว่าเป็นคอลัมน์ตัวเลข (สำหรับจัดชิดขวา)
-                const numericKeywords = ['จำนวน', 'คงเหลือ', 'ขั้นต่ำ', 'qty', 'quantity', 'min', 'stock', 'id'];
+                const headerData = [];
+                const numericKeywords = ['จำนวน', 'คงเหลือ', 'ขั้นต่ำ', 'qty', 'quantity', 'min', 'stock', 'id', 'ราคา', 'มูลค่า', 'ยอดเบิก'];
 
-                // 2.1 ดึงหัวตาราง (thead)
+                // Header
                 const headerRows = table.querySelectorAll('thead tr th');
                 const headerCells = [];
                 
                 headerRows.forEach((th, index) => {
                     const thText = th.textContent.trim();
-                    headerData.push(thText.toLowerCase()); // เก็บ text (ตัวเล็ก) ไว้เช็ค
-                    
-                    // ตั้งค่าสไตล์ (หัวตารางทั้งหมดจัดกลาง)
+                    headerData.push(thText.toLowerCase());
                     headerCells.push({ text: thText, style: 'tableHeader' });
 
-                    // 2.2 (อัปเดต) ตั้งค่าความกว้างคอลัมน์
-                    if (index === 0 || thText === '#') {
-                        colWidths.push('auto'); // คอลัมน์ # หรือ ลำดับ
+                    if (index === 0 || thText === '#' || thText.toLowerCase() === 'id') {
+                        colWidths.push('auto');
                     } else {
-                        colWidths.push('*'); // คอลัมน์ที่เหลือ
+                        colWidths.push('*');
                     }
                 });
                 tableBody.push(headerCells);
 
-                // 2.3 ดึงเนื้อหา (tbody)
+                // Body
                 const bodyRows = table.querySelectorAll('tbody tr');
                 bodyRows.forEach(tr => {
+                    // Skip empty rows
+                    if (tr.cells.length <= 1 && tr.innerText.includes('ไม่พบ')) return;
+
                     const rowCells = [];
                     tr.querySelectorAll('td').forEach((td, index) => {
-                        let styleName = 'tableBody'; // ค่าเริ่มต้น (ชิดซ้าย)
-                        
-                        // 2.4 (อัปเดต) ตรวจสอบการจัดตำแหน่ง
+                        let styleName = 'tableBody';
                         const headerText = headerData[index] || '';
                         
                         if (index === 0 || headerText.includes('#') || headerText.includes('ลำดับ')) {
-                            styleName = 'alignCenter'; // คอลัมน์ # จัดกลาง
+                            styleName = 'alignCenter';
                         } else if (numericKeywords.some(keyword => headerText.includes(keyword))) {
-                            styleName = 'alignRight'; // คอลัมน์ตัวเลข จัดขวา
+                            styleName = 'alignRight';
                         }
                         
-                        rowCells.push({ text: td.textContent.trim(), style: styleName });
+                        rowCells.push({ text: td.innerText.trim(), style: styleName });
                     });
-                    tableBody.push(rowCells);
+                    if (rowCells.length > 0) tableBody.push(rowCells);
                 });
 
                 return { body: tableBody, widths: colWidths };
             }
 
-            // --- 3. Function หลักสำหรับ Export ---
             function exportReportToPdf() {
                 try {
-                    // (อัปเดต) 3.1 ดึงข้อมูลและสัดส่วน
                     const tableConfig = parseHtmlTable();
-
-                    if (tableConfig.body.length === 0) {
+                    if (tableConfig.body.length <= 1) {
                         alert('ไม่พบข้อมูลตารางสำหรับ Export');
                         return;
                     }
 
-                    // --- 4. กำหนดโครงสร้างเอกสาร PDF (อัปเดต) ---
                     const docDefinition = {
                         pageSize: 'A4',
-                        pageOrientation: 'landscape', // แนวนอน
-                        defaultStyle: {
-                            font: 'THSarabun' // ✅ ใช้ฟอนต์ไทยเป็นหลัก
-                        },
+                        pageOrientation: 'landscape',
+                        defaultStyle: { font: 'THSarabun', fontSize: 10 },
                         content: [
-                            // 4.1 หัวข้อรายงาน
                             { text: document.getElementById('report-title').innerText, style: 'header' },
                             { text: document.getElementById('report-subtitle').innerText, style: 'subheader' },
                             { text: `วันที่พิมพ์: ${new Date().toLocaleString('th-TH')}`, style: 'subheader', margin: [0, 0, 0, 10] },
-                            
-                            // 4.2 ตาราง (อัปเดต)
                             {
                                 table: {
                                     headerRows: 1,
-                                    widths: tableConfig.widths, // 👈 (อัปเดต) ใช้สัดส่วนที่คำนวณมา
-                                    body: tableConfig.body     // 👈 (อัปเดต) ใช้เนื้อหาที่แปลงมา
+                                    widths: tableConfig.widths,
+                                    body: tableConfig.body
                                 },
-                                layout: 'lightHorizontalLines' // ธีมตาราง (เส้นแนวนอน)
+                                layout: 'lightHorizontalLines'
                             }
                         ],
-                        // 4.3 สไตล์ (อัปเดต)
                         styles: {
-                            header: {
-                                fontSize: 18,
-                                bold: true,
-                                margin: [0, 0, 0, 5]
-                            },
-                            subheader: {
-                                fontSize: 10,
-                                margin: [0, 0, 0, 2]
-                            },
-                            tableHeader: {
-                                bold: true,
-                                fontSize: 11,
-                                color: 'black',
-                                fillColor: '#eeeeee', // สีพื้นหลังหัวตาราง
-                                alignment: 'center' // 👈 (อัปเดต) หัวตารางจัดกลาง
-                            },
-                            tableBody: {
-                                fontSize: 10,
-                                alignment: 'left' // 👈 ค่าเริ่มต้น
-                            },
-                            // ✅ (เพิ่ม) สไตล์สำหรับจัดตำแหน่ง
-                            alignRight: {
-                                fontSize: 10,
-                                alignment: 'right'
-                            },
-                            alignCenter: {
-                                fontSize: 10,
-                                alignment: 'center'
-                            }
+                            header: { fontSize: 16, bold: true, margin: [0, 0, 0, 5] },
+                            subheader: { fontSize: 10, margin: [0, 0, 0, 2], color: '#555' },
+                            tableHeader: { bold: true, fontSize: 11, color: 'black', fillColor: '#eeeeee', alignment: 'center' },
+                            tableBody: { fontSize: 10, alignment: 'left' },
+                            alignRight: { fontSize: 10, alignment: 'right' },
+                            alignCenter: { fontSize: 10, alignment: 'center' }
                         }
                     };
 
-                    // --- 5. สร้างและดาวน์โหลด PDF ---
                     const reportType = document.getElementById('report_type').value || 'report';
                     pdfMake.createPdf(docDefinition).download(`report_${reportType}_${new Date().toISOString().slice(0, 10)}.pdf`);
 
                 } catch (error) {
-                    console.error('Error exporting PDF with pdfMake:', error);
-                    alert('เกิดข้อผิดพลาดในการสร้าง PDF ด้วย pdfMake');
+                    console.error('Error exporting PDF:', error);
+                    alert('เกิดข้อผิดพลาดในการสร้าง PDF: ' + error.message);
                 }
             }
 
-            // --- (โค้ดเดิม) สั่งให้ปุ่ม PDF ทำงานเมื่อคลิก ---
-            pdfButton.addEventListener('click', exportReportToPdf);
-
-            // --- (โค้ดเดิม) Logic การแสดง/ซ่อนปุ่ม PDF ---
-            const observer = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    if (mutation.attributeName === 'style') {
-                        const targetElement = mutation.target;
-                        
-                        if (targetElement.style.display !== 'none') {
-                            pdfButton.style.display = 'inline-block'; // แสดงปุ่ม PDF
-                        } else {
-                            pdfButton.style.display = 'none'; // ซ่อนปุ่ม PDF
+            if (pdfButton) {
+                pdfButton.addEventListener('click', exportReportToPdf);
+                
+                // Observe changes to show button
+                const observer = new MutationObserver((mutations) => {
+                    for (const mutation of mutations) {
+                        if (mutation.attributeName === 'style') {
+                            if (reportResultsContainer.style.display !== 'none') {
+                                pdfButton.style.display = 'inline-block';
+                            } else {
+                                pdfButton.style.display = 'none';
+                            }
                         }
                     }
-                }
-            });
-
-            // เริ่มสังเกตการณ์
-            observer.observe(reportResultsContainer, {
-                attributes: true, 
-                attributeFilter: ['style'] 
-            });
+                });
+                observer.observe(reportResultsContainer, { attributes: true, attributeFilter: ['style'] });
+            }
         });
+
+        // ✅ ฟังก์ชันสร้าง Badge (Global) - รองรับทุกสถานะที่เพิ่มมา
+        function getStatusBadge(status) {
+            let colorClass = 'bg-gray-100 text-gray-800';
+            let icon = '';
+            let label = status;
+
+            switch (status) {
+                case 'available': colorClass = 'bg-green-100 text-green-800'; icon = '<i class="fas fa-check-circle mr-1"></i>'; label = 'พร้อมใช้งาน'; break;
+                case 'in-use': case 'borrowed': colorClass = 'bg-blue-100 text-blue-800'; icon = '<i class="fas fa-user-clock mr-1"></i>'; label = 'ถูกยืม'; break;
+                case 'low_stock': colorClass = 'bg-yellow-100 text-yellow-800'; icon = '<i class="fas fa-exclamation-triangle mr-1"></i>'; label = 'สต็อกต่ำ'; break;
+                case 'out_of_stock': colorClass = 'bg-red-100 text-red-800'; icon = '<i class="fas fa-times-circle mr-1"></i>'; label = 'สินค้าหมด'; break;
+                case 'repairing': case 'maintenance': colorClass = 'bg-orange-100 text-orange-800'; icon = '<i class="fas fa-tools mr-1"></i>'; label = 'ซ่อมบำรุง'; break;
+                case 'disposed': colorClass = 'bg-gray-200 text-gray-600'; icon = '<i class="fas fa-trash-alt mr-1"></i>'; label = 'ตัดจำหน่าย'; break;
+                case 'pending': colorClass = 'bg-blue-50 text-blue-600'; icon = '<i class="fas fa-hourglass-half mr-1"></i>'; label = 'รออนุมัติ'; break;
+                case 'approved': colorClass = 'bg-green-50 text-green-600'; icon = '<i class="fas fa-check mr-1"></i>'; label = 'อนุมัติแล้ว'; break;
+                case 'rejected': colorClass = 'bg-red-50 text-red-600'; icon = '<i class="fas fa-ban mr-1"></i>'; label = 'ไม่อนุมัติ'; break;
+                case 'completed': colorClass = 'bg-teal-50 text-teal-600'; icon = '<i class="fas fa-flag-checkered mr-1"></i>'; label = 'เสร็จสิ้น'; break;
+                case 'safe': colorClass = 'bg-green-50 text-green-600'; icon = '<i class="fas fa-shield-alt mr-1"></i>'; label = 'ปกติ'; break;
+                case 'warning': colorClass = 'bg-orange-100 text-orange-600'; icon = '<i class="fas fa-exclamation mr-1"></i>'; label = 'เตือน'; break;
+                case 'locked': colorClass = 'bg-red-100 text-red-600'; icon = '<i class="fas fa-lock mr-1"></i>'; label = 'ถูกระงับ'; break;
+            }
+            return `<span class="px-2 py-1 text-xs font-semibold rounded-full ${colorClass} whitespace-nowrap border border-opacity-20 border-current">${icon} ${label}</span>`;
+        }
+        window.getStatusBadge = getStatusBadge; 
     </script>
     
-    {{-- 3. (โค้ดเดิมของคุณ) เรียกใช้ reports.js เป็นไฟล์สุดท้าย (ยังต้องใช้) --}}
     <script src="{{ asset('js/reports.js') }}"></script>
 @endpush

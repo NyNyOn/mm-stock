@@ -1,60 +1,201 @@
 @php
     $menu = [
+        // --- 1. Main Menu (เข้าถึงบ่อยสุด) ---
         'main' => [
-            'dashboard' => ['icon' => 'fa-tachometer-alt', 'color' => 'blue', 'title' => '🏠 Dashboard', 'subtitle' => 'ภาพรวมระบบ', 'permission' => 'dashboard:view'],
-            'user.equipment.index' => ['icon' => 'fa-shopping-basket', 'color' => 'orange', 'title' => '🔄 เบิก/ยืม อุปกรณ์', 'subtitle' => 'Withdraw / Borrow', 'permission' => 'equipment:borrow'],
+            'dashboard' => [
+                'icon' => 'fa-tachometer-alt', 
+                'color' => 'blue', 
+                'title' => '🏠 Dashboard', 
+                'subtitle' => 'ภาพรวมระบบ', 
+                'permission' => 'dashboard:view'
+            ],
+            'user.equipment.index' => [
+                'icon' => 'fa-shopping-basket', 
+                'color' => 'orange', 
+                'title' => '🔄 เบิก/ยืม อุปกรณ์', 
+                'subtitle' => 'Withdraw / Borrow', 
+                'permission' => 'equipment:borrow'
+            ],
+            // ✅✅✅ ย้ายมาไว้ตรงนี้ตามคำขอ (เมนูหลัก) ✅✅✅
+            'transactions.index' => [
+                'icon' => 'fa-clock-rotate-left', 
+                'color' => 'blue', 
+                'title' => '📜 ประวัติธุรกรรม', 
+                'subtitle' => 'Transaction Logs', 
+                'permission' => 'transaction:view'
+            ],
         ],
+
+        // --- 2. Accordion Menu (จัดกลุ่มตามฟังก์ชันงาน) ---
         'accordions' => [
+            
+            // 2.1 งานคลังสินค้า (จัดการของในสต๊อก)
             'inventory' => [
                 'title' => 'คลังและอุปกรณ์',
-                'icon' => 'fa-warehouse',
+                'icon' => 'fa-boxes-stacked', 
                 'color' => 'green',
                 'items' => [
-                    'equipment.index' => ['icon' => 'fa-laptop', 'color' => 'green', 'title' => 'จัดการอุปกรณ์', 'subtitle' => 'เพิ่ม/แก้ไข สต๊อก', 'permission' => 'equipment:view'],
-                    'receive.index' => ['icon' => 'fa-download', 'color' => 'cyan', 'title' => 'รับเข้าอุปกรณ์', 'subtitle' => 'Receive Equipment', 'permission' => 'receive:view'],
-                    'stock-checks.index' => ['icon' => 'fa-clipboard-check', 'color' => 'teal', 'title' => 'ตรวจนับสต็อก', 'subtitle' => 'Stock Count', 'permission' => 'stock-check:manage'],
-                    'disposal.index' => ['icon' => 'fa-trash-alt', 'color' => 'red', 'title' => 'รอตัดจำหน่าย', 'subtitle' => 'Disposal List', 'permission' => 'disposal:view'],
+                    'equipment.index' => [
+                        'icon' => 'fa-laptop', 
+                        'color' => 'green', 
+                        'title' => 'จัดการอุปกรณ์', 
+                        'subtitle' => 'Equipment List', 
+                        'permission' => 'equipment:view'
+                    ],
+                    'receive.index' => [
+                        'icon' => 'fa-download', 
+                        'color' => 'cyan', 
+                        'title' => 'รับเข้าอุปกรณ์', 
+                        'subtitle' => 'Receive Stock', 
+                        'permission' => 'receive:view'
+                    ],
+                    'stock-checks.index' => [
+                        'icon' => 'fa-clipboard-list', 
+                        'color' => 'teal', 
+                        'title' => 'ตรวจนับสต็อก', 
+                        'subtitle' => 'Stock Counting', 
+                        'permission' => 'stock-check:manage'
+                    ],
+                    'disposal.index' => [
+                        'icon' => 'fa-trash-can', 
+                        'color' => 'red', 
+                        'title' => 'ตัดจำหน่าย', 
+                        'subtitle' => 'Write-off / Sell', 
+                        'permission' => 'disposal:view'
+                    ],
                 ]
             ],
+
+            // 2.2 งานจัดซื้อ (Flow การซื้อของ)
             'purchasing' => [
                 'title' => 'จัดซื้อและติดตาม',
-                'icon' => 'fa-file-invoice-dollar',
+                'icon' => 'fa-cart-shopping',
                 'color' => 'teal',
                 'items' => [
-                    'purchase-orders.index' => ['icon' => 'fa-shopping-cart', 'color' => 'teal', 'title' => 'ใบสั่งซื้อ', 'subtitle' => 'Purchase Orders', 'permission' => 'po:view'],
-                    'purchase-track.index' => ['icon' => 'fa-truck-fast', 'color' => 'blue', 'title' => 'ติดตามใบสั่งซื้อ', 'subtitle' => 'Order Tracking', 'permission' => 'po:view'],
+                    'purchase-orders.index' => [
+                        'icon' => 'fa-file-invoice-dollar', 
+                        'color' => 'teal', 
+                        'title' => 'ใบสั่งซื้อ', 
+                        'subtitle' => 'Purchase Orders', 
+                        'permission' => 'po:view'
+                    ],
+                    'purchase-track.index' => [
+                        'icon' => 'fa-truck-fast', 
+                        'color' => 'blue', 
+                        'title' => 'ติดตามพัสดุ', 
+                        'subtitle' => 'Tracking', 
+                        'permission' => 'po:view'
+                    ],
                 ]
             ],
-            'transactions' => [
-                'title' => 'ธุรกรรมและซ่อมบำรุง',
-                'icon' => 'fa-exchange-alt',
-                'color' => 'purple',
+
+            // 2.3 งานบริการและซ่อมบำรุง (Service Desk)
+            'services' => [
+                'title' => 'บริการและซ่อมบำรุง',
+                'icon' => 'fa-screwdriver-wrench',
+                'color' => 'orange',
                 'items' => [
-                    'transactions.index' => ['icon' => 'fa-history', 'color' => 'gray', 'title' => 'ประวัติธุรกรรม', 'subtitle' => 'Transaction History', 'permission' => 'transaction:view'],
-                    'returns.index' => ['icon' => 'fa-undo-alt', 'color' => 'purple', 'title' => 'คืน/แจ้งเสีย', 'subtitle' => 'Return/Report', 'permission' => 'return:view'],
-                    'maintenance.index' => ['icon' => 'fa-wrench', 'color' => 'gray', 'title' => 'ซ่อมบำรุง', 'subtitle' => 'Maintenance', 'permission' => 'maintenance:view'],
-                    'consumable-returns.index' => ['icon' => 'fa-box-tissue', 'color' => 'pink', 'title' => 'รับคืนพัสดุ', 'subtitle' => 'Consumable Return', 'permission' => 'consumable:return'],
+                    'returns.index' => [
+                        'icon' => 'fa-rotate-left', 
+                        'color' => 'purple', 
+                        'title' => 'รับคืน / แจ้งเสีย', 
+                        'subtitle' => 'Return / Defect', 
+                        'permission' => 'return:view'
+                    ],
+                    'consumable-returns.index' => [
+                        'icon' => 'fa-box-open', 
+                        'color' => 'pink', 
+                        'title' => 'คืนวัสดุสิ้นเปลือง', 
+                        'subtitle' => 'Consumable Return', 
+                        'permission' => 'consumable:return'
+                    ],
+                    'maintenance.index' => [
+                        'icon' => 'fa-hammer', 
+                        'color' => 'gray', 
+                        'title' => 'รายการซ่อมบำรุง', 
+                        'subtitle' => 'Maintenance Jobs', 
+                        'permission' => 'maintenance:view'
+                    ],
                 ]
             ],
-            'analysis' => [
-                'title' => 'วิเคราะห์และรายงาน',
-                'icon' => 'fa-chart-pie',
+
+            // 2.4 ข้อมูลและรายงาน (Analytics & Logs)
+            'analytics' => [
+                'title' => 'ข้อมูลและรายงาน',
+                'icon' => 'fa-chart-line',
                 'color' => 'indigo',
                 'items' => [
-                    'reports.index' => ['icon' => 'fa-chart-bar', 'color' => 'indigo', 'title' => 'รายงาน', 'subtitle' => 'System Reports', 'permission' => 'report:view'],
+                    // (ประวัติธุรกรรมย้ายไปอยู่ข้างบนแล้ว)
+                    'deadstock.index' => [
+                        'icon' => 'fa-box-archive', 
+                        'color' => 'gray', 
+                        'title' => 'Deadstock', 
+                        'subtitle' => 'สินค้าค้างสต็อก', 
+                        'permission' => 'report:view'
+                    ],
+                    'reports.index' => [
+                        'icon' => 'fa-file-csv', 
+                        'color' => 'indigo', 
+                        'title' => 'รายงานสรุป', 
+                        'subtitle' => 'Export Reports', 
+                        'permission' => 'report:view'
+                    ],
                 ]
             ],
+
+            // 2.5 การตั้งค่าระบบ (System Config)
             'settings' => [
                 'title' => 'การตั้งค่าระบบ',
-                'icon' => 'fa-cogs',
-                'color' => 'pink',
+                'icon' => 'fa-gears',
+                'color' => 'slate',
                 'items' => [
-                    'management.users.index' => ['icon' => 'fa-users-cog', 'color' => 'pink', 'title' => 'จัดการสิทธิ์ผู้ใช้', 'subtitle' => 'User Permissions', 'permission' => 'user:manage'],
-                    'management.groups.index' => ['icon' => 'fa-shield-alt', 'color' => 'indigo', 'title' => 'จัดการกลุ่มและสิทธิ์', 'subtitle' => 'Groups & Roles', 'permission' => 'permission:manage'],
-                    'management.tokens.index' => ['icon' => 'fa-key', 'color' => 'purple', 'title' => 'จัดการ API Token', 'subtitle' => 'M2M Integration', 'permission' => 'token:manage'],
-                    'categories.index' => ['icon' => 'fa-folder-open', 'color' => 'yellow', 'title' => 'จัดการประเภท', 'subtitle' => 'Master Data', 'permission' => 'master-data:manage'],
-                    'locations.index' => ['icon' => 'fa-map-marker-alt', 'color' => 'teal', 'title' => 'จัดการสถานที่', 'subtitle' => 'Master Data', 'permission' => 'master-data:manage'],
-                    'units.index' => ['icon' => 'fa-ruler-combined', 'color' => 'red', 'title' => 'จัดการหน่วยนับ', 'subtitle' => 'Master Data', 'permission' => 'master-data:manage'],
+                    // User Management
+                    'management.users.index' => [
+                        'icon' => 'fa-users', 
+                        'color' => 'pink', 
+                        'title' => 'ผู้ใช้งาน', 
+                        'subtitle' => 'User Management', 
+                        'permission' => 'user:manage'
+                    ],
+                    'management.groups.index' => [
+                        'icon' => 'fa-user-shield', 
+                        'color' => 'indigo', 
+                        'title' => 'กลุ่มและสิทธิ์', 
+                        'subtitle' => 'Roles & Permissions', 
+                        'permission' => 'permission:manage'
+                    ],
+                    
+                    // Master Data
+                    'categories.index' => [
+                        'icon' => 'fa-tags', 
+                        'color' => 'yellow', 
+                        'title' => 'ประเภทอุปกรณ์', 
+                        'subtitle' => 'Categories', 
+                        'permission' => 'master-data:manage'
+                    ],
+                    'locations.index' => [
+                        'icon' => 'fa-map-location-dot', 
+                        'color' => 'teal', 
+                        'title' => 'สถานที่จัดเก็บ', 
+                        'subtitle' => 'Locations', 
+                        'permission' => 'master-data:manage'
+                    ],
+                    'units.index' => [
+                        'icon' => 'fa-scale-balanced', 
+                        'color' => 'red', 
+                        'title' => 'หน่วยนับ', 
+                        'subtitle' => 'Units', 
+                        'permission' => 'master-data:manage'
+                    ],
+                    
+                    // API Integration
+                    'management.tokens.index' => [
+                        'icon' => 'fa-key', 
+                        'color' => 'purple', 
+                        'title' => 'API Tokens', 
+                        'subtitle' => 'Integration', 
+                        'permission' => 'token:manage'
+                    ],
                 ]
             ]
         ]
@@ -68,20 +209,23 @@
 --}}
 <div id="sidebar" class="fixed top-0 left-0 z-50 w-64 h-screen transition-transform duration-500 transform -translate-x-full soft-card lg:translate-x-0 flex flex-col">
 
+    {{-- ปุ่มปิดเมนู (Mobile Only) --}}
+    <div class="absolute top-4 right-4 lg:hidden z-50">
+        <button id="close-sidebar-btn" class="p-2 text-gray-500 rounded-xl hover:bg-gray-100 hover:text-red-500 transition-colors gentle-shadow border border-gray-100 bg-white">
+            <i class="fas fa-times text-lg"></i>
+        </button>
+    </div>
+
     {{-- (2) ส่วน Header (Logo + User) - ไม่ Scroll --}}
     <div class="p-5"> 
         <div class="flex items-center mb-8 space-x-3 animate-fade-in">
             <div class="relative">
-                {{-- ✅ แก้ไข: เปลี่ยนสีไอคอนเป็นธีม WH (Teal/Emerald) --}}
                 <div class="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-teal-100 to-emerald-200 rounded-2xl gentle-shadow">
-                    {{-- ✅ แก้ไข: เปลี่ยนไอคอนเป็น fa-boxes-stacked (กล่อง) --}}
                     <i class="text-xl text-teal-600 fas fa-boxes-stacked"></i>
                 </div>
             </div>
             <div>
-                {{-- ✅ แก้ไข: เปลี่ยนชื่อเป็น WH Stock --}}
                 <h1 class="text-xl font-bold gradient-text-soft">{{ config('app.name', 'WH Stock') }}</h1>
-                {{-- ✅ แก้ไข: เปลี่ยนข้อความเป็น WH Dept --}}
                 <p class="text-sm font-medium text-gray-600">📦 V 1.0 By WH Dept</p>
             </div>
         </div>
@@ -156,9 +300,6 @@
                         <i class="text-gray-500 transition-transform duration-300 fas fa-chevron-down accordion-chevron"></i>
                     </button>
                     
-                    {{-- 
-                      (โค้ดส่วน Accordion Content - เหมือนเดิม)
-                    --}}
                     <div class="grid grid-rows-[0fr] transition-all duration-500 ease-in-out accordion-content">
                         <div class="overflow-hidden min-h-0"> 
                             <div class="pl-4 mt-2 space-y-2"> 
@@ -273,4 +414,3 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 @endpush
-

@@ -8,14 +8,13 @@
     {{-- การ์ดต้อนรับ --}}
     @auth
         @php
-            $superAdminId = (int)config('app.super_admin_id', 9); // ใส่ 9 เป็นค่า default
+            $superAdminId = (int)config('app.super_admin_id', 9); 
             $userGroupSlug = Auth::user()->serviceUserRole?->userGroup?->slug;
         @endphp
 
-        {{-- 1. ตรวจสอบ Super Admin (ID 9) ก่อน --}}
+        {{-- 1. Super Admin --}}
         @if(Auth::user()->id === $superAdminId)
-            {{-- การ์ดต้อนรับสำหรับ Super Admin --}}
-            <div class="mb-6 p-6 soft-card rounded-2xl gentle-shadow soft-hover flex items-center space-x-6 animate-slide-up-soft bg-gradient-to-r from-blue-50 to-cyan-50">
+            <div class="flex items-center p-6 mb-6 space-x-6 bg-gradient-to-r from-blue-50 to-cyan-50 soft-card rounded-2xl gentle-shadow soft-hover animate-slide-up-soft">
                 <div class="text-5xl text-yellow-400">
                     <i class="fas fa-crown"></i>
                 </div>
@@ -23,22 +22,16 @@
                     <h2 class="text-2xl font-bold gradient-text-soft">
                         ยินดีต้อนรับกลับมา, {{ Auth::user()->fullname }}! (Super Admin)
                     </h2>
-                    <p class="text-gray-600 mt-1">
+                    <p class="mt-1 text-gray-600">
                         ท่านผู้สร้างระบบ! คุณมีสิทธิ์เข้าถึงทุกฟังก์ชัน
                     </p>
                 </div>
             </div>
 
-        {{-- ✅✅✅ START: แก้ไขเงื่อนไขตรงนี้ (ใช้ strtolower) ✅✅✅ --}}
-        {{-- 
-          2. ตรวจสอบ Admin ทั่วไป (แปลง slug เป็นตัวพิมพ์เล็กก่อน)
-             เราจะเช็คว่า slug ที่แปลงแล้ว ตรงกับ 'it', 'admin', หรือ 'administartor' หรือไม่
-        --}}
-        @elseif($userGroupSlug && in_array(strtolower($userGroupSlug), ['it', 'admin', 'administartor']))
-        {{-- ✅✅✅ END: แก้ไขเงื่อนไขตรงนี้ ✅✅✅ --}}
-        
-            {{-- การ์ดต้อนรับสำหรับ IT และ Admin ทั่วไป --}}
-            <div class="mb-6 p-6 soft-card rounded-2xl gentle-shadow soft-hover flex items-center space-x-6 animate-slide-up-soft bg-gradient-to-r from-green-50 to-emerald-50">
+        {{-- 2. การ์ดต้อนรับสำหรับ IT และ Admin ทั่วไป --}}
+        {{-- ✅ รองรับทั้ง administrator (ถูก) และ administartor (เผื่อพิมพ์ผิดใน DB) --}}
+        @elseif($userGroupSlug && in_array(strtolower($userGroupSlug), ['it', 'admin', 'administrator', 'administartor']))
+            <div class="flex items-center p-6 mb-6 space-x-6 bg-gradient-to-r from-green-50 to-emerald-50 soft-card rounded-2xl gentle-shadow soft-hover animate-slide-up-soft">
                 <div class="text-5xl text-green-400">
                     <i class="fas fa-user-shield"></i>
                 </div>
@@ -46,22 +39,21 @@
                     <h2 class="text-2xl font-bold gradient-text-soft">
                         ยินดีต้อนรับ, {{ Auth::user()->fullname }}!
                     </h2>
-                    <p class="text-gray-600 mt-1">
+                    <p class="mt-1 text-gray-600">
                         คุณอยู่ในกลุ่มผู้ดูแลระบบ ขอให้เป็นวันที่ดีกับการทำงาน!
                     </p>
                 </div>
                 <div>
                     <a href="{{ route('management.users.index') }}"
-                       class="px-5 py-3 bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 rounded-xl hover:shadow-lg transition-all button-soft gentle-shadow font-medium text-sm whitespace-nowrap">
-                        <i class="fas fa-users-cog mr-2"></i>
+                       class="px-5 py-3 text-sm font-medium text-blue-700 whitespace-nowrap bg-gradient-to-br from-blue-100 to-blue-200 transition-all rounded-xl hover:shadow-lg button-soft gentle-shadow">
+                        <i class="mr-2 fas fa-users-cog"></i>
                         <span>จัดการผู้ใช้</span>
                     </a>
                 </div>
             </div>
 
-        {{-- 3. ถ้าไม่ใช่ทั้ง Super Admin และ Admin ทั่วไป ให้แสดงการ์ด User ปกติ --}}
+        {{-- 3. User ทั่วไป --}}
         @else
-            {{-- การ์ดต้อนรับสำหรับ User ทั่วไป (ลบ Debug Box ออกแล้ว) --}}
             <div class="p-6 mb-6 soft-card rounded-2xl stat-card gentle-shadow">
                 <div class="flex items-center justify-between">
                     <div>
@@ -79,92 +71,52 @@
 
     @endauth
 
-    {{-- ... (ส่วนที่เหลือของ Dashboard: Stat Cards, Charts, Lists เหมือนเดิม) ... --}}
-    {{-- Stat Cards --}}
+    {{-- Stat Cards Grid --}}
     <div class="grid grid-cols-1 gap-6 mb-6 sm:grid-cols-2 lg:grid-cols-4">
-
-        {{-- Card 1: อุปกรณ์ทั้งหมด (No Link) --}}
         <div class="flex items-start justify-between p-5 bg-white shadow-sm rounded-2xl">
-            <div>
-                <p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-box-open"></i>อุปกรณ์ทั้งหมด</p>
-                <p class="mt-2 text-3xl font-bold text-indigo-600">{{ number_format($total_equipment ?? 0, 0) }}</p>
-            </div>
+            <div><p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-box-open"></i>อุปกรณ์ทั้งหมด</p><p class="mt-2 text-3xl font-bold text-indigo-600">{{ number_format($total_equipment ?? 0, 0) }}</p></div>
             <div class="p-3 bg-blue-100 rounded-xl animate-float-soft"><i class="text-lg text-blue-500 fas fa-cubes"></i></div>
         </div>
-
-        {{-- Card 2: สต็อกต่ำ (Link to Low Stock Report) --}}
-        <a href="{{ route('reports.index', ['report_type' => 'low_stock']) }}" class="block p-5 bg-white shadow-sm rounded-2xl hover:bg-orange-50 transition-colors">
+        <a href="{{ route('reports.index', ['report_type' => 'low_stock']) }}" class="block p-5 bg-white transition-colors shadow-sm rounded-2xl hover:bg-orange-50">
             <div class="flex items-start justify-between">
-                <div>
-                    <p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-exclamation-triangle"></i>สต็อกต่ำ</p>
-                    <p class="mt-2 text-3xl font-bold text-orange-500">{{ number_format($low_stock_count ?? 0, 0) }}</p>
-                </div>
+                <div><p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-exclamation-triangle"></i>สต็อกต่ำ</p><p class="mt-2 text-3xl font-bold text-orange-500">{{ number_format($low_stock_count ?? 0, 0) }}</p></div>
                 <div class="p-3 bg-orange-100 rounded-xl animate-float-soft"><i class="text-lg text-orange-500 fas fa-exclamation-triangle"></i></div>
             </div>
         </a>
-
-        {{-- Card 3: กำลังสั่งซื้อ (Link to Purchase Track) --}}
-        <a href="{{ route('purchase-track.index') }}" class="block p-5 bg-white shadow-sm rounded-2xl hover:bg-sky-50 transition-colors">
+        <a href="{{ route('purchase-track.index') }}" class="block p-5 bg-white transition-colors shadow-sm rounded-2xl hover:bg-sky-50">
             <div class="flex items-start justify-between">
-                <div>
-                    <p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-truck-loading"></i>กำลังสั่งซื้อ</p>
-                    <p class="mt-2 text-3xl font-bold text-sky-500">{{ number_format($on_order_count ?? 0, 0) }}</p>
-                </div>
+                <div><p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-truck-loading"></i>กำลังสั่งซื้อ</p><p class="mt-2 text-3xl font-bold text-sky-500">{{ number_format($on_order_count ?? 0, 0) }}</p></div>
                 <div class="p-3 bg-sky-100 rounded-xl animate-float-soft"><i class="text-lg fas fa-shipping-fast text-sky-500"></i></div>
             </div>
         </a>
-
-        {{-- Card 4: ใกล้หมดประกัน (Link to Warranty Report) --}}
-        <a href="{{ route('reports.index', ['report_type' => 'warranty']) }}" class="block p-5 bg-white shadow-sm rounded-2xl hover:bg-purple-50 transition-colors">
+        <a href="{{ route('reports.index', ['report_type' => 'warranty']) }}" class="block p-5 bg-white transition-colors shadow-sm rounded-2xl hover:bg-purple-50">
             <div class="flex items-start justify-between">
-                <div>
-                    <p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-calendar-times"></i>ใกล้หมดประกัน</p>
-                    <p class="mt-2 text-3xl font-bold text-purple-500">{{ number_format($warranty_count ?? 0, 0) }}</p>
-                </div>
+                <div><p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-calendar-times"></i>ใกล้หมดประกัน</p><p class="mt-2 text-3xl font-bold text-purple-500">{{ number_format($warranty_count ?? 0, 0) }}</p></div>
                 <div class="p-3 bg-purple-100 rounded-xl animate-float-soft"><i class="text-lg text-purple-500 fas fa-calendar-times"></i></div>
             </div>
         </a>
-
-        {{-- Card 5: สั่งซื้อด่วน (Link to Purchase Orders - Urgent) --}}
-        <a href="{{ route('purchase-orders.index') }}" class="block p-5 bg-white shadow-sm rounded-2xl hover:bg-red-50 transition-colors">
+        
+        <a href="{{ route('purchase-orders.index') }}" class="block p-5 bg-white transition-colors shadow-sm rounded-2xl hover:bg-red-50">
             <div class="flex items-start justify-between">
-                <div>
-                    <p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-bolt"></i>สั่งซื้อด่วน</p>
-                    <p class="mt-2 text-3xl font-bold text-red-500">{{ number_format($urgent_order_count ?? 0, 0) }}</p>
-                </div>
+                <div><p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-bolt"></i>สั่งซื้อด่วน</p><p class="mt-2 text-3xl font-bold text-red-500">{{ number_format($urgent_order_count ?? 0, 0) }}</p></div>
                 <div class="p-3 bg-red-100 rounded-xl animate-float-soft"><i class="text-lg text-red-500 fas fa-bolt"></i></div>
             </div>
         </a>
-
-        {{-- Card 6: สั่งซื้อตามรอบ (Link to Purchase Orders - Scheduled) --}}
-        <a href="{{ route('purchase-orders.index') }}" class="block p-5 bg-white shadow-sm rounded-2xl hover:bg-cyan-50 transition-colors">
+        <a href="{{ route('purchase-orders.index') }}" class="block p-5 bg-white transition-colors shadow-sm rounded-2xl hover:bg-cyan-50">
             <div class="flex items-start justify-between">
-                <div>
-                    <p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-calendar-alt"></i>สั่งซื้อตามรอบ</p>
-                    <p class="mt-2 text-3xl font-bold text-cyan-500">{{ number_format($scheduled_order_count ?? 0, 0) }}</p>
-                </div>
+                <div><p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-calendar-alt"></i>สั่งซื้อตามรอบ</p><p class="mt-2 text-3xl font-bold text-cyan-500">{{ number_format($scheduled_order_count ?? 0, 0) }}</p></div>
                 <div class="p-3 bg-cyan-100 rounded-xl animate-float-soft"><i class="text-lg fas fa-calendar-alt text-cyan-500"></i></div>
             </div>
         </a>
-
-        {{-- Card 7: รอตรวจสอบ (Link to Receive Page) --}}
-        <a href="{{ route('receive.index') }}" class="block p-5 bg-white shadow-sm rounded-2xl hover:bg-teal-50 transition-colors">
+        <a href="{{ route('receive.index') }}" class="block p-5 bg-white transition-colors shadow-sm rounded-2xl hover:bg-teal-50">
             <div class="flex items-start justify-between">
-                <div>
-                    <p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-hourglass-half"></i>รอตรวจสอบ</p>
-                    <p class="mt-2 text-3xl font-bold text-teal-500">{{ number_format($pending_transactions_count ?? 0, 0) }}</p>
-                </div>
+                <div><p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-hourglass-half"></i>รอตรวจสอบ</p><p class="mt-2 text-3xl font-bold text-teal-500">{{ number_format($pending_transactions_count ?? 0, 0) }}</p></div>
                 <div class="p-3 bg-teal-100 rounded-xl animate-float-soft"><i class="text-lg text-teal-500 fas fa-hourglass-half"></i></div>
             </div>
         </a>
-
-        {{-- Card 8: สั่งซื้อตาม Job (Link to Purchase Orders - Job) --}}
-        <a href="{{ route('purchase-orders.index') }}" class="block p-5 bg-white shadow-sm rounded-2xl hover:bg-gray-50 transition-colors">
+        <a href="{{ route('purchase-orders.index') }}" class="block p-5 bg-white transition-colors shadow-sm rounded-2xl hover:bg-gray-50">
              <div class="flex items-start justify-between">
-                <div>
-                    <p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-tools"></i>สั่งซื้อตาม Job</p>
-                    <p class="mt-2 text-3xl font-bold text-gray-500">{{ number_format($job_order_count ?? 0, 0) }}</p>
-                </div>
+                <div><p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-tools"></i>สั่งซื้อตาม Job</p><p class="mt-2 text-3xl font-bold text-gray-500">{{ number_format($job_order_count ?? 0, 0) }}</p></div>
                 <div class="p-3 bg-gray-100 rounded-xl animate-float-soft"><i class="text-lg text-gray-500 fas fa-tools"></i></div>
             </div>
         </a>
@@ -184,34 +136,34 @@
             </div>
         </div>
         <div class="grid grid-cols-1 gap-4 mb-4 sm:grid-cols-3">
-            <select id="chartYearSelect" class="w-full px-2 py-1 border rounded-md">
+            <select id="chartYearSelect" class="w-full px-2 py-1 border rounded-md border-gray-200 focus:ring-blue-500 focus:border-blue-500">
                 @forelse($available_years as $year)
                     <option value="{{ $year }}" @if($year == now()->year) selected @endif>ปี {{ $year + 543 }}</option>
                 @empty
                     <option value="{{ now()->year }}">ปี {{ now()->year + 543 }}</option>
                 @endforelse
             </select>
-            <select id="chartCategorySelect" class="w-full px-2 py-1 border rounded-md">
+            <select id="chartCategorySelect" class="w-full px-2 py-1 border rounded-md border-gray-200 focus:ring-blue-500 focus:border-blue-500">
                 <option value="">ทุกหมวดหมู่</option>
                 @foreach($categories as $category)
                     <option value="{{ $category->id }}">{{ $category->name }}</option>
                 @endforeach
             </select>
-            <select id="chartEquipmentSelect" class="w-full">
-                {{-- Select2 will populate this --}}
-            </select>
+            <select id="chartEquipmentSelect" class="w-full"></select>
         </div>
         <div class="relative h-80"><canvas id="mainDashboardChart"></canvas></div>
     </div>
 
     {{-- Lists: Activities & Alerts --}}
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div class="p-5 lg:col-span-2 soft-card rounded-2xl stat-card gentle-shadow">
+        
+        {{-- Left Column: Activities --}}
+        <div class="p-5 lg:col-span-2 soft-card rounded-2xl stat-card gentle-shadow flex flex-col h-full">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-bold text-gray-800">⚡ กิจกรรมล่าสุด</h3>
                 <a href="{{ route('transactions.index') }}" class="text-sm font-medium text-blue-600 hover:underline">ดูทั้งหมด →</a>
             </div>
-            <div class="space-y-3">
+            <div class="space-y-3 flex-grow">
                 @forelse ($recent_activities as $tx)
                     @php
                         $details = match($tx->type) {
@@ -233,21 +185,90 @@
                         <div class="flex items-center justify-center flex-shrink-0 w-10 h-10 rounded-full {{ $colorClasses }}"><i class="fas {{ $details['icon'] }}"></i></div>
                         <div class="flex-grow min-w-0">
                             <p class="text-sm font-bold text-gray-800">{{ $details['title'] }}</p>
-                            <p class="text-sm text-gray-600 truncate">{{ optional($tx->equipment)->name }} (<strong class="{{ $qtyColor }}">{{ $qtySign }}{{ $tx->quantity_change }}</strong> ชิ้น)</p>
-                            <p class="text-xs text-gray-400">โดย {{ optional($tx->user)->fullname ?? 'System' }}</p>
+                            <p class="text-xs text-gray-600 truncate">{{ optional($tx->equipment)->name }} (<strong class="{{ $qtyColor }}">{{ $qtySign }}{{ $tx->quantity_change }}</strong> ชิ้น)</p>
+                            <p class="text-gray-400" style="font-size: 10px;">โดย {{ optional($tx->user)->fullname ?? 'System' }}</p>
                         </div>
-                        <div class="flex-shrink-0 text-xs font-medium text-gray-500">{{ optional($tx->transaction_date)->diffForHumans() }}</div>
+                        <div class="flex-shrink-0 font-medium text-gray-400 whitespace-nowrap" style="font-size: 10px;">{{ optional($tx->transaction_date)->diffForHumans() }}</div>
                     </div>
                 @empty
                     <p class="py-8 text-sm text-center text-gray-500">ยังไม่มีกิจกรรมล่าสุด</p>
                 @endforelse
             </div>
             @if ($recent_activities && $recent_activities->hasPages())
-                 <div class="pt-4 mt-4 border-t border-gray-100">{{ $recent_activities->links() }}</div>
+                 <div class="pt-4 mt-auto border-t border-gray-100">{{ $recent_activities->links() }}</div>
             @endif
         </div>
 
+        {{-- Right Column --}}
         <div class="space-y-6">
+
+            {{-- รอบการนับสต๊อก (105 วัน) --}}
+            <div class="p-5 soft-card rounded-2xl stat-card gentle-shadow">
+                <h3 class="mb-4 text-lg font-bold text-gray-800 gradient-text-soft">📋 รอบการนับสต๊อก (105 วัน)</h3>
+                <div class="space-y-3 overflow-y-auto max-h-72 scrollbar-soft">
+                    @forelse($stockCycles as $cycle)
+                        @php
+                            $theme = match($cycle->status) {
+                                'locked' => [
+                                    'border' => 'border-red-300',
+                                    'bg' => 'bg-gradient-to-r from-red-50 to-rose-100',
+                                    'text_head' => 'text-red-700',
+                                    'text_sub' => 'text-red-500',
+                                    'icon' => 'text-red-500',
+                                    'msg' => '⚠️ ระงับการใช้งาน (เลยกำหนด)'
+                                ],
+                                'warning' => [
+                                    'border' => 'border-orange-300',
+                                    'bg' => 'bg-gradient-to-r from-amber-50 to-orange-100',
+                                    'text_head' => 'text-orange-700',
+                                    'text_sub' => 'text-orange-500',
+                                    'icon' => 'text-orange-500',
+                                    'msg' => '⚠️ ใกล้ถึงกำหนดนับสต๊อก'
+                                ],
+                                default => [ // safe
+                                    'border' => 'border-emerald-200',
+                                    'bg' => 'bg-gradient-to-r from-emerald-50 to-teal-50',
+                                    'text_head' => 'text-emerald-700',
+                                    'text_sub' => 'text-emerald-600',
+                                    'icon' => 'text-emerald-500',
+                                    'msg' => '✅ สถานะปกติ'
+                                ]
+                            };
+                        @endphp
+
+                        <div class="p-3 border {{ $theme['border'] }} {{ $theme['bg'] }} rounded-2xl relative overflow-hidden shadow-sm transition-all hover:shadow-md">
+                            <div class="flex justify-between items-start mb-1">
+                                <h4 class="text-sm font-bold {{ $theme['text_head'] }} truncate pr-2">
+                                    @if($cycle->status === 'locked') <i class="fas fa-lock mr-1"></i> @endif
+                                    {{ $cycle->name }}
+                                </h4>
+                                <a href="{{ route('stock-checks.create') }}" class="text-xs {{ $theme['text_sub'] }} hover:underline transition-colors">
+                                    <i class="fas fa-edit"></i> สร้างนัดหมาย
+                                </a>
+                            </div>
+                            
+                            <div class="text-xs text-gray-600 mb-1">
+                                <span class="font-semibold"><i class="fas fa-cubes mr-1 {{ $theme['icon'] }}"></i>จำนวน:</span> {{ $cycle->item_count }} รายการ
+                            </div>
+                            <div class="text-xs font-bold {{ $theme['text_sub'] }} mb-2">
+                                {{ $theme['msg'] }}
+                            </div>
+
+                            {{-- ✅ แสดง Countdown เสมอ --}}
+                            <p class="text-xs {{ $theme['text_sub'] }} mb-2 border-t border-black/5 pt-1 mt-1">
+                                <i class="fas fa-clock mr-1"></i>เป้าหมาย: {{ $cycle->formatted_date }}
+                            </p>
+                            <div class="flex space-x-2 text-xs font-mono {{ $theme['text_head'] }} bg-white/60 p-2 rounded-lg justify-center stock-countdown-display border border-black/5" 
+                                 data-target="{{ $cycle->next_check_date }}">
+                                 <span><i class="fas fa-spinner fa-spin"></i> กำลังคำนวณ...</span>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="p-4 text-sm text-center text-gray-500"><i class="mr-2 text-green-500 fas fa-check-circle"></i>ข้อมูลครบถ้วน</div>
+                    @endforelse
+                </div>
+            </div>
+
             <div class="p-5 soft-card rounded-2xl stat-card gentle-shadow">
                 <h3 class="mb-4 text-lg font-bold text-gray-800 gradient-text-soft">⏳ รายการที่กำลังสั่งซื้อ</h3>
                 <div class="space-y-3 overflow-y-auto max-h-72 scrollbar-soft">
@@ -260,6 +281,7 @@
                     @endforelse
                 </div>
             </div>
+            
             <div class="p-5 soft-card rounded-2xl stat-card gentle-shadow">
                 <h3 class="mb-4 text-lg font-bold text-gray-800 gradient-text-soft">🚨 การแจ้งเตือนสำคัญ</h3>
                 <div class="space-y-3 overflow-y-auto max-h-72 scrollbar-soft">
@@ -284,6 +306,14 @@
 @endsection
 
 @push('scripts')
+    {{-- SweetAlert2 for Popups --}}
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script>
+        window.lockedStockCount = {{ $stockCycles->where('status', 'locked')->count() }};
+        window.warningStockCount = {{ $stockCycles->where('status', 'warning')->count() }};
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="{{ asset('js/dashboard.js') }}"></script>
