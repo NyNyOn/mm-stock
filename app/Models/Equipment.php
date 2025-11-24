@@ -39,12 +39,14 @@ class Equipment extends Model
         'has_msds',
         'msds_file_path',
         'msds_details',
+        'last_stock_check_at', // ✅ ต้องมีฟิลด์นี้
     ];
 
     protected $casts = [
         'price' => 'float',
         'purchase_date' => 'date:Y-m-d',
         'warranty_date' => 'date:Y-m-d',
+        'last_stock_check_at' => 'datetime', // ✅ สำคัญ: ต้องแปลงเป็น datetime ไม่งั้นหน้า Dashboard จะพัง
         'quantity' => 'integer',
         'min_stock' => 'integer',
         'max_stock' => 'integer',
@@ -60,7 +62,8 @@ class Equipment extends Model
         static::saving(function ($equipment) {
             $manualStatuses = [
                 'maintenance', 'disposed', 'sold',
-                'on_loan', 'repairing', 'inactive', 'written_off'
+                'on_loan', 'repairing', 'inactive', 'written_off',
+                'frozen' // ✅ เพิ่มสถานะ frozen
             ];
 
             if (!in_array($equipment->status, $manualStatuses)) {
@@ -125,9 +128,6 @@ class Equipment extends Model
         return $this->hasMany(PurchaseOrderItem::class);
     }
     
-    /**
-     * ✅ Relation สำหรับดึงคะแนนจากตารางใหม่
-     */
     public function ratings(): HasMany
     {
         return $this->hasMany(EquipmentRating::class);
@@ -153,5 +153,11 @@ class Equipment extends Model
             return $parts[1] ?? null;
         }
         return null;
+    }
+
+    // ✅ ฟังก์ชันเช็คสถานะ Frozen
+    public function isFrozen()
+    {
+        return $this->status === 'frozen';
     }
 }

@@ -29,6 +29,42 @@ class TransactionController extends Controller
     use AuthorizesRequests;
 
     // =========================================================================
+    // 🛡️ HELPER: ระบบบังคับแช่แข็ง (Self-Healing Frozen State)
+    // =========================================================================
+    /**
+     * ตรวจสอบและบังคับแช่แข็งทันทีถ้าหมดอายุ (ป้องกันการเบิกของที่หมดอายุแต่สถานะยังไม่เปลี่ยน)
+     */
+    private function checkAndEnforceFrozenState(Equipment $equipment)
+    {
+        // ถ้าสถานะเป็น frozen, sold, disposed อยู่แล้ว ไม่ต้องเช็คซ้ำ
+        if (in_array($equipment->status, ['frozen', 'sold', 'disposed'])) {
+            return;
+        }
+
+        $limitDays = 105;
+        $isExpired = false;
+
+        if (is_null($equipment->last_stock_check_at)) {
+            // ถ้าไม่เคยนับเลย -> หมดอายุทันที
+            $isExpired = true;
+        } else {
+            // ถ้านับล่าสุด นานกว่า 105 วัน -> หมดอายุ
+            $daysSinceCheck = Carbon::parse($equipment->last_stock_check_at)->diffInDays(now());
+            if ($daysSinceCheck >= $limitDays) {
+                $isExpired = true;
+            }
+        }
+
+        // 🔥 ถ้าหมดอายุจริง แต่สถานะยังไม่ Frozen -> สั่งแช่แข็งเดี๋ยวนี้!
+        if ($isExpired) {
+            $equipment->status = 'frozen';
+            $equipment->save();
+            $equipment->refresh(); // โหลดค่าใหม่มาใช้
+            Log::info("Force Frozen Triggered: Equipment ID {$equipment->id} ({$equipment->name})");
+        }
+    }
+
+    // =========================================================================
     // 1. LIST & SHOW
     // =========================================================================
 
@@ -88,7 +124,7 @@ class TransactionController extends Controller
             ];
 
         } catch (\Throwable $e) {
-            Log::error('Transaction Index Error: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
+            Log::error('Transaction Index Error: ' . $e->getMessage());
             if ($request->ajax()) { return response()->json(['error' => 'เกิดข้อผิดพลาดในการโหลดข้อมูล'], 500); }
             $transactions = collect(); $users = collect(); $types = []; $statusFilter = 'my_history';
             return redirect()->back()->with('error', 'เกิดข้อผิดพลาดในการโหลดข้อมูล โปรดตรวจสอบ Log');
@@ -105,8 +141,9 @@ class TransactionController extends Controller
     public function searchItems(Request $request)
     {
         $term = $request->input('q', '');
-        $query = Equipment::whereIn('status', ['available', 'low_stock'])
-                            ->where('quantity', '>', 0);
+        // ไม่กรอง status frozen ออกที่นี่ เพื่อให้ user เห็นว่าของมีอยู่จริง แต่เบิกไม่ได้ (จะไปบล็อกตอนกดเลือก)
+        $query = Equipment::where('quantity', '>', 0)
+                          ->whereNotIn('status', ['sold', 'disposed']); 
         
         try { 
             if (method_exists(Equipment::class, 'ratings')) {
@@ -125,6 +162,9 @@ class TransactionController extends Controller
         $items = $query->with('images', 'unit')->orderBy('name')->paginate(10);
         $defaultDeptKey = config('department_stocks.default_nas_dept_key', 'mm');
         $items->getCollection()->transform(function ($item) use ($defaultDeptKey) {
+            // 🟢 Force Check ทุกครั้งที่ค้นหา
+            $this->checkAndEnforceFrozenState($item);
+
             $primaryImage = $item->images->firstWhere('is_primary', true) ?? $item->images->first();
             $imageFileName = $primaryImage->file_name ?? null;
             try {
@@ -133,9 +173,11 @@ class TransactionController extends Controller
                 $item->image_url = asset('images/placeholder.webp');
             }
             $item->unit_name = $item->unit->name ?? 'N/A';
-            
             $item->avg_rating = $item->ratings_avg_rating ? (float)$item->ratings_avg_rating : 0;
             $item->rating_count = $item->ratings_count ?? 0;
+            
+            // ส่ง Flag Frozen กลับไปให้ Frontend
+            $item->is_frozen = $item->status === 'frozen';
 
             return $item;
         });
@@ -149,7 +191,7 @@ class TransactionController extends Controller
     public function storeWithdrawal(Request $request)
     {
         Log::debug('===== storeWithdrawal Start =====');
-        $this->authorize('equipment:manage');
+        $this->authorize('equipment:manage'); // Admin withdraw
 
         $validator = Validator::make($request->all(), [
             'type'             => ['required', Rule::in(['withdraw', 'borrow'])],
@@ -188,6 +230,18 @@ class TransactionController extends Controller
                 if (!$equipment || $equipment->quantity < $quantityToWithdraw) {
                     DB::rollBack();
                     return response()->json(['success' => false, 'message' => "สต็อกของ " . ($equipment->name ?? "ID: {$itemData['id']}") . " ไม่เพียงพอ"], 400);
+                }
+
+                // ✅ [Safety Check] ตรวจสอบและบังคับแช่แข็ง
+                $this->checkAndEnforceFrozenState($equipment);
+
+                // ✅ [Frozen Check] บล็อกถ้าระงับ (ยกเว้นมีสิทธิ์ Bypass)
+                if ($equipment->status === 'frozen') {
+                    $canBypass = method_exists($loggedInUser, 'canBypassFrozenState') ? $loggedInUser->canBypassFrozenState() : false;
+                    if (!$canBypass) {
+                        DB::rollBack();
+                        return response()->json(['success' => false, 'message' => "อุปกรณ์ '{$equipment->name}' ถูกระงับ (Frozen) กรุณานับสต็อกก่อน"], 403);
+                    }
                 }
 
                 $purpose = $request->input('purpose');
@@ -255,14 +309,14 @@ class TransactionController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("storeWithdrawal Error: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด'], 500);
+            return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
         }
     }
 
     public function handleUserTransaction(Request $request)
     {
         Log::debug('===== handleUserTransaction Start =====');
-        $this->authorize('equipment:borrow');
+        $this->authorize('equipment:borrow'); // User withdraw
 
         $loggedInUser = Auth::user();
         $canAutoConfirm = $loggedInUser->can('transaction:auto_confirm');
@@ -271,11 +325,10 @@ class TransactionController extends Controller
         $targetUserId = ($requestorType === 'other' && $request->filled('requestor_id')) 
                         ? (int)$request->input('requestor_id') : $loggedInUser->id;
 
-        // ✅ เช็ค Block เฉพาะกรณีเบิกให้ตัวเอง
+        // Check if user is blocked (unrated transactions)
         if ($targetUserId === $loggedInUser->id) {
             $unratedTransactions = $this->getUnratedTransactions($targetUserId);
             if ($unratedTransactions->count() > 0) {
-                // ✅ เพิ่ม ->values() เพื่อให้มั่นใจว่าเป็น Array JSON ไม่ใช่ Object
                 return response()->json([
                     'success' => false,
                     'message' => 'คุณมีรายการอุปกรณ์ที่ยังไม่ได้ให้คะแนน',
@@ -309,6 +362,24 @@ class TransactionController extends Controller
             if (!$equipment || $equipment->quantity < $quantityToTransact) {
                 DB::rollBack();
                 return response()->json(['success' => false, 'message' => "สต็อกไม่เพียงพอ"], 400);
+            }
+
+            // ✅✅✅ [STEP 1]: บังคับเช็คและแช่แข็ง ถ้าหมดอายุจริง ✅✅✅
+            $this->checkAndEnforceFrozenState($equipment);
+
+            $bypassed = false;
+
+            // ✅✅✅ [STEP 2]: บล็อกการเบิก ถ้าถูกแช่แข็ง (และไม่มีสิทธิ์ Bypass) ✅✅✅
+            if ($equipment->status === 'frozen') {
+                $canBypass = method_exists($loggedInUser, 'canBypassFrozenState') ? $loggedInUser->canBypassFrozenState() : false;
+                
+                if (!$canBypass) {
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => "❌ ทำรายการไม่สำเร็จ: อุปกรณ์นี้ถูกระงับ (Frozen) เนื่องจากไม่ได้นับสต็อกเกิน 105 วัน กรุณาติดต่อ Admin"], 403);
+                } else {
+                    $bypassed = true;
+                    Log::warning("User ID {$loggedInUser->id} bypassed frozen item ID {$equipment->id}");
+                }
             }
 
             $purpose = $request->input('purpose');
@@ -359,12 +430,16 @@ class TransactionController extends Controller
                 } catch (\Exception $e) { Log::error("Notify Error: " . $e->getMessage()); }
             }
 
+            if ($bypassed) {
+                $successMessage .= " (⚠️ Warning: Frozen Item Bypassed)";
+            }
+
             return response()->json(['success' => true, 'message' => $successMessage]);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("handleUserTransaction Error: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด'], 500);
+            return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
         }
     }
 
@@ -473,18 +548,14 @@ class TransactionController extends Controller
     }
 
     // =========================================================================
-    // 4. RATING SYSTEM (ใช้ตาราง equipment_ratings)
+    // 4. RATING SYSTEM
     // =========================================================================
 
-    // ✅ API Check Block Status
     public function checkBlockStatus(Request $request)
     {
         try {
             $userId = Auth::id();
             $unratedTransactions = $this->getUnratedTransactions($userId);
-
-            // 🔍 DEBUG LOG: เช็คว่าเจอเท่าไหร่
-            Log::info("[CheckBlockStatus] User ID: {$userId}, Count: " . $unratedTransactions->count());
 
             if ($unratedTransactions->count() > 0) {
                 $defaultDeptKey = config('department_stocks.default_nas_dept_key', 'mm');
@@ -502,8 +573,6 @@ class TransactionController extends Controller
                 return response()->json([
                     'blocked' => true,
                     'message' => 'มีรายการค้างประเมิน',
-                    // ✅ เพิ่ม ->values() เพื่อบังคับให้เป็น JSON Array [{},{},{}] 
-                    // แก้ปัญหา JS อ่านค่าได้แค่ตัวเดียว
                     'unrated_items' => $unratedTransactions->values()
                 ]);
             }
@@ -516,15 +585,14 @@ class TransactionController extends Controller
     private function getUnratedTransactions($userId)
     {
         return Transaction::where('user_id', $userId)
-            ->where('status', 'completed') // ✅ ต้อง Completed เท่านั้น
+            ->where('status', 'completed')
             ->whereIn('type', ['consumable', 'returnable', 'partial_return'])
-            ->whereDoesntHave('rating') // เช็คว่าไม่มีในตาราง equipment_ratings
+            ->whereDoesntHave('rating')
             ->orderBy('transaction_date', 'desc')
             ->with(['equipment.latestImage'])
             ->get();
     }
 
-    // ✅ Rate Transaction
     public function rateTransaction(Request $request, Transaction $transaction)
     {
         if (Auth::id() !== $transaction->user_id) return response()->json(['success' => false, 'message' => 'ไม่มีสิทธิ์'], 403);
@@ -542,7 +610,6 @@ class TransactionController extends Controller
 
         DB::beginTransaction();
         try {
-            // ✅ บันทึกลง equipment_ratings
             EquipmentRating::create([
                 'transaction_id' => $transaction->id,
                 'equipment_id' => $transaction->equipment_id,

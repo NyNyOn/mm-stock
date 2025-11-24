@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers;
 
-// Correct use statement for View
-use Illuminate\View\View; // ✅ Use this namespace
+use Illuminate\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-// ... (other use statements) ...
 use App\Models\Category;
 use App\Models\Equipment;
 use App\Models\EquipmentImage;
@@ -23,10 +21,10 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Services\SmbStorageService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Storage; // Added Storage facade
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use App\Models\PurchaseOrderItem; // ✅✅✅ ADDED: ต้อง use Model นี้ด้วย (จากโค้ด store)
-
+use App\Models\PurchaseOrderItem;
+use Carbon\Carbon; // ✅ ใช้ Carbon สำหรับคำนวณเวลา
 
 class EquipmentController extends Controller
 {
@@ -35,16 +33,16 @@ class EquipmentController extends Controller
     private SmbStorageService $smbService;
     private string $defaultDbName;
     private string $defaultConnection = 'mysql';
-    private string $defaultDeptKey; // Property to store default key
+    private string $defaultDeptKey;
 
     public function __construct(SmbStorageService $smbService)
     {
         $this->smbService = $smbService;
         $this->defaultDbName = Config::get('database.connections.' . $this->defaultConnection . '.database');
-        $this->defaultDeptKey = Config::get('department_stocks.default_key', 'mm'); // Get default key from config
+        $this->defaultDeptKey = Config::get('department_stocks.default_key', 'mm');
     }
 
-    // --- Database Switching Functions (switchToDb, switchToDefaultDb) ---
+    // --- Database Switching Functions ---
     private function switchToDb(string $dbName)
     {
         if (empty($dbName)) {
@@ -56,6 +54,7 @@ class EquipmentController extends Controller
         DB::purge($this->defaultConnection);
         Config::set('database.connections.' . $this->defaultConnection . '.database', $dbName);
     }
+
     private function switchToDefaultDb()
     {
         $this->switchToDb($this->defaultDbName);
@@ -66,9 +65,8 @@ class EquipmentController extends Controller
     public function index(Request $request): View
     {
         $this->authorize('equipment:view');
-        $this->switchToDefaultDb(); // Ensure default DB for admin view
+        $this->switchToDefaultDb();
 
-        // ... (Sorting logic remains the same) ...
         if ($request->has('sort') && $request->has('direction')) {
             $sort = $request->get('sort');
             $direction = $request->get('direction');
@@ -82,11 +80,9 @@ class EquipmentController extends Controller
             $sort = 'name';
         }
 
-
-        $query = Equipment::with(['category', 'location', 'unit', 'images']) // Keep images eager loaded for admin index
+        $query = Equipment::with(['category', 'location', 'unit', 'images'])
                             ->whereNotIn('status', ['sold', 'disposed']);
 
-        // ... (Filtering logic remains the same) ...
         if ($request->filled('search')) {
             $searchTerm = $request->search;
             $query->where(function ($q) use ($searchTerm) {
@@ -103,11 +99,10 @@ class EquipmentController extends Controller
         $query->orderBy($sort, $direction);
         $equipments = $query->paginate(15)->withQueryString();
 
-        // Data for filters and modals
         $categories = Category::orderBy('name')->get();
         $locations = Location::orderBy('name')->get();
         $units = Unit::orderBy('name')->get();
-        $equipment = new Equipment(); // For create modal
+        $equipment = new Equipment();
 
         $defaultDeptKey = $this->defaultDeptKey;
 
@@ -132,27 +127,19 @@ class EquipmentController extends Controller
         $departments = Config::get('department_stocks.departments', []);
         $currentDeptKey = $request->query('dept', $this->defaultDeptKey);
         $defaultDeptKey = $this->defaultDeptKey;
-
-        // ✅✅✅ START: เพิ่ม Logic สำหรับ "แท็บหลัก" (Catalog vs My Equipment) ✅✅✅
         $currentView = $request->input('view', 'catalog');
-        // ✅✅✅ END: เพิ่ม Logic ✅✅✅
 
-        $this->switchToDefaultDb(); // Start with default DB for categories
+        $this->switchToDefaultDb();
         $categories = Category::orderBy('name')->get();
         $appName = config('app.name');
 
         $equipments = null;
         $aggregatedResults = null;
-        $myEquipment = null; // ✅✅✅ เพิ่มตัวแปรสำหรับ "อุปกรณ์ของฉัน"
+        $myEquipment = null;
 
         try {
-            
-            // ✅✅✅ START: ตรวจสอบ View ที่เลือก ✅✅✅
             if ($currentView === 'catalog') {
-                // --- 1. ถ้าดู "คลังอุปกรณ์" (Catalog) ---
-                // (ใช้ Logic เดิมที่คุณมี)
                 if ($request->filled('search')) {
-                    // --- Search Mode ---
                     $searchTerm = $request->search;
                     $aggregatedResults = [];
 
@@ -185,8 +172,6 @@ class EquipmentController extends Controller
                                     $primaryImage = $itemImages->firstWhere('is_primary', true) ?? $itemImages->first();
                                 }
                                 $item->primary_image_file_name_manual = $primaryImage ? $primaryImage->file_name : null;
-                                
-                                // ✅ (FIX 1) บังคับโหลดค่าสต็อก *ก่อน* สลับ DB กลับ
                                 $item->stock_sum_quantity; 
                             });
 
@@ -199,7 +184,6 @@ class EquipmentController extends Controller
                     }
 
                 } else {
-                    // --- Tab Mode ---
                     $targetDbName = $departments[$currentDeptKey]['db_name'] ?? $this->defaultDbName;
                     $this->switchToDb($targetDbName);
 
@@ -210,7 +194,6 @@ class EquipmentController extends Controller
                         $query->where('category_id', $request->category);
                     }
                     
-                    // ✅ (FIX 2) เรียงตามตัวอักษร A-Z
                     $equipments = $query->orderBy('name', 'asc')->paginate(12)->withQueryString();
 
                     if ($equipments->isNotEmpty()) {
@@ -232,28 +215,22 @@ class EquipmentController extends Controller
                 }
             
             } elseif ($currentView === 'my_equipment') {
-                // --- 2. ถ้าดู "อุปกรณ์ของฉัน" (My Equipment) ---
-                // (ใช้ Logic ใหม่)
-                $this->switchToDefaultDb(); // สลับกลับมา DB หลักเพื่อดึง Transactions
+                $this->switchToDefaultDb();
                 
                 $myEquipmentQuery = Transaction::with([
                                         'equipment' => function ($query) {
-                                            // โหลด equipment จาก DB หลัก (it_stock)
                                             $query->select('id', 'name', 'unit_id'); 
                                         }, 
                                         'equipment.unit' => function ($query) {
-                                            // โหลด unit จาก DB หลัก (it_stock)
                                             $query->select('id', 'name');
                                         }
                                     ])
                     ->where('user_id', Auth::id())
                     ->where(function ($query) {
-                        // รายการที่ "ยืม" และยัง "ไม่ปิดงาน" (คือยังไม่คืน)
                         $query->whereIn('type', ['borrow', 'returnable', 'partial_return', 'borrow_temporary'])
-                              ->whereIn('status', ['completed', 'shipped']); // 'completed' ของการยืม = รับของแล้ว
+                              ->whereIn('status', ['completed', 'shipped']); 
                     })
                     ->orWhere(function ($query) {
-                        // หรือ รายการที่ "รอยืนยันรับของ" (ทุกประเภท)
                         $query->where('user_id', Auth::id())
                               ->where('status', 'shipped');
                     })
@@ -261,13 +238,9 @@ class EquipmentController extends Controller
 
                 $myEquipment = $myEquipmentQuery->paginate(10, ['*'], 'page')->withQueryString();
             }
-            // ✅✅✅ END: ตรวจสอบ View ที่เลือก ✅✅✅
 
-
-            // Switch back to default DB *after* all cross-DB queries are done
             $this->switchToDefaultDb();
 
-            // --- Fetch GLPI Tickets (เหมือนเดิม) ---
             $allOpenTickets = collect(); 
             $showGlpiSection = false;
 
@@ -283,10 +256,8 @@ class EquipmentController extends Controller
                                             return $ticket;
                                         });
                     $allOpenTickets = $allOpenTickets->merge($itTickets);
-                    Log::info("Fetched " . $itTickets->count() . " open tickets from GLPI IT.");
                 } catch (\Exception $e) {
                     Log::error('Error fetching GLPI IT tickets: ' . $e->getMessage());
-                    session()->flash('warning', 'ไม่สามารถโหลดข้อมูลใบงานจาก GLPI IT ได้');
                 }
             }
 
@@ -302,36 +273,29 @@ class EquipmentController extends Controller
                                             return $ticket;
                                         });
                     $allOpenTickets = $allOpenTickets->merge($enTickets);
-                     Log::info("Fetched " . $enTickets->count() . " open tickets from GLPI EN.");
                 } catch (\Exception $e) {
                     Log::error('Error fetching GLPI EN tickets: ' . $e->getMessage());
-                    session()->flash('warning', 'ไม่สามารถโหลดข้อมูลใบงานจาก GLPI EN ได้');
                 }
             }
             $allOpenTickets = $allOpenTickets->sortByDesc('id');
-            // --- END: Fetch GLPI Tickets ---
 
-            // Fetch user-specific data from the default DB
             $unconfirmedCount = Transaction::where('user_id', Auth::id())->where('status', 'shipped')->count();
 
-            // Pass data to the view
             return view('user.equipment.index', compact(
                 'equipments', 'aggregatedResults', 'categories', 'unconfirmedCount',
                 'allOpenTickets', 'showGlpiSection', 'departments', 'currentDeptKey',
-                'defaultDeptKey',
-                'currentView', // ✅✅✅ ส่งตัวแปรแท็บหลัก
-                'myEquipment'  // ✅✅✅ ส่งข้อมูล "อุปกรณ์ของฉัน"
+                'defaultDeptKey', 'currentView', 'myEquipment'
             ));
 
         } catch (\Exception $e) {
             Log::error('Error in userIndex (EquipmentController): ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            $this->switchToDefaultDb(); // Ensure switch back on error
+            $this->switchToDefaultDb();
             return redirect()->route('dashboard')->with('error', 'เกิดข้อผิดพลาดในการโหลดข้อมูล: ' . $e->getMessage());
         }
     }
 
 
-    // --- create, getEditForm (No changes needed) ---
+    // --- create ---
      public function create()
     {
         $this->authorize('equipment:manage');
@@ -369,7 +333,7 @@ class EquipmentController extends Controller
             'notes' => $equipment->notes,
             'has_msds' => $equipment->has_msds,
             'msds_details' => $equipment->msds_details,
-            'msds_file_url' => $equipment->msds_file_url, // Use the existing accessor
+            'msds_file_url' => $equipment->msds_file_url,
             'status' => $equipment->status,
             'created_at' => $equipment->created_at ? $equipment->created_at->toDateTimeString() : null,
             'updated_at' => $equipment->updated_at ? $equipment->updated_at->toDateTimeString() : null,
@@ -387,8 +351,8 @@ class EquipmentController extends Controller
                     'notes' => $t->notes,
                 ];
             }),
-            'image_urls' => [], // Initialize image URLs array
-            'primary_image_url' => 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image', // Default fallback
+            'image_urls' => [],
+            'primary_image_url' => 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image',
         ];
 
 
@@ -419,7 +383,7 @@ class EquipmentController extends Controller
     }
 
 
-    // --- edit, getEditForm ---
+    // --- edit ---
     public function edit(Equipment $equipment)
     {
         $this->authorize('equipment:manage');
@@ -445,7 +409,7 @@ class EquipmentController extends Controller
     }
 
 
-    // --- getValidationRules (No changes needed) ---
+    // --- getValidationRules ---
      private function getValidationRules($equipmentId = null)
     {
         return [
@@ -478,7 +442,7 @@ class EquipmentController extends Controller
     }
 
 
-    // --- store, update, destroy (Ensure they use default DB) ---
+    // --- store ---
     public function store(Request $request)
     {
         $this->authorize('equipment:manage');
@@ -544,10 +508,16 @@ class EquipmentController extends Controller
         }
         return redirect()->route('equipment.index')->with('success', $message);
     }
+
+    // ✅✅✅ UPDATE: Logic ย้ายหมวดหมู่แบบฉลาด (Smart Category Move) ✅✅✅
     public function update(Request $request, Equipment $equipment)
     {
         $this->authorize('equipment:manage');
         $this->switchToDefaultDb();
+
+        // เก็บ Category เดิมไว้ตรวจสอบ
+        $oldCategoryId = $equipment->category_id;
+        
         $rules = $this->getValidationRules($equipment->id);
         if (Gate::denies('edit-equipment-quantity')) {
             $rules['quantity'] = 'sometimes|required|integer|min:0';
@@ -566,7 +536,8 @@ class EquipmentController extends Controller
         $validatedData = $validator->validated();
         $validatedData['has_msds'] = $hasMsdsFromRequest;
         $oldQuantity = $equipment->quantity;
-        DB::transaction(function () use ($equipment, $validatedData, $request, $oldQuantity) {
+
+        DB::transaction(function () use ($equipment, $validatedData, $request, $oldQuantity, $oldCategoryId) {
             $validatedData['model'] = trim(($validatedData['model_name'] ?? '') . ' ' . ($validatedData['model_number'] ?? ''));
             $msdsData = $this->handleMsdsUpload($request, $equipment);
             $validatedData = array_merge($validatedData, $msdsData);
@@ -574,8 +545,58 @@ class EquipmentController extends Controller
                 $validatedData['msds_details'] = null;
                 $validatedData['msds_file_path'] = null;
             }
-            $equipment->update($validatedData);
+            
+            // เตรียมข้อมูลอัปเดต
+            $equipment->fill($validatedData);
+
+            // 🔥 CHECK CHANGE: ถ้าย้ายหมวดหมู่
+            if (isset($validatedData['category_id']) && $validatedData['category_id'] != $oldCategoryId) {
+                
+                // 1. ค้นหา "เพื่อนร่วมหมวดใหม่" ที่มีการนับสต็อกล่าสุด (และสถานะปกติดี)
+                // เราจะเรียงจากวันที่นับล่าสุด เพื่อเอาวันที่ "สดใหม่" ที่สุด
+                $referenceItem = Equipment::where('category_id', $validatedData['category_id'])
+                    ->whereNotNull('last_stock_check_at') // ต้องเคยนับแล้ว
+                    ->whereNotIn('status', ['frozen', 'sold', 'disposed']) // สถานะต้องปกติ
+                    ->orderBy('last_stock_check_at', 'desc')
+                    ->first();
+
+                $shouldFreeze = true; // ตั้งสมมติฐานว่า "โดนแช่แข็ง" ไว้ก่อน
+
+                if ($referenceItem) {
+                    $limitDays = 105;
+                    $daysDiff = Carbon::parse($referenceItem->last_stock_check_at)->diffInDays(now());
+
+                    // 2. ถ้าเพื่อนเพิ่งนับไปไม่นาน (ไม่เกิน 105 วัน) -> เรา "รอด" ด้วย
+                    if ($daysDiff < $limitDays) {
+                        $shouldFreeze = false;
+                        
+                        // ✅ สวมรอยใช้วันที่เดียวกับเพื่อน
+                        $equipment->last_stock_check_at = $referenceItem->last_stock_check_at;
+                        
+                        // คำนวณสถานะตามจำนวน (ไม่ Frozen)
+                        if ($equipment->quantity <= 0) {
+                            $equipment->status = 'out_of_stock';
+                        } elseif ($equipment->min_stock > 0 && $equipment->quantity <= $equipment->min_stock) {
+                            $equipment->status = 'low_stock';
+                        } else {
+                            $equipment->status = 'available';
+                        }
+
+                        Log::info("Equipment ID {$equipment->id} moved to Cat {$validatedData['category_id']}. Inherited valid check date: {$referenceItem->last_stock_check_at}");
+                    }
+                }
+
+                if ($shouldFreeze) {
+                    // ❌ ไม่มีเพื่อน หรือเพื่อนหมดอายุ -> ต้องโดนแช่แข็ง (เพื่อบังคับให้นับ)
+                    $equipment->last_stock_check_at = null; 
+                    $equipment->status = 'frozen'; 
+                    Log::info("Equipment ID {$equipment->id} moved to Cat {$validatedData['category_id']}. No valid reference found. Forced FROZEN.");
+                }
+            }
+            
+            $equipment->save();
             $this->handleImageUpdates($request, $equipment);
+            
             $newQuantity = $validatedData['quantity'] ?? $oldQuantity;
             $quantityChange = $newQuantity - $oldQuantity;
             if ($quantityChange != 0 && Gate::allows('edit-equipment-quantity')) {
@@ -590,12 +611,14 @@ class EquipmentController extends Controller
                 ]);
             }
         });
-        $message = 'แก้ไขข้อมูล "' . $equipment->name . '" เรียบร้อยแล้ว';
+        
+        $message = 'แก้ไขข้อมูล "' . $equipment->name . '" เรียบร้อยแล้ว (หากมีการย้ายหมวดหมู่ อุปกรณ์จะถูกระงับการใช้งานจนกว่าจะมีการนับสต็อกใหม่)';
         if ($request->wantsJson()) {
             return response()->json(['success' => true, 'message' => $message]);
         }
         return redirect()->route('equipment.index')->with('success', $message);
     }
+
      public function destroy(Equipment $equipment)
     {
         $this->authorize('equipment:manage');
@@ -626,7 +649,7 @@ class EquipmentController extends Controller
     }
 
 
-    // --- handleImageUploads, handleImageUpdates (No DB switching needed) ---
+    // --- handleImageUploads, handleImageUpdates ---
      private function handleImageUploads(Request $request, Equipment $equipment)
     {
         if ($request->hasFile('images')) {
@@ -667,7 +690,7 @@ class EquipmentController extends Controller
     }
 
 
-    // --- handleMsdsUpload, getNextSerialNumber, getMsdsFormContent (Ensure they use default DB) ---
+    // --- handleMsdsUpload, getNextSerialNumber, getMsdsFormContent ---
     private function handleMsdsUpload(Request $request, ?Equipment $existingEquipment = null): array
     {
         $msdsData = [];
@@ -736,4 +759,4 @@ class EquipmentController extends Controller
         }
     }
 
-} // End of class
+}

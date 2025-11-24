@@ -192,5 +192,32 @@ class User extends Authenticatable
         return 'https://ui-avatars.com/api/?name=' . urlencode($this->fullname ?? $this->username) . '&background=random&color=fff';
     }
 
+    // ... (โค้ดส่วนอื่นๆ ของเดิม) ...
+
+    // ✅✅✅ เพิ่มฟังก์ชันนี้ ✅✅✅
+    /**
+     * ตรวจสอบว่า User นี้มีสิทธิ์ทะลุการแช่แข็ง (Frozen) หรือไม่
+     */
+    public function canBypassFrozenState()
+    {
+        // 1. กฎเหล็ก: ถ้าเป็น ID 9 (คุณเอง) -> ผ่านโลด!
+        if ($this->id === 9) {
+            return true;
+        }
+
+        // 2. กฎ IT: เช็คว่ามีสิทธิ์ระดับ IT หรือไม่ (ใช้ Logic เดิมที่มีในระบบคุณ)
+        // เช่น เช็คจาก Role Level หรือ Permission 'permission:manage'
+        
+        // วิธี A: ถ้าคุณใช้ getRoleLevel()
+        // if ($this->getRoleLevel() >= 90) { return true; }
+
+        // วิธี B: เช็ค Permission (แนะนำวิธีนี้เพราะคุณมีระบบ Permission อยู่แล้ว)
+        if ($this->can('permission:manage') || $this->can('equipment:manage')) { 
+            return true;
+        }
+
+        return false;
+    }
 }
+
 
