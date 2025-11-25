@@ -17,33 +17,39 @@ class ConsumableReturnController extends Controller
 {
     use AuthorizesRequests;
 
+    /**
+     * แสดงรายการที่สามารถคืนได้ และประวัติการคืน
+     */
     public function index()
     {
         $pendingReturns = collect();
+        
+        // Admin: ดูรายการรออนุมัติทั้งหมด
         if (Auth::user()->can('permission:manage')) {
-            $pendingReturns = ConsumableReturn::with(['originalTransaction.equipment', 'requester'])
+            $pendingReturns = ConsumableReturn::with(['originalTransaction.equipment.latestImage', 'requester'])
                 ->where('status', 'pending')
                 ->orderBy('created_at', 'desc')
                 ->get();
         }
 
-        $userReturnHistory = ConsumableReturn::with(['originalTransaction.equipment', 'approver'])
+        // User: ประวัติการขอคืนของตัวเอง
+        $userReturnHistory = ConsumableReturn::with(['originalTransaction.equipment.latestImage', 'approver'])
             ->where('requested_by_user_id', Auth::id())
             ->orderBy('created_at', 'desc')
             ->paginate(10, ['*'], 'history_page');
 
-        // ✅✅✅ START: แก้ไข Query ตรงนี้ ✅✅✅
-        $returnableItems = Transaction::with('equipment')
+        // User: รายการที่ "เบิกเหลือคืนได้" (Partial Return) ที่ยังคืนไม่ครบ
+        $returnableItems = Transaction::with(['equipment.latestImage'])
             ->where('user_id', Auth::id())
             ->where('return_condition', 'allowed')
             ->where('type', 'partial_return')
             ->where('status', 'completed')
-            // ‼️ แก้ไขบรรทัดนี้: เพิ่ม COALESCE เพื่อจัดการกับค่า NULL (ว่าง) ให้เป็น 0
+            // ตรวจสอบว่ายังมียอดคงเหลือให้คืน (Abs(จำนวนเบิก) > จำนวนที่คืนแล้ว)
             ->where(DB::raw('ABS(quantity_change)'), '>', DB::raw('COALESCE(returned_quantity, 0)'))
             ->orderBy('transaction_date', 'desc')
             ->paginate(10, ['*'], 'items_page');
-        // ✅✅✅ END: แก้ไข Query ✅✅✅
 
+        // รายการที่ User เคยกดขอคืนไปแล้ว แต่สถานะเป็น Pending (เพื่อนำไปแสดง Badge 'รออนุมัติ')
         $pendingReturnTxnIds = ConsumableReturn::where('requested_by_user_id', Auth::id())
                                 ->where('status', 'pending')
                                 ->pluck('original_transaction_id')
@@ -52,44 +58,71 @@ class ConsumableReturnController extends Controller
         return view('consumable-returns.index', compact('pendingReturns', 'userReturnHistory', 'returnableItems', 'pendingReturnTxnIds'));
     }
 
-    // (ฟังก์ชัน store นี้ถูกต้องแล้ว จากที่เราแก้ครั้งก่อน)
+    /**
+     * บันทึกคำขอคืน (หรือแจ้งใช้หมด)
+     */
     public function store(Request $request)
     {
         $this->authorize('consumable:return');
         
         $request->validate([
             'transaction_id' => 'required|integer|exists:transactions,id',
-            'return_quantity' => 'required|integer|min:1',
+            'action_type' => 'required|in:return,write_off', // return = คืนของ, write_off = ใช้หมด
+            'return_quantity' => 'nullable|integer|min:1',
             'notes' => 'nullable|string|max:255',
         ]);
 
         $originalTransaction = Transaction::findOrFail($request->transaction_id);
 
+        // เช็คว่ามีรายการรออนุมัติค้างอยู่หรือไม่
         $existingPendingReturn = ConsumableReturn::where('original_transaction_id', $originalTransaction->id)
             ->where('status', 'pending')
             ->exists();
+
         if ($existingPendingReturn) {
-            return back()->with('error', 'คุณได้ส่งคำขอคืนสำหรับรายการนี้ไปแล้ว และกำลังรอการอนุมัติ');
+            return back()->with('error', 'รายการนี้มีคำขอที่รอการอนุมัติอยู่แล้ว');
         }
 
-        $remainingQty = abs($originalTransaction->quantity_change) - ($originalTransaction->returned_quantity ?? 0); // (ใช้ ?? 0 เพื่อความปลอดภัย)
-        if ($request->return_quantity > $remainingQty) {
-            return back()->with('error', "ไม่สามารถขอคืนเกินจำนวนที่เหลือได้ (เหลือให้คืน {$remainingQty} ชิ้น)");
+        // คำนวณยอดคงเหลือจริง
+        $remainingQty = abs($originalTransaction->quantity_change) - ($originalTransaction->returned_quantity ?? 0);
+
+        if ($remainingQty <= 0) {
+            return back()->with('error', 'รายการนี้ถูกเคลียร์ยอดหมดแล้ว');
+        }
+
+        $quantityToProcess = 0;
+        $notePrefix = "";
+
+        // กรณี: แจ้งใช้หมด (Write-off) -> บังคับยอดเท่ากับจำนวนคงเหลือทั้งหมด
+        if ($request->action_type === 'write_off') {
+            $quantityToProcess = $remainingQty;
+            $notePrefix = "[แจ้งใช้หมด] ";
+        } 
+        // กรณี: คืนของ (Return) -> ใช้ยอดตามที่กรอก
+        else {
+            $quantityToProcess = $request->return_quantity;
+            if (!$quantityToProcess || $quantityToProcess > $remainingQty) {
+                return back()->with('error', "ไม่สามารถขอคืนเกินจำนวนที่เหลือได้ (เหลือ {$remainingQty} ชิ้น)");
+            }
+            $notePrefix = "[ขอคืนของ] ";
         }
 
         ConsumableReturn::create([
             'original_transaction_id' => $originalTransaction->id,
             'requested_by_user_id' => Auth::id(),
-            'quantity_returned' => $request->return_quantity,
-            'notes' => $request->notes,
+            'quantity_returned' => $quantityToProcess,
+            'action_type' => $request->action_type,
+            'notes' => $notePrefix . $request->notes,
             'status' => 'pending',
         ]);
 
-        return back()->with('success', 'ส่งคำขอคืนพัสดุสำเร็จแล้ว กรุณารอ Admin อนุมัติ');
+        $msg = $request->action_type === 'write_off' ? 'แจ้งใช้งานหมดแล้วสำเร็จ กรุณารอ Admin ตรวจสอบ' : 'ส่งคำขอคืนพัสดุสำเร็จ กรุณารอ Admin อนุมัติ';
+        return back()->with('success', $msg);
     }
 
-
-    // (ฟังก์ชัน approve นี้ไม่ได้แก้ไข ตรรกะเดิมของคุณถูกต้องแล้ว)
+    /**
+     * Admin อนุมัติคำขอ
+     */
     public function approve(ConsumableReturn $return)
     {
         $this->authorize('permission:manage');
@@ -102,38 +135,65 @@ class ConsumableReturnController extends Controller
             $originalTransaction = Transaction::lockForUpdate()->findOrFail($return->original_transaction_id);
             $equipment = Equipment::lockForUpdate()->findOrFail($originalTransaction->equipment_id);
             
-            // เพิ่ม Stock คืน
-            $equipment->increment('quantity', $return->quantity_returned);
-            
-            // อัปเดต Transaction เดิม (increment จะจัดการ NULL ให้เป็น 0 อัตโนมัติ)
+            // 1. อัปเดต Transaction เดิมให้ยอด Returned เพิ่มขึ้น (เพื่อให้รายการหายไปจากหน้า User เพราะถือว่าเคลียร์แล้ว)
             $originalTransaction->increment('returned_quantity', $return->quantity_returned);
 
-            // สร้าง Transaction 'return' ใหม่เพื่อเก็บประวัติ
-            Transaction::create([
-                'equipment_id' => $equipment->id,
-                'user_id' => Auth::id(), // คนที่กดยืนยัน (Admin)
-                'type' => 'return',
-                'quantity_change' => $return->quantity_returned, // คืนเข้า (ค่าบวก)
-                'notes' => "รับคืนพัสดุจาก #TXN-{$originalTransaction->id} (อนุมัติคำขอ #{$return->id})",
-                'transaction_date' => now(),
-                'status' => 'completed',
-            ]);
+            // 2. จัดการ Stock และสร้าง Transaction ใหม่ตามประเภท
+            if ($return->action_type === 'return') {
+                // === กรณีคืนของ: เพิ่ม Stock กลับ ===
+                $equipment->increment('quantity', $return->quantity_returned);
 
+                // สร้าง Transaction 'return'
+                Transaction::create([
+                    'equipment_id' => $equipment->id,
+                    'user_id' => $return->requested_by_user_id, // เจ้าของรายการเดิม
+                    'handler_id' => Auth::id(), // Admin ผู้อนุมัติ
+                    'type' => 'return',
+                    'quantity_change' => $return->quantity_returned, // คืนเข้า (+)
+                    'notes' => "รับคืนพัสดุจาก #TXN-{$originalTransaction->id} (อนุมัติคำขอ #{$return->id})",
+                    'transaction_date' => now(),
+                    'status' => 'completed',
+                    'confirmed_at' => now(),
+                    'admin_confirmed_at' => now(),
+                ]);
+
+            } else {
+                // === กรณีใช้หมด (Write-off): ไม่เพิ่ม Stock ===
+                // สร้าง Transaction 'adjust' เพื่อเก็บ Log ว่าของชิ้นนี้ถูกใช้หมดแล้ว
+                Transaction::create([
+                    'equipment_id' => $equipment->id,
+                    'user_id' => $return->requested_by_user_id,
+                    'handler_id' => Auth::id(),
+                    'type' => 'adjust', // ใช้ adjust เพื่อไม่กระทบ Stock รวม (เพราะ quantity_change เป็น 0 หรือ log แยก)
+                    'quantity_change' => 0, // ไม่เพิ่ม Stock กลับ (เพราะใช้หมดแล้ว)
+                    'notes' => "บันทึกการใช้งานจนหมด (Write-off) จาก #TXN-{$originalTransaction->id} (อนุมัติคำขอ #{$return->id})",
+                    'transaction_date' => now(),
+                    'status' => 'completed',
+                    'confirmed_at' => now(),
+                    'admin_confirmed_at' => now(),
+                ]);
+            }
+
+            // 3. อัปเดตสถานะคำขอ
             $return->status = 'approved';
             $return->approved_by_user_id = Auth::id();
             $return->save();
 
+            // 4. แจ้งเตือนผู้ขอ
             $return->requester->notify(new ConsumableReturnApproved($return));
 
             DB::commit();
-            return back()->with('success', 'อนุมัติการรับคืนเรียบร้อยแล้ว');
+            return back()->with('success', 'อนุมัติรายการเรียบร้อยแล้ว');
+
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
     }
 
-    // (ฟังก์ชัน reject นี้ไม่ได้แก้ไข ตรรกะเดิมของคุณถูกต้องแล้ว)
+    /**
+     * Admin ปฏิเสธคำขอ
+     */
     public function reject(ConsumableReturn $return)
     {
         $this->authorize('permission:manage');

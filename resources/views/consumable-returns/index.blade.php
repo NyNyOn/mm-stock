@@ -1,68 +1,97 @@
 @extends('layouts.app')
 
-@section('header', 'รับคืนพัสดุสิ้นเปลือง')
-@section('subtitle', 'สำหรับรับคืนอุปกรณ์ที่เบิกไปแบบไม่ต้องคืน')
+@section('header', 'จัดการพัสดุที่เบิกไป')
+@section('subtitle', 'เลือกส่งคืนของเหลือ หรือ แจ้งใช้งานหมดแล้ว')
 
 @section('content')
 <div class="container p-4 mx-auto space-y-6">
 
     @if (session('success'))
-        <div class="p-4 mb-4 text-green-800 bg-green-100 border-l-4 border-green-500 rounded-r-lg" role="alert"><p>{{ session('success') }}</p></div>
+        <div class="p-4 mb-4 text-green-800 bg-green-100 border-l-4 border-green-500 rounded-r-lg shadow-sm"><p><i class="fas fa-check-circle mr-2"></i>{{ session('success') }}</p></div>
     @endif
     @if (session('error'))
-        <div class="p-4 mb-4 text-red-800 bg-red-100 border-l-4 border-red-500 rounded-r-lg" role="alert"><p>{{ session('error') }}</p></div>
+        <div class="p-4 mb-4 text-red-800 bg-red-100 border-l-4 border-red-500 rounded-r-lg shadow-sm"><p><i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}</p></div>
     @endif
 
-    {{-- ============== ส่วนสร้างคำขอ (ตารางแสดงรายการที่คืนได้) ============== --}}
-    <div class="max-w-4xl mx-auto">
-        <div class="soft-card rounded-2xl gentle-shadow">
-            <div class="p-5 border-b border-gray-100">
-                <h3 class="text-lg font-bold text-gray-800">เลือกรายการพัสดุที่ต้องการคืน</h3>
+    {{-- ============== ตารางรายการที่จัดการได้ ============== --}}
+    <div class="max-w-5xl mx-auto">
+        <div class="soft-card rounded-2xl gentle-shadow overflow-hidden">
+            <div class="p-5 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white">
+                <h3 class="text-lg font-bold text-gray-800">📦 รายการพัสดุคงค้างของคุณ</h3>
+                <p class="text-sm text-gray-500">กรุณาจัดการรายการเมื่อใช้งานเสร็จสิ้น</p>
             </div>
-            <div class="overflow-x-auto scrollbar-soft">
+            
+            <div class="overflow-x-auto">
                 <table class="w-full">
-                    <thead class="bg-gray-50">
+                    <thead class="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider">
                         <tr>
-                            <th class="px-4 py-3 text-sm font-medium text-left">วันที่เบิก</th>
-                            <th class="px-4 py-3 text-sm font-medium text-left">อุปกรณ์</th>
-                            <th class="px-4 py-3 text-sm font-medium text-center">เหลือให้คืน (ชิ้น)</th>
-                            <th class="px-4 py-3 text-sm font-medium text-center">จัดการ</th>
+                            <th class="px-6 py-3 text-left">สินค้า</th>
+                            <th class="px-6 py-3 text-center">วันที่เบิก</th>
+                            <th class="px-6 py-3 text-center">คงเหลือ (ชิ้น)</th>
+                            <th class="px-6 py-3 text-center">การจัดการ</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100">
+                    <tbody class="divide-y divide-gray-100 bg-white">
                         @forelse ($returnableItems as $item)
                         @php
                             $remaining = abs($item->quantity_change) - $item->returned_quantity;
+                            
+                            $imgUrl = asset('images/placeholder.webp');
+                            if ($item->equipment && $item->equipment->latestImage) {
+                                $deptKey = config('department_stocks.default_nas_dept_key', 'mm');
+                                $imgUrl = route('nas.image', ['deptKey' => $deptKey, 'filename' => $item->equipment->latestImage->file_name]);
+                            }
                         @endphp
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3 text-sm">{{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y') }}</td>
-                            <td class="px-4 py-3 font-medium">{{ optional($item->equipment)->name ?? 'N/A' }}</td>
-                            <td class="px-4 py-3 text-lg font-bold text-center text-blue-600">{{ $remaining }}</td>
-                            <td class="px-4 py-3 text-center">
+                        <tr class="hover:bg-blue-50 transition-colors">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center space-x-4">
+                                    <div class="h-12 w-12 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0">
+                                        <img src="{{ $imgUrl }}" class="h-full w-full object-cover">
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-gray-800">{{ optional($item->equipment)->name ?? 'Unknown' }}</div>
+                                        <div class="text-xs text-gray-500">{{ optional($item->equipment)->serial_number }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-center text-sm text-gray-600">
+                                {{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y') }}
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="inline-flex items-center justify-center w-8 h-8 text-sm font-bold text-blue-600 bg-blue-100 rounded-full">
+                                    {{ $remaining }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center">
                                 @if(isset($pendingReturnTxnIds) && in_array($item->id, $pendingReturnTxnIds))
-                                    <span class="px-3 py-1 text-sm font-bold text-yellow-800 bg-yellow-200 rounded-lg">
-                                        <i class="fas fa-clock"></i> รออนุมัติ
+                                    <span class="inline-flex items-center px-3 py-1 text-xs font-bold text-yellow-700 bg-yellow-100 rounded-full border border-yellow-200">
+                                        <i class="fas fa-clock mr-1"></i> รอตรวจสอบ
                                     </span>
                                 @else
-                                    <button
+                                    <button 
                                         type="button"
-                                        class="px-3 py-1 text-sm font-bold text-white bg-blue-500 rounded-lg hover:bg-blue-600 return-btn"
-                                        data-transaction-id="{{ $item->id }}"
-                                        data-equipment-name="{{ optional($item->equipment)->name ?? 'N/A' }}"
-                                        data-remaining-qty="{{ $remaining }}">
-                                        <i class="fas fa-undo"></i> คืนอุปกรณ์
+                                        class="action-btn inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm transition-all transform hover:scale-105"
+                                        data-id="{{ $item->id }}"
+                                        data-name="{{ optional($item->equipment)->name }}"
+                                        data-remaining="{{ $remaining }}">
+                                        จัดการ <i class="fas fa-chevron-right ml-2 text-xs"></i>
                                     </button>
                                 @endif
                             </td>
                         </tr>
                         @empty
-                        <tr><td colspan="4" class="p-8 text-center text-gray-500">ไม่พบรายการที่สามารถคืนได้</td></tr>
+                        <tr>
+                            <td colspan="4" class="px-6 py-10 text-center text-gray-400 bg-gray-50">
+                                <i class="fas fa-box-open text-4xl mb-3 block opacity-50"></i>
+                                ไม่พบรายการค้างส่งคืน
+                            </td>
+                        </tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
             @if($returnableItems->hasPages())
-            <div class="p-4 border-t border-gray-100">
+            <div class="p-4 border-t border-gray-100 bg-gray-50">
                 {{ $returnableItems->appends(['history_page' => $userReturnHistory->currentPage()])->links() }}
             </div>
             @endif
@@ -71,25 +100,34 @@
         {{-- ============== ส่วนตารางประวัติการขอคืน ============== --}}
         <div class="mt-8 soft-card rounded-2xl gentle-shadow">
             <div class="p-5 border-b border-gray-100">
-                <h3 class="text-lg font-bold text-gray-800">ประวัติคำขอคืนของคุณ</h3>
+                <h3 class="text-lg font-bold text-gray-800">🕒 ประวัติคำขอคืนของคุณ</h3>
             </div>
             <div class="overflow-x-auto scrollbar-soft">
                 <table class="w-full">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-4 py-3 text-sm font-medium text-left">อุปกรณ์ที่ขอคืน</th>
+                            <th class="px-4 py-3 text-sm font-medium text-left">อุปกรณ์</th>
+                            <th class="px-4 py-3 text-sm font-medium text-center">ประเภท</th>
                             <th class="px-4 py-3 text-sm font-medium text-center">จำนวน</th>
                             <th class="px-4 py-3 text-sm font-medium text-left">วันที่ส่งคำขอ</th>
                             <th class="px-4 py-3 text-sm font-medium text-center">สถานะ</th>
-                            <th class="px-4 py-3 text-sm font-medium text-left">ผู้อนุมัติ</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                         @forelse ($userReturnHistory as $history)
                         <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3 font-medium">{{ optional(optional($history->originalTransaction)->equipment)->name ?? 'N/A' }}</td>
-                            <td class="px-4 py-3 text-lg font-bold text-center text-blue-600">{{ $history->quantity_returned }}</td>
-                            <td class="px-4 py-3 text-sm">{{ $history->created_at->format('d/m/Y H:i') }}</td>
+                            <td class="px-4 py-3 font-medium text-gray-800">
+                                {{ optional(optional($history->originalTransaction)->equipment)->name ?? 'N/A' }}
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                @if($history->action_type == 'write_off')
+                                    <span class="px-2 py-1 bg-gray-200 text-gray-600 rounded text-xs">ใช้หมด</span>
+                                @else
+                                    <span class="px-2 py-1 bg-blue-100 text-blue-600 rounded text-xs">คืนของ</span>
+                                @endif
+                            </td>
+                            <td class="px-4 py-3 text-lg font-bold text-center text-gray-700">{{ $history->quantity_returned }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600">{{ $history->created_at->format('d/m/Y H:i') }}</td>
                             <td class="px-4 py-3 text-center">
                                 @if($history->status == 'approved')
                                     <span class="px-2 py-1 text-xs font-semibold text-green-800 bg-green-200 rounded-full">อนุมัติแล้ว</span>
@@ -99,7 +137,6 @@
                                     <span class="px-2 py-1 text-xs font-semibold text-yellow-800 bg-yellow-200 rounded-full">รออนุมัติ</span>
                                 @endif
                             </td>
-                            <td class="px-4 py-3 text-sm">{{ optional($history->approver)->fullname ?? '-' }}</td>
                         </tr>
                         @empty
                         <tr><td colspan="5" class="p-8 text-center text-gray-500">คุณยังไม่มีประวัติการขอคืน</td></tr>
@@ -117,43 +154,73 @@
 
     {{-- ============== ส่วนสำหรับ Admin (แสดงเฉพาะ Admin) ============== --}}
     @can('permission:manage')
-    <div class="mt-8 overflow-hidden soft-card rounded-2xl gentle-shadow">
-        <div class="p-5 border-b border-gray-100"><h3 class="text-lg font-bold text-gray-800">รายการคำขอคืนที่รออนุมัติ</h3></div>
+    <div class="mt-8 overflow-hidden soft-card rounded-2xl gentle-shadow border-2 border-indigo-100">
+        <div class="p-5 bg-indigo-50 border-b border-indigo-100">
+            <h3 class="text-lg font-bold text-indigo-900"><i class="fas fa-user-shield mr-2"></i>รายการคำขอคืนที่รออนุมัติ (Admin)</h3>
+        </div>
         <div class="overflow-x-auto scrollbar-soft">
             <table class="w-full">
-                <thead class="bg-gray-50">
+                <thead class="bg-white border-b">
                     <tr>
-                        <th class="px-4 py-3 text-sm font-medium text-left">ผู้ส่งคำขอ</th>
-                        <th class="px-4 py-3 text-sm font-medium text-left">อุปกรณ์</th>
-                        <th class="px-4 py-3 text-sm font-medium text-center">จำนวนที่ขอคืน</th>
-                        <th class="px-4 py-3 text-sm font-medium text-left">วันที่ส่งคำขอ</th>
-                        <th class="px-4 py-3 text-sm font-medium text-center">จัดการ</th>
+                        <th class="px-4 py-3 text-sm font-medium text-left text-gray-500">ผู้ส่งคำขอ</th>
+                        <th class="px-4 py-3 text-sm font-medium text-left text-gray-500">อุปกรณ์</th>
+                        <th class="px-4 py-3 text-sm font-medium text-center text-gray-500">ประเภท</th>
+                        <th class="px-4 py-3 text-sm font-medium text-center text-gray-500">จำนวน</th>
+                        <th class="px-4 py-3 text-sm font-medium text-left text-gray-500">วันที่ส่งคำขอ</th>
+                        <th class="px-4 py-3 text-sm font-medium text-center text-gray-500">จัดการ</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody class="divide-y divide-gray-100 bg-white">
                     @forelse ($pendingReturns as $return)
+                    @php
+                        $adminImgUrl = asset('images/placeholder.webp');
+                        if ($return->originalTransaction && $return->originalTransaction->equipment && $return->originalTransaction->equipment->latestImage) {
+                            $deptKey = config('department_stocks.default_nas_dept_key', 'mm');
+                            $filename = $return->originalTransaction->equipment->latestImage->file_name;
+                            $adminImgUrl = route('nas.image', ['deptKey' => $deptKey, 'filename' => $filename]);
+                        }
+                    @endphp
                     <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3 font-medium">{{ optional($return->requester)->fullname ?? 'N/A' }}</td>
-                        <td class="px-4 py-3">{{ optional(optional($return->originalTransaction)->equipment)->name ?? 'N/A' }}</td>
+                        <td class="px-4 py-3 font-medium text-indigo-700">{{ optional($return->requester)->fullname ?? 'N/A' }}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 overflow-hidden bg-gray-100 rounded-md border">
+                                    <img src="{{ $adminImgUrl }}" class="object-cover w-full h-full">
+                                </div>
+                                <div>
+                                    <div class="font-medium text-gray-900">{{ optional(optional($return->originalTransaction)->equipment)->name ?? 'N/A' }}</div>
+                                    <div class="text-xs text-gray-500">TXN #{{ $return->original_transaction_id }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            @if($return->action_type == 'write_off')
+                                <span class="px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs font-bold">แจ้งใช้หมด</span>
+                            @else
+                                <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold">ขอคืนของ</span>
+                            @endif
+                        </td>
                         <td class="px-4 py-3 text-lg font-bold text-center text-blue-600">{{ $return->quantity_returned }}</td>
-                        <td class="px-4 py-3 text-sm">{{ $return->created_at->format('d/m/Y H:i') }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-600">{{ $return->created_at->format('d/m/Y H:i') }}</td>
                         <td class="px-4 py-3 text-center">
                             <div class="flex justify-center space-x-2">
-                                {{-- ✅✅✅ แก้ไข Form อนุมัติ ✅✅✅ --}}
-                                <form action="{{ route('consumable-returns.approve', $return->id) }}" method="POST" class="needs-confirmation" data-title="ยืนยันการอนุมัติ" data-text="คุณต้องการอนุมัติรายการนี้ใช่หรือไม่?">
+                                <form action="{{ route('consumable-returns.approve', $return->id) }}" method="POST" class="needs-confirmation" data-title="อนุมัติรายการ" data-text="ยืนยันการอนุมัติรายการนี้ใช่หรือไม่?">
                                     @csrf
-                                    <button type="submit" class="px-3 py-1 text-xs font-medium text-white bg-green-500 rounded-lg">อนุมัติ</button>
+                                    <button type="submit" class="px-3 py-1.5 text-xs font-bold text-white bg-green-500 rounded hover:bg-green-600 shadow-sm">
+                                        <i class="fas fa-check"></i> อนุมัติ
+                                    </button>
                                 </form>
-                                {{-- ✅✅✅ แก้ไข Form ปฏิเสธ ✅✅✅ --}}
-                                <form action="{{ route('consumable-returns.reject', $return->id) }}" method="POST" class="needs-confirmation" data-title="ยืนยันการปฏิเสธ" data-text="คุณต้องการปฏิเสธรายการนี้ใช่หรือไม่?">
+                                <form action="{{ route('consumable-returns.reject', $return->id) }}" method="POST" class="needs-confirmation" data-title="ปฏิเสธคำขอ" data-text="รายการนี้จะถูกปฏิเสธ">
                                     @csrf
-                                    <button type="submit" class="px-3 py-1 text-xs font-medium text-white bg-red-500 rounded-lg">ปฏิเสธ</button>
+                                    <button type="submit" class="px-3 py-1.5 text-xs font-bold text-white bg-red-500 rounded hover:bg-red-600 shadow-sm">
+                                        <i class="fas fa-times"></i> ปฏิเสธ
+                                    </button>
                                 </form>
                             </div>
                         </td>
                     </tr>
                     @empty
-                    <tr><td colspan="5" class="p-8 text-center text-gray-500">ไม่มีรายการรออนุมัติ</td></tr>
+                    <tr><td colspan="6" class="p-8 text-center text-gray-400">ไม่มีรายการรออนุมัติ</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -162,105 +229,179 @@
     @endcan
 </div>
 
-{{-- ============== Modal สำหรับกรอกจำนวนคืน ============== --}}
-<div id="returnModal" class="fixed inset-0 z-50 flex items-center justify-center hidden bg-black bg-opacity-50">
-    <div class="w-full max-w-md p-6 bg-white rounded-lg shadow-xl">
-        <h2 class="text-xl font-bold" id="modalTitle">คืนอุปกรณ์</h2>
-        <p class="mb-4 text-gray-600" id="modalEquipmentName"></p>
+{{-- ============== New Selection Modal (No Notes) ============== --}}
+<div id="actionModal" class="fixed inset-0 z-50 flex items-center justify-center hidden bg-black bg-opacity-60 backdrop-blur-sm transition-opacity">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all scale-100">
+        {{-- Header --}}
+        <div class="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+            <div>
+                <h3 class="text-lg font-bold text-gray-800" id="modalItemName">...</h3>
+                <p class="text-xs text-gray-500">เลือกสิ่งที่ต้องการทำกับรายการนี้</p>
+            </div>
+            <button type="button" onclick="closeActionModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
 
-        <form action="{{ route('consumable-returns.store') }}" method="POST">
+        <form action="{{ route('consumable-returns.store') }}" method="POST" id="actionForm">
             @csrf
             <input type="hidden" name="transaction_id" id="modalTransactionId">
-            <div class="space-y-4">
-                <div>
-                    <label for="return_quantity" class="block mb-2 font-bold text-gray-700">จำนวนที่ต้องการคืน</label>
-                    <input type="number" name="return_quantity" id="modalReturnQuantity" class="w-full px-3 py-2 border rounded-lg" min="1" required>
+            <input type="hidden" name="action_type" id="modalActionType">
+
+            <div class="p-6">
+                {{-- Choice Buttons --}}
+                <div class="grid grid-cols-2 gap-4 mb-6" id="choiceContainer">
+                    {{-- Option 1: Return --}}
+                    <div class="choice-card cursor-pointer border-2 border-gray-200 rounded-xl p-4 text-center hover:border-blue-500 hover:bg-blue-50 transition-all group" onclick="selectAction('return')">
+                        <div class="w-12 h-12 mx-auto bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            <i class="fas fa-undo text-xl"></i>
+                        </div>
+                        <h4 class="font-bold text-gray-800">คืนของที่เหลือ</h4>
+                        <p class="text-xs text-gray-500 mt-1">กรณีใช้งานเสร็จแล้ว และมีของเหลือคืน Stock</p>
+                    </div>
+
+                    {{-- Option 2: Write Off --}}
+                    <div class="choice-card cursor-pointer border-2 border-gray-200 rounded-xl p-4 text-center hover:border-red-500 hover:bg-red-50 transition-all group" onclick="selectAction('write_off')">
+                        <div class="w-12 h-12 mx-auto bg-gray-100 text-gray-600 rounded-full flex items-center justify-center mb-3 group-hover:bg-red-500 group-hover:text-white transition-colors">
+                            <i class="fas fa-trash-alt text-xl"></i>
+                        </div>
+                        <h4 class="font-bold text-gray-800">ใช้หมดแล้ว</h4>
+                        <p class="text-xs text-gray-500 mt-1">กรณีใช้งานจนหมดสภาพ หรือไม่เหลือซากให้คืน</p>
+                    </div>
                 </div>
-                <div>
-                    <label for="notes" class="block mb-2 font-bold text-gray-700">หมายเหตุ</label>
-                    <textarea name="notes" rows="3" class="w-full px-3 py-2 border rounded-lg"></textarea>
+
+                {{-- Dynamic Content Area --}}
+                <div id="dynamicContent" class="hidden space-y-4">
+                    {{-- Return Input --}}
+                    <div id="returnInputGroup" class="hidden bg-blue-50 p-4 rounded-xl border border-blue-100">
+                        <label class="block text-sm font-bold text-blue-800 mb-2">จำนวนที่จะส่งคืน (จาก <span id="maxQtyDisplay"></span> ชิ้น)</label>
+                        <div class="flex items-center">
+                            <input type="number" name="return_quantity" id="returnQtyInput" class="flex-1 border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500 text-center font-bold text-lg" min="1">
+                            <span class="bg-blue-200 text-blue-800 px-4 py-2 rounded-r-lg font-bold text-sm">ชิ้น</span>
+                        </div>
+                    </div>
+
+                    {{-- Write Off Message --}}
+                    <div id="writeOffMessage" class="hidden bg-red-50 p-4 rounded-xl border border-red-100 text-center">
+                        <p class="text-red-800 font-bold"><i class="fas fa-exclamation-triangle mr-1"></i> ยืนยันการแจ้งใช้หมด</p>
+                        <p class="text-xs text-red-600 mt-1">ระบบจะเคลียร์ยอดคงเหลือ <span id="writeOffQtyDisplay" class="font-bold"></span> ชิ้น ออกจากรายการของคุณ</p>
+                    </div>
+                    
+                    {{-- ❌ ตัดช่อง Notes ออกตามคำขอ --}}
                 </div>
             </div>
-            <div class="flex justify-end pt-6 mt-6 space-x-2 border-t">
-                <button type="button" id="closeModalBtn" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">ยกเลิก</button>
-                <button type="submit" class="px-4 py-2 font-bold text-white bg-blue-500 rounded-lg hover:bg-blue-600">
-                    <i class="mr-1 fas fa-paper-plane"></i> ส่งคำขอคืน
+
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end space-x-3 hidden" id="submitArea">
+                <button type="button" onclick="resetSelection()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium">ย้อนกลับ</button>
+                <button type="submit" class="px-6 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 shadow-lg transform active:scale-95 transition-all">
+                    ยืนยันรายการ
                 </button>
             </div>
         </form>
     </div>
 </div>
+
 @endsection
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const modal = document.getElementById('returnModal');
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    const returnButtons = document.querySelectorAll('.return-btn');
+    const modal = document.getElementById('actionModal');
+    const choiceContainer = document.getElementById('choiceContainer');
+    const dynamicContent = document.getElementById('dynamicContent');
+    const returnInputGroup = document.getElementById('returnInputGroup');
+    const writeOffMessage = document.getElementById('writeOffMessage');
+    const submitArea = document.getElementById('submitArea');
+    
+    // Variables
+    let currentMaxQty = 0;
 
-    const modalTransactionId = document.getElementById('modalTransactionId');
-    const modalEquipmentName = document.getElementById('modalEquipmentName');
-    const modalReturnQuantity = document.getElementById('modalReturnQuantity');
+    // Open Modal
+    document.querySelectorAll('.action-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            const name = this.dataset.name;
+            const remaining = this.dataset.remaining;
 
-    returnButtons.forEach(button => {
-        button.addEventListener('click', function () {
-            const transactionId = this.dataset.transactionId;
-            const equipmentName = this.dataset.equipmentName;
-            const remainingQty = this.dataset.remainingQty;
-
-            modalTransactionId.value = transactionId;
-            modalEquipmentName.textContent = equipmentName;
-            modalReturnQuantity.value = '1';
-            modalReturnQuantity.max = remainingQty;
-            modalReturnQuantity.placeholder = 'สูงสุด ' + remainingQty + ' ชิ้น';
-
+            document.getElementById('modalTransactionId').value = id;
+            document.getElementById('modalItemName').textContent = name;
+            document.getElementById('maxQtyDisplay').textContent = remaining;
+            document.getElementById('writeOffQtyDisplay').textContent = remaining;
+            document.getElementById('returnQtyInput').max = remaining;
+            document.getElementById('returnQtyInput').value = remaining; // Default max
+            
+            currentMaxQty = parseInt(remaining);
+            
+            resetSelection();
             modal.classList.remove('hidden');
         });
     });
 
-    function closeModal() {
+    function closeActionModal() {
         modal.classList.add('hidden');
     }
 
-    closeModalBtn.addEventListener('click', closeModal);
+    function resetSelection() {
+        choiceContainer.classList.remove('hidden');
+        dynamicContent.classList.add('hidden');
+        submitArea.classList.add('hidden');
+        document.getElementById('modalActionType').value = '';
+        
+        // Reset styles
+        document.querySelectorAll('.choice-card').forEach(el => {
+            el.classList.remove('ring-2', 'ring-indigo-500', 'bg-blue-50', 'bg-red-50');
+        });
+    }
 
-    modal.addEventListener('click', function (event) {
-        if (event.target === modal) {
-            closeModal();
+    window.selectAction = function(type) {
+        document.getElementById('modalActionType').value = type;
+        
+        choiceContainer.classList.add('hidden'); // Hide choices
+        dynamicContent.classList.remove('hidden'); // Show form
+        submitArea.classList.remove('hidden'); // Show submit button
+
+        if (type === 'return') {
+            returnInputGroup.classList.remove('hidden');
+            writeOffMessage.classList.add('hidden');
+            document.getElementById('returnQtyInput').required = true;
+        } else {
+            returnInputGroup.classList.add('hidden');
+            writeOffMessage.classList.remove('hidden');
+            document.getElementById('returnQtyInput').required = false;
         }
-    });
-});
-</script>
+    };
+    
+    // SweetAlert Confirmation
+    document.addEventListener('DOMContentLoaded', function () {
+        const confirmationForms = document.querySelectorAll('.needs-confirmation');
 
-{{-- ✅✅✅ เพิ่ม Script สำหรับ SweetAlert ✅✅✅ --}}
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const confirmationForms = document.querySelectorAll('.needs-confirmation');
+        confirmationForms.forEach(form => {
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
 
-    confirmationForms.forEach(form => {
-        form.addEventListener('submit', function (event) {
-            event.preventDefault();
+                const title = this.dataset.title || 'ยืนยันการดำเนินการ';
+                const text = this.dataset.text || 'คุณแน่ใจหรือไม่?';
 
-            const title = this.dataset.title || 'ยืนยันการดำเนินการ';
-            const text = this.dataset.text || 'คุณแน่ใจหรือไม่?';
-
-            Swal.fire({
-                title: title,
-                text: text,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'ใช่, ยืนยัน!',
-                cancelButtonText: 'ยกเลิก'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    this.submit();
-                }
+                Swal.fire({
+                    title: title,
+                    text: text,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'ยืนยัน',
+                    cancelButtonText: 'ยกเลิก',
+                    customClass: {
+                        popup: 'rounded-xl',
+                        confirmButton: 'rounded-lg',
+                        cancelButton: 'rounded-lg'
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.submit();
+                    }
+                });
             });
         });
     });
-});
 </script>
 @endpush

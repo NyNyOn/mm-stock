@@ -16,6 +16,7 @@ class ConsumableReturn extends Model
         'requested_by_user_id',
         'approved_by_user_id',
         'quantity_returned',
+        'action_type',
         'status',
         'notes',
     ];
