@@ -17,21 +17,27 @@ class StockCheck extends Model
         'completed_at',
         'status',
         'checked_by_user_id',
+        'category_id', // ✅ 1. เพิ่มเพื่อบันทึก ID หมวดหมู่
     ];
 
-    /**
-     * Get the items associated with this stock check.
-     */
+    protected $casts = [
+        'scheduled_date' => 'date',
+        'completed_at' => 'datetime',
+    ];
+
     public function items()
     {
         return $this->hasMany(StockCheckItem::class);
     }
 
-    /**
-     * Get the user who performed this stock check.
-     */
     public function checker()
     {
         return $this->belongsTo(User::class, 'checked_by_user_id');
+    }
+
+    // ✅ 2. เพิ่มฟังก์ชันนี้ เพื่อแก้ Error "Undefined relationship"
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
     }
 }

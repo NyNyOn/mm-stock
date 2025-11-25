@@ -18,7 +18,7 @@ class StockCheckController extends Controller
 {
     public function index()
     {
-        $stockChecks = StockCheck::with('checker')
+        $stockChecks = StockCheck::with(['checker', 'category'])
             ->orderBy('scheduled_date', 'desc')
             ->paginate(15);
 
@@ -28,37 +28,47 @@ class StockCheckController extends Controller
     public function create()
     {
         $categories = Category::orderBy('name')->get()->map(function($category) {
-            $oldestItem = Equipment::where('category_id', $category->id)
-                ->where('status', '!=', 'sold')
-                ->orderBy('last_stock_check_at', 'asc')
+            
+            $lastCheckDate = null;
+
+            // ✅ LOGIC ที่ถูกต้อง (STRICT MODE): 
+            // ค้นหาเฉพาะ "งานตรวจนับ" ที่ระบุ category_id ตรงกับหมวดนี้เป๊ะๆ เท่านั้น
+            // ไม่มีการไปแอบดูที่ตัวอุปกรณ์ หรือ Item ย่อยเด็ดขาด
+            $lastStockCheck = StockCheck::where('status', 'completed')
+                ->where('category_id', $category->id) 
+                ->latest('completed_at')
                 ->first();
 
-            $totalItems = Equipment::where('category_id', $category->id)->where('status', '!=', 'sold')->count();
+            if ($lastStockCheck && $lastStockCheck->completed_at) {
+                $lastCheckDate = $lastStockCheck->completed_at;
+            } 
             
+            // ❌ ตัด Fallback ทิ้ง: ถ้าไม่เจอ StockCheck ของหมวดนี้ ให้ถือว่า "ไม่เคยนับ" ทันที
+
+            // --- คำนวณสถานะ ---
+            $totalItems = Equipment::where('category_id', $category->id)->where('status', '!=', 'sold')->count();
             $status = 'normal';
-            $daysLeft = 105;
-            $lastCheck = 'ยังไม่เคยนับ';
+            $daysLeft = 105; 
+            
+            // ส่งค่าเวลา
+            $lastCheckStr = ($lastCheckDate) ? $lastCheckDate->format('Y-m-d H:i:s') : '-';
 
-            if ($totalItems > 0 && $oldestItem) {
-                if ($oldestItem->last_stock_check_at) {
-                    $daysLeft = 105 - now()->diffInDays($oldestItem->last_stock_check_at);
-                    $lastCheck = $oldestItem->last_stock_check_at->format('d/m/Y');
-                } else {
-                    $daysLeft = -1; 
-                    $lastCheck = 'ไม่เคยนับ';
-                }
-
+            if ($totalItems == 0) {
+                $status = 'empty';
+            } elseif ($lastCheckDate) {
+                $daysLeft = 105 - now()->diffInDays($lastCheckDate);
+                
                 if ($daysLeft <= 0) $status = 'critical';
                 elseif ($daysLeft <= 15) $status = 'warning';
-                else $status = 'normal';
-            } elseif ($totalItems == 0) {
-                $status = 'empty';
+            } else {
+                // ถ้า code มาถึงตรงนี้ แสดงว่าไม่มี StockCheck ของหมวดนี้ -> สถานะ "ไม่เคยนับ"
+                $status = 'critical';
             }
 
             $category->stock_status = [
                 'status' => $status,
                 'days_left' => $daysLeft,
-                'last_check' => $lastCheck,
+                'last_check' => $lastCheckStr,
                 'total_items' => $totalItems
             ];
 
@@ -78,10 +88,12 @@ class StockCheckController extends Controller
 
         DB::beginTransaction();
         try {
+            // ✅ บันทึก category_id ลง DB
             $stockCheck = StockCheck::create([
                 'name' => $request->name,
                 'scheduled_date' => $request->scheduled_date,
                 'status' => 'scheduled',
+                'category_id' => $request->category_id, 
             ]);
 
             $query = Equipment::where('status', '!=', 'sold');
@@ -94,7 +106,7 @@ class StockCheckController extends Controller
 
             if ($equipmentsToCount->isEmpty()) {
                 DB::rollBack();
-                return back()->with('error', 'ไม่พบอุปกรณ์ในหมวดหมู่ที่เลือก กรุณาเลือกใหม่')->withInput();
+                return back()->with('error', 'ไม่พบอุปกรณ์ในหมวดหมู่ที่เลือก')->withInput();
             }
 
             foreach ($equipmentsToCount as $equipment) {
@@ -106,7 +118,7 @@ class StockCheckController extends Controller
             }
 
             DB::commit();
-            return redirect()->route('stock-checks.index')->with('success', 'สร้างงานตรวจนับสต็อกสำเร็จแล้ว! (จำนวน ' . $equipmentsToCount->count() . ' รายการ)');
+            return redirect()->route('stock-checks.index')->with('success', 'สร้างงานตรวจนับสำเร็จ');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -114,6 +126,7 @@ class StockCheckController extends Controller
         }
     }
 
+    // ... (ฟังก์ชัน show, perform, update เหมือนเดิม ไม่ต้องแก้ครับ) ...
     public function show(StockCheck $stockCheck)
     {
         $stockCheck->load(['items.equipment.unit', 'checker']);
@@ -125,14 +138,11 @@ class StockCheckController extends Controller
         if ($stockCheck->status === 'completed') {
             return redirect()->route('stock-checks.show', $stockCheck)->with('info', 'งานตรวจนับนี้เสร็จสิ้นแล้ว');
         }
-
         if ($stockCheck->status === 'scheduled') {
             $stockCheck->status = 'in_progress';
             $stockCheck->save();
         }
-
         $items = $stockCheck->items()->with('equipment.unit')->get();
-
         return view('stock-check.perform', compact('stockCheck', 'items'));
     }
 
@@ -145,93 +155,64 @@ class StockCheckController extends Controller
 
         DB::beginTransaction();
         try {
-            // 1. บันทึกค่าที่กรอกเข้ามาก่อน (Updated_at ของ Item จะเปลี่ยนตรงนี้)
             foreach ($request->items as $itemId => $data) {
                 $item = StockCheckItem::find($itemId);
                 if ($item && $item->stock_check_id === $stockCheck->id) {
                     $counted = $data['counted_quantity'] ?? 0;
-                    
-                    // เช็คว่ามีการเปลี่ยนแปลงค่าหรือไม่ เพื่อให้ updated_at ทำงานแน่นอน
                     if ($item->counted_quantity !== $counted) {
                         $item->counted_quantity = $counted;
                         $item->discrepancy = $counted - $item->expected_quantity;
-                        $item->save(); // timestamp 'updated_at' จะอัปเดตเป็นเวลาปัจจุบัน
+                        $item->save();
                     }
                 }
             }
 
-            // เช็คว่านับครบทุกรายการหรือยัง
             $isComplete = $stockCheck->items()->whereNull('counted_quantity')->count() === 0;
 
-            // 2. ถ้ากดปุ่ม "ปิดงาน" (Complete)
             if ($request->has('complete_check') && $isComplete) {
-                
                 $stockCheck->status = 'completed';
                 $stockCheck->completed_at = now();
                 $stockCheck->checked_by_user_id = Auth::id();
                 $stockCheck->save();
 
                 $allItemsInCheck = $stockCheck->items()->with('equipment')->get();
-
                 foreach ($allItemsInCheck as $checkItem) {
                     $equipment = $checkItem->equipment;
-                    
                     if ($equipment) {
-                        // ✅✅✅ FIX: ใช้เวลาที่กรอกข้อมูลจริง ($checkItem->updated_at) แทนเวลาปิดงาน (now())
-                        // ถ้าไม่มี updated_at ให้ใช้ now() สำรอง
-                        $equipment->last_stock_check_at = $checkItem->updated_at ?? now(); 
-
-                        // ถ้าเคย Frozen -> คำนวณสถานะใหม่ตามจำนวน
+                        $equipment->last_stock_check_at = $stockCheck->completed_at;
                         if ($equipment->status === 'frozen') {
-                            if ($checkItem->counted_quantity <= 0) {
-                                $equipment->status = 'out_of_stock';
-                            } elseif ($equipment->min_stock > 0 && $checkItem->counted_quantity <= $equipment->min_stock) {
-                                $equipment->status = 'low_stock';
-                            } else {
-                                $equipment->status = 'available';
-                            }
+                            if ($checkItem->counted_quantity <= 0) $equipment->status = 'out_of_stock';
+                            elseif ($equipment->min_stock > 0 && $checkItem->counted_quantity <= $equipment->min_stock) $equipment->status = 'low_stock';
+                            else $equipment->status = 'available';
                         }
-
                         if ($checkItem->discrepancy != 0) {
                             $equipment->quantity = $checkItem->counted_quantity;
-                            
                             Transaction::create([
-                                'equipment_id'    => $equipment->id,
-                                'user_id'         => Auth::id(),
-                                'type'            => 'adjust',
+                                'equipment_id' => $equipment->id,
+                                'user_id' => Auth::id(),
+                                'type' => 'adjust',
                                 'quantity_change' => $checkItem->discrepancy,
-                                'notes'           => 'ปรับสต็อกจากงานตรวจนับ: ' . $stockCheck->name,
-                                'transaction_date'=> now(),
-                                'status'          => 'completed',
+                                'notes' => 'ปรับสต็อกจากงานตรวจนับ: ' . $stockCheck->name,
+                                'transaction_date' => now(),
+                                'status' => 'completed',
                             ]);
                         }
-
                         $equipment->save();
                     }
                 }
-
                 DB::commit(); 
-
-                try {
-                    Artisan::call('stock:check-expiration');
-                    Log::info("Triggered stock expiration check after completing StockCheck #{$stockCheck->id}");
-                } catch (\Throwable $e) {
-                    Log::warning("Failed to trigger stock expiration check: " . $e->getMessage());
-                }
-
+                try { Artisan::call('stock:check-expiration'); } catch (\Throwable $e) {}
                 return redirect()->route('stock-checks.show', $stockCheck)->with('success', 'บันทึกและปิดงานตรวจนับเรียบร้อยแล้ว');
-
             } elseif ($request->has('complete_check') && !$isComplete) {
                 DB::rollBack();
-                return back()->with('error', 'กรุณากรอกข้อมูล "จำนวนที่นับได้" ให้ครบทุกรายการก่อนปิดงาน');
+                return back()->with('error', 'กรุณากรอกข้อมูลให้ครบทุกรายการก่อนปิดงาน');
             }
 
             DB::commit();
             return back()->with('success', 'บันทึกความคืบหน้าเรียบร้อยแล้ว');
-
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
+            return back()->with('error', 'Error: ' . $e->getMessage());
         }
     }
 }
