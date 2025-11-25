@@ -43,6 +43,8 @@
                         <option value="on-order" @selected(request('status') == 'on-order')>⏳ กำลังสั่งซื้อ</option>
                         <option value="inactive" @selected(request('status') == 'inactive')>⭕ ไม่ใช้งาน</option>
                         <option value="disposed" @selected(request('status') == 'disposed')>❌ จำหน่ายออก</option>
+                        {{-- เพิ่มตัวเลือกกรอง Frozen --}}
+                        <option value="frozen" @selected(request('status') == 'frozen')>❄️ ระงับ (Frozen)</option>
                     </select>
                 </div>
                 <div class="flex items-end space-x-2">
@@ -59,15 +61,13 @@
 
     <div class="flex items-center justify-between mb-6">
         <div></div>
-        {{-- Make sure window.showAddModal is defined in equipment.js --}}
         <a href="#" onclick="event.preventDefault(); window.showAddModal ? window.showAddModal() : alert('showAddModal function not found');" class="flex items-center px-4 py-3 text-sm font-medium text-white transition-all bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl hover:shadow-lg button-soft gentle-shadow">
             <i class="mr-2 text-sm fas fa-plus"></i><span>เพิ่มอุปกรณ์</span>
         </a>
     </div>
 
     <div class="overflow-hidden soft-card rounded-2xl gentle-shadow">
-        {{-- ✅✅✅ START: 1. DESKTOP VIEW (VIEW LAMA) ✅✅✅ --}}
-        {{-- Ini adalah tabel asli Anda. Ini akan tetap tersembunyi di ponsel (hidden) dan hanya muncul di desktop (md:block) --}}
+        {{-- ✅✅✅ START: 1. DESKTOP VIEW ✅✅✅ --}}
         <div class="hidden overflow-x-auto scrollbar-soft md:block">
             <table class="w-full">
                 <thead class="bg-gradient-to-r from-blue-50 to-purple-50">
@@ -113,7 +113,14 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     @forelse ($equipments as $item)
-                    <tr class="table-row">
+                        {{-- 🔥 คำนวณสถานะ Locked 🔥 --}}
+                        @php
+                            $isFrozen = strtolower($item->status) === 'frozen';
+                            $canManage = Auth::user()->canBypassFrozenState(); // ใช้ฟังก์ชันใหม่ใน User Model
+                            $shouldLock = $isFrozen && !$canManage;
+                        @endphp
+
+                    <tr class="table-row {{ $isFrozen ? 'bg-cyan-50/50' : '' }}">
                         <td class="px-4 py-4">
                             @php
                                 $primaryImage = $item->images->firstWhere('is_primary', true) ?? $item->images->first();
@@ -144,41 +151,55 @@
                         </td>
 
                         <td class="px-4 py-4"><x-status-badge :status="$item->status" /></td>
+                        
+                        {{-- ❄️ COLUMN: สั่งด่วน (ซ่อนถ้า Locked) --}}
                         <td class="px-2 py-4 text-center">
-                            <form action="{{ route('purchase-orders.addItemToUrgent', $item->id) }}" method="POST"
-                                  onsubmit="confirmAddItemToPo(event, this, 'ด่วน')"
-                                  data-equipment-name="{{ e($item->name) }}">
-                                @csrf
-                                <button type="submit"
-                                        class="w-8 h-8 text-red-600 transition-colors bg-red-100 rounded-lg hover:bg-red-500 hover:text-white"
-                                        title="เพิ่มลงในใบสั่งซื้อด่วน">
-                                    <i class="fas fa-cart-plus"></i>
-                                </button>
-                            </form>
-                        </td>
-                        <td class="px-4 py-4">
-                            <div class="flex space-x-2">
-                                <form action="{{ route('purchase-orders.addItemToScheduled', $item->id) }}" method="POST"
-                                      onsubmit="showQuantityModal(event, this)"
+                            @if(!$shouldLock)
+                                <form action="{{ route('purchase-orders.addItemToUrgent', $item->id) }}" method="POST"
+                                      onsubmit="confirmAddItemToPo(event, this, 'ด่วน')"
                                       data-equipment-name="{{ e($item->name) }}">
                                     @csrf
                                     <button type="submit"
-                                            class="p-2 rounded-lg bg-blue-50 hover:bg-blue-100"
-                                            title="เพิ่มลงในใบสั่งซื้อตามรอบ">
-                                        <i class="text-blue-600 fas fa-shopping-cart"></i>
+                                            class="w-8 h-8 text-red-600 transition-colors bg-red-100 rounded-lg hover:bg-red-500 hover:text-white"
+                                            title="เพิ่มลงในใบสั่งซื้อด่วน">
+                                        <i class="fas fa-cart-plus"></i>
                                     </button>
                                 </form>
-                                <a href="#" onclick="event.preventDefault(); window.showEditModal ? showEditModal({{ $item->id }}) : alert('showEditModal function not found');" class="p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="แก้ไข"><i class="text-yellow-600 fas fa-edit"></i></a>
-                                <form action="{{ route('equipment.destroy', $item->id) }}" method="POST" class="delete-form">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="button" class="delete-button p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="ลบ" data-equipment-name="{{ e($item->name) }}"><i class="text-red-600 fas fa-trash"></i></button>
-                                </form>
-                            </div>
+                            @else
+                                <span class="text-gray-300" title="รายการถูกระงับ (Frozen)">-</span>
+                            @endif
+                        </td>
+
+                        {{-- ❄️ COLUMN: จัดการ (ซ่อนถ้า Locked) --}}
+                        <td class="px-4 py-4">
+                            @if(!$shouldLock)
+                                <div class="flex space-x-2">
+                                    <form action="{{ route('purchase-orders.addItemToScheduled', $item->id) }}" method="POST"
+                                          onsubmit="showQuantityModal(event, this)"
+                                          data-equipment-name="{{ e($item->name) }}">
+                                        @csrf
+                                        <button type="submit"
+                                                class="p-2 rounded-lg bg-blue-50 hover:bg-blue-100"
+                                                title="เพิ่มลงในใบสั่งซื้อตามรอบ">
+                                            <i class="text-blue-600 fas fa-shopping-cart"></i>
+                                        </button>
+                                    </form>
+                                    <a href="#" onclick="event.preventDefault(); window.showEditModal ? showEditModal({{ $item->id }}) : alert('showEditModal function not found');" class="p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="แก้ไข"><i class="text-yellow-600 fas fa-edit"></i></a>
+                                    <form action="{{ route('equipment.destroy', $item->id) }}" method="POST" class="delete-form">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="button" class="delete-button p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="ลบ" data-equipment-name="{{ e($item->name) }}"><i class="text-red-600 fas fa-trash"></i></button>
+                                    </form>
+                                </div>
+                            @else
+                                <span class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-400 bg-gray-100 rounded-md cursor-not-allowed">
+                                    <i class="mr-1 fas fa-lock"></i> Locked
+                                </span>
+                            @endif
                         </td>
                     </tr>
                     @empty
-                        <tr><td colspan="10" class="p-8 text-center text-gray-500">ไม่พบข้อมูลอุปกรณ์</td></tr> {{-- Adjusted colspan --}}
+                        <tr><td colspan="10" class="p-8 text-center text-gray-500">ไม่พบข้อมูลอุปกรณ์</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -186,11 +207,17 @@
         {{-- ✅✅✅ END: 1. DESKTOP VIEW ✅✅✅ --}}
 
 
-        {{-- ✅✅✅ START: 2. MOBILE VIEW (BARU) ✅✅✅ --}}
-        {{-- Ini adalah tampilan kartu baru. Ini hanya muncul di ponsel (block) dan tersembunyi di desktop (md:hidden) --}}
+        {{-- ✅✅✅ START: 2. MOBILE VIEW ✅✅✅ --}}
         <div class="block md:hidden divide-y divide-gray-100">
             @forelse ($equipments as $item)
-                <div class="flex items-center p-4 space-x-4">
+                {{-- 🔥 คำนวณสถานะ Locked (Mobile) 🔥 --}}
+                @php
+                    $isFrozen = strtolower($item->status) === 'frozen';
+                    $canManage = Auth::user()->canBypassFrozenState();
+                    $shouldLock = $isFrozen && !$canManage;
+                @endphp
+
+                <div class="flex items-center p-4 space-x-4 {{ $isFrozen ? 'bg-cyan-50/50' : '' }}">
                     {{-- Bagian Gambar --}}
                     <div class="flex-shrink-0">
                         @php
@@ -217,9 +244,15 @@
                     {{-- Bagian Aksi & Jumlah --}}
                     <div class="flex flex-col items-end flex-shrink-0 space-y-2">
                          <span class="text-lg font-bold text-gray-800">{{ $item->quantity }}</span>
-                         <a href="#" onclick="event.preventDefault(); window.showEditModal ? showEditModal({{ $item->id }}) : alert('showEditModal function not found');" class="p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="แก้ไข">
-                            <i class="text-yellow-600 fas fa-edit"></i>
-                         </a>
+                         
+                         {{-- ❄️ ซ่อนปุ่มแก้ไขถ้า Locked --}}
+                         @if(!$shouldLock)
+                             <a href="#" onclick="event.preventDefault(); window.showEditModal ? showEditModal({{ $item->id }}) : alert('showEditModal function not found');" class="p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="แก้ไข">
+                                <i class="text-yellow-600 fas fa-edit"></i>
+                             </a>
+                         @else
+                            <span class="text-gray-400" title="ถูกระงับ"><i class="fas fa-lock"></i></span>
+                         @endif
                     </div>
                 </div>
             @empty
@@ -238,7 +271,6 @@
     </div>
 </div>
 
-{{-- Include All Modals at the end of the content section --}}
 @include('partials.modals.add-equipment-modal')
 @include('partials.modals.edit-equipment-modal')
 @include('partials.modals.equipment-details')
@@ -247,11 +279,9 @@
 @include('partials.modals.purchase-order-modal')
 
 @push('scripts')
-    {{-- เรียกใช้ equipment.js สำหรับฟังก์ชัน AJAX ต่างๆ --}}
     <script src="{{ asset('js/equipment.js') }}"></script>
 
     <script>
-        // --- ส่วนจัดการการแจ้งเตือน ---
         setTimeout(function() {
             @if (session('success'))
                 Swal.fire({
@@ -269,15 +299,12 @@
                 Swal.fire({
                     icon: 'error',
                     title: 'เกิดข้อผิดพลาด!',
-                    html: `{!! session('error') !!}` // Use html to render potential <br> tags
+                    html: `{!! session('error') !!}`
                 });
             @endif
         }, 100);
 
-        // --- ส่วนจัดการอื่นๆ ของหน้านี้ (ทำงานเมื่อ DOM พร้อม) ---
         document.addEventListener('DOMContentLoaded', function() {
-            // ✅✅✅ START: แก้ไขส่วน Delete (ใช้ Event Delegation ที่แม่นยำขึ้น) ✅✅✅
-            // เราจะใช้ page container ที่เราตั้ง ID ไว้
             const pageContainer = document.getElementById('equipment-page');
             
             if (pageContainer) {
@@ -309,10 +336,8 @@
             } else {
                 console.error("Could not find page container '#equipment-page' for delete listener.");
             }
-             // ✅✅✅ END: แก้ไขส่วน Delete ✅✅✅
         });
 
-        // --- ฟังก์ชัน Global ที่เรียกจาก onsubmit (ต้องอยู่นอกสุด) ---
         function confirmAddItemToPo(event, form, type) {
             event.preventDefault();
             const equipmentName = form.dataset.equipmentName;

@@ -7,6 +7,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta name="app-base-url" content="{{ url('') }}">
+        <meta name="can-bypass-frozen" content="{{ Auth::user()->canBypassFrozenState() ? 'true' : 'false' }}">
         <title>{{ config('app.name', 'Laravel') }}</title>
 
         <script src="https://cdn.tailwindcss.com"></script>

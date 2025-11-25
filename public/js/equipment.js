@@ -74,6 +74,8 @@ function createStatusBadgeInternal(status) {
         case 'low_stock': styleClass = 'bg-yellow-50 text-yellow-700 border-yellow-200'; icon = '<i class="fas fa-exclamation-circle mr-1"></i>'; text = 'ใกล้หมด'; break;
         case 'out_of_stock': styleClass = 'bg-red-50 text-red-700 border-red-200'; icon = '<i class="fas fa-times-circle mr-1"></i>'; text = 'สินค้าหมด'; break;
         case 'maintenance': styleClass = 'bg-blue-50 text-blue-700 border-blue-200'; icon = '<i class="fas fa-tools mr-1"></i>'; text = 'ซ่อมบำรุง'; break;
+        // ✅ เพิ่มสถานะ Frozen
+        case 'frozen': styleClass = 'bg-cyan-50 text-cyan-700 border-cyan-200'; icon = '<i class="fas fa-snowflake mr-1"></i>'; text = 'ระงับ (Frozen)'; break;
     }
     badge.className += ` ${styleClass}`;
     badge.innerHTML = `${icon} ${text}`;
@@ -145,7 +147,7 @@ window.showAddModal = async function() {
                      attachFormEventListeners(form);
                      // Initialize Select2 for Add Form
                      if (typeof $ !== 'undefined' && $.fn.select2) {
-                        $(form).find('.select2').select2({ dropdownParent: $(modal), width: '100%' });
+                         $(form).find('.select2').select2({ dropdownParent: $(modal), width: '100%' });
                      }
                  }
                  
@@ -611,7 +613,7 @@ function populateDetails(item) {
     }
 
     setupGallery(item);
-    setupDetailButtons(item);
+    setupDetailButtons(item); // ✅ เรียกใช้ฟังก์ชันที่ถูกแก้ไข
 }
 
 function setupGallery(item) {
@@ -651,19 +653,40 @@ function setupGallery(item) {
     }
 }
 
+// ✅✅✅ ฟังก์ชันที่ถูกแก้ไขเพื่อควบคุมปุ่ม Edit ✅✅✅
 function setupDetailButtons(item) {
     const editBtn = document.getElementById('details-edit-btn');
     const printBtn = document.getElementById('details-print-btn');
 
+    // 🔑 START FIX: Frozen Lock Logic for Edit Button 🔑
+    // 1. ตรวจสอบสิทธิ์ผู้ใช้จาก Meta Tag
+    const userCanBypass = document.querySelector('meta[name="can-bypass-frozen"]')?.content === 'true';
+    // 2. ตรวจสอบสถานะ Frozen
+    const isFrozen = item.status && item.status.toLowerCase() === 'frozen';
+    // 3. กำหนดลอจิก: ซ่อนถ้า Frozen และผู้ใช้ไม่มีสิทธิ์ Bypass
+    const shouldLock = isFrozen && !userCanBypass;
+    
     if (editBtn) {
-        const newEdit = editBtn.cloneNode(true);
-        editBtn.parentNode.replaceChild(newEdit, editBtn);
-        newEdit.setAttribute('data-equipment-id', item.id);
-        newEdit.addEventListener('click', () => {
-            window.closeDetailsModal();
-            if (typeof window.showEditModal === 'function') window.showEditModal(item.id);
-        });
+        if (shouldLock) {
+            // ซ่อนปุ่มถ้าติดล็อค
+            editBtn.style.display = 'none';
+        } else {
+            // สำคัญ: สั่งให้แสดงปุ่มถ้าผ่านเงื่อนไข (เพื่อ override style="display: none;" ใน Blade)
+            editBtn.style.display = 'inline-flex'; 
+
+            // Clone and replace to clear old listeners
+            const newEdit = editBtn.cloneNode(true);
+            editBtn.parentNode.replaceChild(newEdit, editBtn); 
+
+            newEdit.setAttribute('data-equipment-id', item.id);
+            // ผูก Event Handler
+            newEdit.addEventListener('click', () => {
+                window.closeDetailsModal();
+                if (typeof window.showEditModal === 'function') window.showEditModal(item.id);
+            });
+        }
     }
+    // 🔑 END FIX 🔑
 
     if (printBtn) {
         const newPrint = printBtn.cloneNode(true);
@@ -682,6 +705,7 @@ function setupDetailButtons(item) {
         });
     }
 }
+// ✅✅✅ สิ้นสุดฟังก์ชันที่ถูกแก้ไข ✅✅✅
 
 window.switchDetailsTab = function(selectedBtn, targetPanelId) {
     document.querySelectorAll('.details-tab-btn').forEach(btn => {

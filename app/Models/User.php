@@ -130,7 +130,10 @@ class User extends Authenticatable
     public function getRoleLevel(): int
     {
         // ใช้ config() แทน env() เพื่อความปลอดภัยและประสิทธิภาพ
-        if ($this->id === (int)config('app.super_admin_id', 9)) { // ใส่ 9 เป็นค่า default
+        // ใช้ config('app.super_admin_id', 9) แทนการ hardcode 9
+        $superAdminId = (int)config('app.super_admin_id', 9); 
+        
+        if ($this->id === $superAdminId) {
             return PHP_INT_MAX;
         }
          try {
@@ -143,7 +146,7 @@ class User extends Authenticatable
         }
     }
 
-    // ✅✅✅ START: โค้ดที่แก้ไข (ใช้ URL Hardcode เหมือนไฟล์ตัวอย่างที่ถูกต้อง) ✅✅✅
+    // ✅✅✅ START: โค้ดที่เกี่ยวข้องกับ Profile Link (ใช้ URL Hardcode เหมือนไฟล์ตัวอย่างที่ถูกต้อง) ✅✅✅
     /**
      * สร้าง URL สำหรับลิงก์ไปยังโปรไฟล์พนักงาน (ใช้ URL ตรง)
      */
@@ -165,7 +168,7 @@ class User extends Authenticatable
             return '#';
         }
     }
-    // ✅✅✅ END: โค้ดที่แก้ไข ✅✅✅
+    // ✅✅✅ END: โค้ดที่เกี่ยวข้องกับ Profile Link ✅✅✅
 
     /**
      * Accessor สำหรับสร้าง URL รูปภาพเต็ม
@@ -176,8 +179,6 @@ class User extends Authenticatable
         // ตรวจสอบว่ามี photo_path และไม่เป็นค่าว่าง
         if ($this->photo_path && !empty($this->photo_path)) {
             // ดึง Base URL และ Path รูปภาพจาก config
-            // (หมายเหตุ: ไฟล์ที่ถูกต้องที่คุณส่งมาก็ยังใช้ config ที่นี่ ซึ่งอาจจะถูกหรือผิดก็ได้)
-            // (ถ้าส่วนนี้ยังผิด ให้เปลี่ยน $baseUrl และ $photoPath เป็น Hardcode เหมือนกัน)
             $baseUrl = config('employee_portal.base_uri');
             $photoPath = config('employee_portal.photo_path');
 
@@ -192,32 +193,26 @@ class User extends Authenticatable
         return 'https://ui-avatars.com/api/?name=' . urlencode($this->fullname ?? $this->username) . '&background=random&color=fff';
     }
 
-    // ... (โค้ดส่วนอื่นๆ ของเดิม) ...
-
-    // ✅✅✅ เพิ่มฟังก์ชันนี้ ✅✅✅
+    // ✅✅✅ โค้ดที่แก้ไขและรัดกุมที่สุดสำหรับ Frozen State ✅✅✅
     /**
      * ตรวจสอบว่า User นี้มีสิทธิ์ทะลุการแช่แข็ง (Frozen) หรือไม่
+     * อนุญาตเฉพาะ Super Admin (ID 9) และ IT/Superuser (Level >= 90) เท่านั้น
      */
     public function canBypassFrozenState()
     {
-        // 1. กฎเหล็ก: ถ้าเป็น ID 9 (คุณเอง) -> ผ่านโลด!
-        if ($this->id === 9) {
+        $superAdminId = (int)config('app.super_admin_id', 9); 
+        
+        // 1. กฎเหล็ก: ถ้าเป็น ID 9 (Super Admin) -> ผ่าน
+        if ($this->id === $superAdminId) {
             return true;
         }
 
-        // 2. กฎ IT: เช็คว่ามีสิทธิ์ระดับ IT หรือไม่ (ใช้ Logic เดิมที่มีในระบบคุณ)
-        // เช่น เช็คจาก Role Level หรือ Permission 'permission:manage'
-        
-        // วิธี A: ถ้าคุณใช้ getRoleLevel()
-        // if ($this->getRoleLevel() >= 90) { return true; }
-
-        // วิธี B: เช็ค Permission (แนะนำวิธีนี้เพราะคุณมีระบบ Permission อยู่แล้ว)
-        if ($this->can('permission:manage') || $this->can('equipment:manage')) { 
+        // 2. กฎ IT/Superuser: เช็ค Level >= 90
+        // (Admin ทั่วไปที่มี Level 50 จะไม่สามารถ Bypass ได้)
+        if ($this->getRoleLevel() >= 90) { 
             return true;
         }
 
         return false;
     }
 }
-
-

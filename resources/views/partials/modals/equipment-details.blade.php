@@ -1,6 +1,7 @@
 {{-- 
     File: resources/views/partials/modals/equipment-details.blade.php 
-    Status: PERFECT (Fixed Main Modal + Safe Lightbox Restored)
+    Status: COMPLETE - Button 'แก้ไขข้อมูล' is now controlled by JavaScript (equipment.js) 
+    based on Frozen status and User's Bypass permission.
 --}}
 
 {{-- ========================================== --}}
@@ -196,7 +197,14 @@
             <div class="flex gap-3">
                 <button id="details-print-btn" type="button" class="group flex items-center px-5 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-bold text-gray-700 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all"><i class="fas fa-qrcode mr-2 text-gray-400 group-hover:text-indigo-500 transition-colors"></i> Print QR</button>
                 @can('equipment:manage')
-                <button id="details-edit-btn" type="button" class="flex items-center px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 border border-transparent rounded-xl text-sm font-bold text-white shadow-md hover:shadow-lg hover:scale-105 hover:from-indigo-500 hover:to-purple-500 transition-all duration-200"><i class="fas fa-edit mr-2"></i> แก้ไขข้อมูล</button>
+                <button 
+                    id="details-edit-btn" 
+                    type="button" 
+                    style="display: none;" {{-- ซ่อนปุ่มโดยค่าเริ่มต้น, JS (equipment.js) จะควบคุมการแสดงผลตามสิทธิ์และสถานะ Frozen --}}
+                    class="flex items-center px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 border border-transparent rounded-xl text-sm font-bold text-white shadow-md hover:shadow-lg hover:scale-105 hover:from-indigo-500 hover:to-purple-500 transition-all duration-200"
+                >
+                    <i class="fas fa-edit mr-2"></i> แก้ไขข้อมูล
+                </button>
                 @endcan
             </div>
         </div>
@@ -230,6 +238,7 @@
 
 {{-- ========================================== --}}
 {{-- 🟢 PART 3: SCRIPTS (แยกการทำงานกันอย่างชัดเจน) --}}
+{{-- *ต้องผูกกับฟังก์ชัน controlDetailModalEditButton ใน equipment.js* --}}
 {{-- ========================================== --}}
 <script>
     // 1️⃣ ฟังก์ชันบังคับปิด Main Modal (แก้หน้าค้าง)
@@ -347,7 +356,7 @@
             setTimeout(() => {
                 lightboxModal.classList.add('hidden');
                 lightboxModal.style.display = 'none'; // ซ่อนให้มิด
-                lightboxModal.style.zIndex = '-1';    // หลบไปหลังสุด
+                lightboxModal.style.zIndex = '-1';    // หลบไปหลังสุด
             }, 300);
         }
     }
