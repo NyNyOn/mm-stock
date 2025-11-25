@@ -5,14 +5,16 @@
 @section('content')
 <div id="dashboard-page" class="page animate-slide-up-soft">
 
-    {{-- การ์ดต้อนรับ --}}
+    {{-- ========================================================= --}}
+    {{-- 1. ส่วนการ์ดต้อนรับ (Welcome Cards) --}}
+    {{-- ========================================================= --}}
     @auth
         @php
             $superAdminId = (int)config('app.super_admin_id', 9); 
             $userGroupSlug = Auth::user()->serviceUserRole?->userGroup?->slug;
         @endphp
 
-        {{-- 1. Super Admin --}}
+        {{-- 1.1 Super Admin --}}
         @if(Auth::user()->id === $superAdminId)
             <div class="flex items-center p-6 mb-6 space-x-6 bg-gradient-to-r from-blue-50 to-cyan-50 soft-card rounded-2xl gentle-shadow soft-hover animate-slide-up-soft">
                 <div class="text-5xl text-yellow-400">
@@ -28,8 +30,7 @@
                 </div>
             </div>
 
-        {{-- 2. การ์ดต้อนรับสำหรับ IT และ Admin ทั่วไป --}}
-        {{-- ✅ รองรับทั้ง administrator (ถูก) และ administartor (เผื่อพิมพ์ผิดใน DB) --}}
+        {{-- 1.2 IT & Admin --}}
         @elseif($userGroupSlug && in_array(strtolower($userGroupSlug), ['it', 'admin', 'administrator', 'administartor']))
             <div class="flex items-center p-6 mb-6 space-x-6 bg-gradient-to-r from-green-50 to-emerald-50 soft-card rounded-2xl gentle-shadow soft-hover animate-slide-up-soft">
                 <div class="text-5xl text-green-400">
@@ -52,7 +53,7 @@
                 </div>
             </div>
 
-        {{-- 3. User ทั่วไป --}}
+        {{-- 1.3 General User --}}
         @else
             <div class="p-6 mb-6 soft-card rounded-2xl stat-card gentle-shadow">
                 <div class="flex items-center justify-between">
@@ -68,10 +69,11 @@
                 </div>
             </div>
         @endif
-
     @endauth
 
-    {{-- Stat Cards Grid --}}
+    {{-- ========================================================= --}}
+    {{-- 2. Stat Cards Grid --}}
+    {{-- ========================================================= --}}
     <div class="grid grid-cols-1 gap-6 mb-6 sm:grid-cols-2 lg:grid-cols-4">
         <div class="flex items-start justify-between p-5 bg-white shadow-sm rounded-2xl">
             <div><p class="flex items-center text-sm font-medium text-gray-500"><i class="mr-2 text-gray-400 fas fa-box-open"></i>อุปกรณ์ทั้งหมด</p><p class="mt-2 text-3xl font-bold text-indigo-600">{{ number_format($total_equipment ?? 0, 0) }}</p></div>
@@ -122,7 +124,9 @@
         </a>
     </div>
 
-    {{-- Chart Area --}}
+    {{-- ========================================================= --}}
+    {{-- 3. Chart Area --}}
+    {{-- ========================================================= --}}
     <div class="p-5 mb-6 soft-card rounded-2xl stat-card gentle-shadow">
         <div class="flex flex-col items-start justify-between gap-4 mb-4 md:flex-row">
             <h3 class="text-lg font-bold text-gray-800">📊 ภาพรวมการเคลื่อนไหวสต๊อกรายเดือน</h3>
@@ -157,7 +161,9 @@
     {{-- Lists: Activities & Alerts --}}
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
         
-        {{-- Left Column: Activities --}}
+        {{-- ========================================================= --}}
+        {{-- 4. Left Column: Activities --}}
+        {{-- ========================================================= --}}
         <div class="p-5 lg:col-span-2 soft-card rounded-2xl stat-card gentle-shadow flex flex-col h-full">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-bold text-gray-800">⚡ กิจกรรมล่าสุด</h3>
@@ -199,10 +205,12 @@
             @endif
         </div>
 
-        {{-- Right Column --}}
+        {{-- ========================================================= --}}
+        {{-- 5. Right Column --}}
+        {{-- ========================================================= --}}
         <div class="space-y-6">
 
-            {{-- รอบการนับสต๊อก (105 วัน) --}}
+            {{-- 5.1 รอบการนับสต๊อก --}}
             <div class="p-5 soft-card rounded-2xl stat-card gentle-shadow">
                 <h3 class="mb-4 text-lg font-bold text-gray-800 gradient-text-soft">📋 รอบการนับสต๊อก (105 วัน)</h3>
                 <div class="space-y-3 overflow-y-auto max-h-72 scrollbar-soft">
@@ -210,30 +218,44 @@
                         @php
                             $theme = match($cycle->status) {
                                 'locked' => [
-                                    'border' => 'border-red-300',
-                                    'bg' => 'bg-gradient-to-r from-red-50 to-rose-100',
-                                    'text_head' => 'text-red-700',
-                                    'text_sub' => 'text-red-500',
-                                    'icon' => 'text-red-500',
+                                    'border' => 'border-red-300', 'bg' => 'bg-gradient-to-r from-red-50 to-rose-100',
+                                    'text_head' => 'text-red-700', 'text_sub' => 'text-red-500', 'icon' => 'text-red-500',
                                     'msg' => '⚠️ ระงับการใช้งาน (เลยกำหนด)'
                                 ],
                                 'warning' => [
-                                    'border' => 'border-orange-300',
-                                    'bg' => 'bg-gradient-to-r from-amber-50 to-orange-100',
-                                    'text_head' => 'text-orange-700',
-                                    'text_sub' => 'text-orange-500',
-                                    'icon' => 'text-orange-500',
+                                    'border' => 'border-orange-300', 'bg' => 'bg-gradient-to-r from-amber-50 to-orange-100',
+                                    'text_head' => 'text-orange-700', 'text_sub' => 'text-orange-500', 'icon' => 'text-orange-500',
                                     'msg' => '⚠️ ใกล้ถึงกำหนดนับสต๊อก'
                                 ],
-                                default => [ // safe
-                                    'border' => 'border-emerald-200',
-                                    'bg' => 'bg-gradient-to-r from-emerald-50 to-teal-50',
-                                    'text_head' => 'text-emerald-700',
-                                    'text_sub' => 'text-emerald-600',
-                                    'icon' => 'text-emerald-500',
+                                default => [ 
+                                    'border' => 'border-emerald-200', 'bg' => 'bg-gradient-to-r from-emerald-50 to-teal-50',
+                                    'text_head' => 'text-emerald-700', 'text_sub' => 'text-emerald-600', 'icon' => 'text-emerald-500',
                                     'msg' => '✅ สถานะปกติ'
                                 ]
                             };
+
+                            // Logic คำนวณวันที่
+                            $targetDate = $cycle->next_check_date ? \Carbon\Carbon::parse($cycle->next_check_date) : null;
+                            $finalTimestamp = 0;
+                            $isOverdue = false; // Flag สำหรับเช็คว่าเลยกำหนดหรือยัง
+
+                            if ($targetDate) {
+                                // Safe Check: ใช้ $loop->index แทน id เพื่อความปลอดภัย
+                                $seed = isset($cycle->id) ? $cycle->id : $loop->index;
+                                
+                                // ป้องกัน Error Undefined property created_at
+                                if (isset($cycle->created_at) && $cycle->created_at) {
+                                    $created = \Carbon\Carbon::parse($cycle->created_at);
+                                    $targetDate->setTime($created->hour, $created->minute, $created->second);
+                                } else {
+                                    $targetDate->addSeconds($seed % 60);
+                                }
+                                
+                                $finalTimestamp = $targetDate->timestamp * 1000;
+                                
+                                // เช็คว่าเลยกำหนดหรือยัง (หรือสถานะ locked)
+                                $isOverdue = $cycle->status === 'locked' || $targetDate->isPast();
+                            }
                         @endphp
 
                         <div class="p-3 border {{ $theme['border'] }} {{ $theme['bg'] }} rounded-2xl relative overflow-hidden shadow-sm transition-all hover:shadow-md">
@@ -254,14 +276,23 @@
                                 {{ $theme['msg'] }}
                             </div>
 
-                            {{-- ✅ แสดง Countdown เสมอ --}}
                             <p class="text-xs {{ $theme['text_sub'] }} mb-2 border-t border-black/5 pt-1 mt-1">
-                                <i class="fas fa-clock mr-1"></i>เป้าหมาย: {{ $cycle->formatted_date }}
+                                <i class="fas fa-clock mr-1"></i>เป้าหมาย: {{ $targetDate ? $targetDate->format('d/m/Y H:i') : '-' }}
                             </p>
-                            <div class="flex space-x-2 text-xs font-mono {{ $theme['text_head'] }} bg-white/60 p-2 rounded-lg justify-center stock-countdown-display border border-black/5" 
-                                 data-target="{{ $cycle->next_check_date }}">
-                                 <span><i class="fas fa-spinner fa-spin"></i> กำลังคำนวณ...</span>
-                            </div>
+                            
+                            {{-- 🔥 ถ้าเลยกำหนดแล้ว แสดงป้ายนิ่งๆ --}}
+                            @if($isOverdue)
+                                <div class="flex items-center justify-center p-2 mt-2 text-xs font-bold text-red-600 bg-white/60 border border-red-200 rounded-lg">
+                                    <i class="mr-2 fas fa-exclamation-circle animate-pulse"></i> เลยกำหนด (กรุณาตรวจนับ)
+                                </div>
+                            {{-- 🔥 ถ้ายังไม่ถึง แสดงตัวนับถอยหลัง --}}
+                            @else
+                                <div class="flex space-x-2 text-xs font-mono {{ $theme['text_head'] }} bg-white/60 p-2 rounded-lg justify-center stock-countdown-display border border-black/5" 
+                                     title="Target: {{ $targetDate ? $targetDate->toDateTimeString() : '' }}"
+                                     data-target="{{ $finalTimestamp }}">
+                                     <span><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</span>
+                                </div>
+                            @endif
                         </div>
                     @empty
                         <div class="p-4 text-sm text-center text-gray-500"><i class="mr-2 text-green-500 fas fa-check-circle"></i>ข้อมูลครบถ้วน</div>
@@ -269,6 +300,7 @@
                 </div>
             </div>
 
+            {{-- 5.2 รายการที่กำลังสั่งซื้อ --}}
             <div class="p-5 soft-card rounded-2xl stat-card gentle-shadow">
                 <h3 class="mb-4 text-lg font-bold text-gray-800 gradient-text-soft">⏳ รายการที่กำลังสั่งซื้อ</h3>
                 <div class="space-y-3 overflow-y-auto max-h-72 scrollbar-soft">
@@ -282,6 +314,7 @@
                 </div>
             </div>
             
+            {{-- 5.3 การแจ้งเตือนสำคัญ --}}
             <div class="p-5 soft-card rounded-2xl stat-card gentle-shadow">
                 <h3 class="mb-4 text-lg font-bold text-gray-800 gradient-text-soft">🚨 การแจ้งเตือนสำคัญ</h3>
                 <div class="space-y-3 overflow-y-auto max-h-72 scrollbar-soft">
