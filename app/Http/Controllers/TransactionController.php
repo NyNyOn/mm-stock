@@ -71,16 +71,47 @@ class TransactionController extends Controller
     public function index(Request $request)
     {
         try {
-            $statusFilter = $request->query('status', 'my_history');
+            // 1. Badge Counters (นับจำนวนแจ้งเตือนจุดแดง)
+            $adminPendingCount = 0;
+            $myPendingCount = 0;
+            $user = Auth::user();
+
+            // ถ้าเป็น Admin: นับรายการที่รออนุมัติ (Pending)
+            if ($user->can('equipment:manage')) {
+                $adminPendingCount = Transaction::where('status', 'pending')->count();
+            }
+
+            // User: นับรายการที่ตนเองต้องกดรับของ (Shipped / User Confirm Pending)
+            $myPendingCount = Transaction::where('user_id', $user->id)
+                ->whereIn('status', ['shipped', 'user_confirm_pending'])
+                ->count();
+
+            // 2. ตั้งค่า Default Tab
+            // ถ้าเป็น Admin ให้ไปหน้า admin_pending ก่อน ถ้าไม่ใช่ให้ไป my_history
+            $defaultTab = ($user->can('equipment:manage')) ? 'admin_pending' : 'my_history';
+            $statusFilter = $request->query('status', $defaultTab);
+
+            // 3. Query Builder
             $query = Transaction::with(['equipment.latestImage', 'user', 'handler'])
                                 ->orderBy('transaction_date', 'desc');
 
-            if ($statusFilter == 'pending_confirmation') {
-                $query->where('user_id', Auth::id())
+            // --- Logic การกรองข้อมูลตาม Tab ---
+            if ($statusFilter == 'admin_pending') {
+                // Tab 1: รอจัดส่ง (Admin)
+                $this->authorize('equipment:manage');
+                $query->where('status', 'pending');
+
+            } elseif ($statusFilter == 'my_pending') {
+                // Tab 2: รายการที่ต้องจัดการ (User)
+                $query->where('user_id', $user->id)
                         ->whereIn('status', ['shipped', 'user_confirm_pending']);
+
             } elseif ($statusFilter == 'my_history') {
-                $query->where('user_id', Auth::id());
+                // Tab 3: ประวัติของฉัน
+                $query->where('user_id', $user->id);
+
             } elseif ($statusFilter == 'all_history') {
+                // Tab 4: ประวัติทั้งหมด (Admin Report)
                 $this->authorize('report:view');
 
                 if ($search = $request->get('search')) {
@@ -93,20 +124,27 @@ class TransactionController extends Controller
                             });
                     });
                 }
-                if ($type = $request->get('type')) { $query->where('type', $type); }
-                if ($userId = $request->get('user_id')) { $query->where('user_id', $userId); }
-                if ($startDate = $request->get('start_date')) { $query->whereDate('transaction_date', '>=', $startDate); }
-                if ($endDate = $request->get('end_date')) { $query->whereDate('transaction_date', '<=', $endDate); }
+                if ($type = $request->get('type')) {
+                    $query->where('type', $type);
+                }
+                if ($userId = $request->get('user_id')) {
+                    $query->where('user_id', $userId);
+                }
+                if ($startDate = $request->get('start_date')) {
+                    $query->whereDate('transaction_date', '>=', $startDate);
+                }
+                if ($endDate = $request->get('end_date')) {
+                    $query->whereDate('transaction_date', '<=', $endDate);
+                }
             }
 
             $transactions = $query->paginate(15)->appends($request->query());
 
-            if ($request->ajax() && $statusFilter == 'all_history') {
-                $latestTimestamp = $transactions->isNotEmpty() ? Carbon::parse($transactions->first()->transaction_date)->timestamp : now()->timestamp;
+            // AJAX Response (กรณีใช้ Pagination แบบไม่รีโหลดหน้า)
+            if ($request->ajax()) {
                 return response()->json([
-                    'view' => view('transactions.partials._table_rows', compact('transactions'))->render(),
-                    'pagination' => $transactions->links()->toHtml(),
-                    'latest_timestamp' => $latestTimestamp
+                    'html' => view('transactions.partials._table_rows', compact('transactions', 'statusFilter'))->render(),
+                    'pagination' => $transactions->links()->toHtml()
                 ]);
             }
 
@@ -123,13 +161,23 @@ class TransactionController extends Controller
                 'adjust' => 'ปรับสต็อก'
             ];
 
+            // ส่งตัวแปร Counts ไปที่ View
+            return view('transactions.index', compact(
+                'transactions', 'users', 'types', 'statusFilter', 
+                'adminPendingCount', 'myPendingCount'
+            ));
+
         } catch (\Throwable $e) {
             Log::error('Transaction Index Error: ' . $e->getMessage());
-            if ($request->ajax()) { return response()->json(['error' => 'เกิดข้อผิดพลาดในการโหลดข้อมูล'], 500); }
-            $transactions = collect(); $users = collect(); $types = []; $statusFilter = 'my_history';
+            if ($request->ajax()) {
+                return response()->json(['error' => 'เกิดข้อผิดพลาดในการโหลดข้อมูล'], 500);
+            }
+            $transactions = collect();
+            $users = collect();
+            $types = [];
+            $statusFilter = 'my_history';
             return redirect()->back()->with('error', 'เกิดข้อผิดพลาดในการโหลดข้อมูล โปรดตรวจสอบ Log');
         }
-        return view('transactions.index', compact('transactions', 'users', 'types', 'statusFilter'));
     }
 
     public function show(Transaction $transaction)
@@ -246,7 +294,10 @@ class TransactionController extends Controller
 
                 $purpose = $request->input('purpose');
                 $notes = $request->input('notes');
-                $combinedNotes = $notes ?? '';
+                
+                // ⚠️ FIXED: ไม่เอาวัตถุประสงค์ไปต่อท้ายใน notes แล้ว เพื่อแก้ปัญหาซ้ำซ้อนใน View
+                $combinedNotes = $notes ?? ''; 
+                
                 $glpiTicketId = null;
                 $purposeForDb = $purpose;
 
@@ -255,11 +306,11 @@ class TransactionController extends Controller
                     if (count($parts) === 3) {
                         $glpiTicketId = (int) $parts[2];
                         $purposeForDb = 'glpi_ticket';
+                        // สำหรับ GLPI เราอาจจะยังเก็บอ้างอิงไว้ใน notes ได้ ถ้าต้องการ
                         $combinedNotes = "อ้างอิงใบงาน GLPI #{$glpiTicketId}\n" . $combinedNotes;
                     }
-                } else {
-                    $combinedNotes = "วัตถุประสงค์: " . $purpose . "\n" . $combinedNotes;
-                }
+                } 
+                // ถ้าไม่ใช่ GLPI เราจะไม่เอา purpose ไปต่อใน notes แล้ว เพราะมีฟิลด์ purpose เก็บแยกต่างหาก
 
                 $returnCondition = match ($request->type) {
                     'borrow' => 'allowed',
@@ -384,6 +435,8 @@ class TransactionController extends Controller
 
             $purpose = $request->input('purpose');
             $combinedNotes = $request->input('notes') ?? '';
+            // ⚠️ FIXED: ไม่เอา purpose ไปต่อใน combinedNotes เพื่อลดความซ้ำซ้อน
+            
             $glpiTicketId = null;
 
              if (str_starts_with($purpose, 'glpi-')) {
@@ -392,9 +445,8 @@ class TransactionController extends Controller
                     $glpiTicketId = (int) $parts[2];
                     $combinedNotes = "อ้างอิง GLPI #{$glpiTicketId}\n" . $combinedNotes;
                 }
-            } else {
-                $combinedNotes = "วัตถุประสงค์: " . $purpose . "\n" . $combinedNotes;
-            }
+            } 
+            // else: purpose is stored separately, no need to append to notes
 
             $returnCondition = ($transactionType === 'returnable' || $transactionType === 'partial_return') ? 'allowed' : 'not_allowed';
             $transaction = null;

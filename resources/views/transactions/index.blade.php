@@ -1,388 +1,361 @@
 @extends('layouts.app')
 
-@section('header', 'ประวัติธุรกรรมทั้งหมด')
-@section('subtitle', 'ประวัติการเบิก จ่าย ยืม คืน ทั้งหมดในระบบ')
+@section('header', 'ประวัติธุรกรรมและติดตามสถานะ')
+@section('subtitle', 'ตรวจสอบสถานะการเบิก-จ่าย และประวัติการใช้งานอุปกรณ์')
 
 @section('content')
-<div class="space-y-6 page animate-slide-up-soft">
+<div class="container mx-auto p-4 lg:p-6 space-y-6">
 
-    {{-- Tabs UI --}}
-    <div class="mb-6">
-       <div class="border-b border-gray-200">
-            <nav class="-mb-px flex space-x-4 overflow-x-auto" aria-label="Tabs">
-                @php
-                    $tabs = [
-                        // --- ✅✅✅ START: นำ Tab 'pending_confirmation' กลับมา ---
-                        'pending_confirmation' => [
-                            'name' => 'รายการรอรับ', // Changed name back
-                            'icon' => 'fas fa-exclamation-circle text-yellow-500',
-                            'permission' => true // Everyone can see items pending their confirmation
-                        ],
-                        // --- ✅✅✅ END: นำ Tab 'pending_confirmation' กลับมา ---
-                        'my_history' => [
-                            'name' => 'ประวัติของฉัน',
-                            'icon' => 'fas fa-user-clock text-blue-500',
-                            'permission' => true // Everyone can see their own history
-                        ],
-                        'all_history' => [
-                            'name' => 'ประวัติทั้งหมด',
-                            'icon' => 'fas fa-globe-asia text-gray-500',
-                            // Use 'report:view' permission as decided
-                            'permission' => auth()->user()->can('report:view') // ✅ Corrected permission
-                        ],
-                    ];
-                @endphp
-
-                @foreach ($tabs as $key => $tab)
-                    @if ($tab['permission'])
-                        @php
-                            // สร้าง URL โดยรวม query string เดิมทั้งหมด ยกเว้น 'page' และ 'status'
-                            $currentParams = request()->except(['page', 'status']);
-                            $newParams = array_merge($currentParams, ['status' => $key]);
-                            $url = route('transactions.index', $newParams);
-                            $isActive = ($statusFilter ?? '') === $key;
-                        @endphp
-                        <a href="{{ $url }}"
-                           class="{{ $isActive ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}
-                                  whitespace-nowrap flex py-4 px-1 border-b-2 font-medium text-sm items-center space-x-2">
-                            <i class="{{ $tab['icon'] }} {{ $isActive ? '' : 'text-gray-400' }}"></i>
-                            <span>{{ $tab['name'] }}</span>
-                             {{-- Optional: Show count for pending --}}
-                             @if($key === 'pending_confirmation' && isset($pendingCount) && $pendingCount > 0)
-                                 <span class="ml-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                     {{ $pendingCount }}
-                                 </span>
-                             @endif
-                        </a>
-                    @endif
-                @endforeach
-            </nav>
+    {{-- Alert Messages --}}
+    @if (session('success'))
+        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded shadow-sm flex items-center animate-fade-in-down">
+            <i class="fas fa-check-circle mr-2"></i> {{ session('success') }}
         </div>
-    </div>
-    {{-- End Tabs UI --}}
-
-
-    {{-- Filter Form (เฉพาะแท็บ all_history) --}}
-    @if($statusFilter === 'all_history')
-        <form id="filter-form" method="GET" action="{{ route('transactions.index', ['status' => 'all_history']) }}" class="p-4 mb-6 bg-white border border-gray-200 rounded-lg shadow-sm">
-            {{-- Hidden input to keep status --}}
-            <input type="hidden" name="status" value="all_history">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                {{-- Search --}}
-                <div>
-                    <label for="search" class="block text-sm font-medium text-gray-700">ค้นหา</label>
-                    <input type="text" name="search" id="search" value="{{ request('search') }}" placeholder="ชื่อ, Serial, หมายเหตุ..." class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                </div>
-                {{-- Type --}}
-                <div>
-                    <label for="type" class="block text-sm font-medium text-gray-700">ประเภท</label>
-                    <select name="type" id="type" class="block w-full py-2 pl-3 pr-10 mt-1 text-base border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="">-- ทุกประเภท --</option>
-                        @foreach ($types as $value => $label)
-                            <option value="{{ $value }}" {{ request('type') == $value ? 'selected' : '' }}>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                {{-- User --}}
-                <div>
-                    <label for="user_id" class="block text-sm font-medium text-gray-700">ผู้ใช้</label>
-                    <select name="user_id" id="user_id" class="block w-full py-2 pl-3 pr-10 mt-1 text-base border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="">-- ทุกผู้ใช้ --</option>
-                        @foreach ($users as $user)
-                            <option value="{{ $user->id }}" {{ request('user_id') == $user->id ? 'selected' : '' }}>{{ $user->fullname }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                {{-- Start Date --}}
-                <div>
-                    <label for="start_date" class="block text-sm font-medium text-gray-700">ตั้งแต่วันที่</label>
-                    <input type="date" name="start_date" id="start_date" value="{{ request('start_date') }}" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                </div>
-                {{-- End Date --}}
-                <div>
-                    <label for="end_date" class="block text-sm font-medium text-gray-700">ถึงวันที่</label>
-                    <input type="date" name="end_date" id="end_date" value="{{ request('end_date') }}" class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                </div>
-            </div>
-            <div class="flex justify-end mt-4">
-                <button type="submit" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    <i class="mr-2 fas fa-filter"></i> กรองข้อมูล
-                </button>
-                 <a href="{{ route('transactions.index', ['status' => 'all_history']) }}" class="inline-flex items-center px-4 py-2 ml-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                     ล้างค่า
-                 </a>
-            </div>
-        </form>
     @endif
-    {{-- End Filter Form --}}
+    @if (session('error'))
+        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm flex items-center animate-fade-in-down">
+            <i class="fas fa-exclamation-circle mr-2"></i> {{ session('error') }}
+        </div>
+    @endif
 
-    {{-- Transaction Table Wrapper --}}
-    <div id="transaction-table-wrapper" class="overflow-hidden bg-white border border-gray-200 rounded-lg shadow-sm">
+    {{-- TABS NAVIGATION --}}
+    <div class="border-b border-gray-200 mb-6">
+        <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
+            
+            {{-- Admin Pending Tab --}}
+            @can('equipment:manage')
+            <a href="{{ route('transactions.index', ['status' => 'admin_pending']) }}" 
+               class="relative whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors group
+                      {{ $statusFilter == 'admin_pending' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                <i class="fas fa-user-shield {{ $statusFilter == 'admin_pending' ? 'text-indigo-500' : 'text-gray-400' }}"></i>
+                รอจัดส่ง (Admin)
+                @if(isset($adminPendingCount) && $adminPendingCount > 0)
+                    <span class="absolute -top-1 -right-2 flex h-4 w-4 items-center justify-center">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[10px] text-white items-center justify-center ring-2 ring-white">
+                            {{ $adminPendingCount }}
+                        </span>
+                    </span>
+                @endif
+            </a>
+            @endcan
+
+            {{-- My Pending Tab --}}
+            <a href="{{ route('transactions.index', ['status' => 'my_pending']) }}" 
+               class="relative whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors group
+                      {{ $statusFilter == 'my_pending' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                <i class="fas fa-clock {{ $statusFilter == 'my_pending' ? 'text-indigo-500' : 'text-gray-400' }}"></i>
+                รายการที่ต้องจัดการ
+                @if(isset($myPendingCount) && $myPendingCount > 0)
+                    <span class="absolute -top-1 -right-2 flex h-4 w-4 items-center justify-center">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-4 w-4 bg-orange-500 text-[10px] text-white items-center justify-center ring-2 ring-white">
+                            {{ $myPendingCount }}
+                        </span>
+                    </span>
+                @endif
+            </a>
+
+            {{-- My History Tab --}}
+            <a href="{{ route('transactions.index', ['status' => 'my_history']) }}" 
+               class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors group
+                      {{ $statusFilter == 'my_history' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                <i class="fas fa-history {{ $statusFilter == 'my_history' ? 'text-indigo-500' : 'text-gray-400' }}"></i>
+                ประวัติของฉัน
+            </a>
+
+            {{-- All History Tab --}}
+            @can('report:view')
+            <a href="{{ route('transactions.index', ['status' => 'all_history']) }}" 
+               class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors group
+                      {{ $statusFilter == 'all_history' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                <i class="fas fa-database {{ $statusFilter == 'all_history' ? 'text-indigo-500' : 'text-gray-400' }}"></i>
+                ประวัติทั้งหมด (Admin)
+            </a>
+            @endcan
+        </nav>
+    </div>
+
+    {{-- Search Filter --}}
+    @if($statusFilter == 'all_history')
+        <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
+            <form action="{{ route('transactions.index') }}" method="GET" class="flex flex-wrap gap-4">
+                <input type="hidden" name="status" value="all_history">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">คำค้นหา</label>
+                    <input type="text" name="search" value="{{ request('search') }}" placeholder="ชื่อ, อุปกรณ์, Serial..." class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                </div>
+                <div class="w-auto self-end">
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 shadow-sm transition-colors">
+                        <i class="fas fa-search mr-1"></i> ค้นหา
+                    </button>
+                </div>
+            </form>
+        </div>
+    @endif
+
+    {{-- TABLE CONTAINER --}}
+    <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        {{-- Header Table --}}
-                        <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">ประเภท</th>
-                        <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">อุปกรณ์ / ID</th>
-                        <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">ผู้ใช้</th>
-                        <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">วันที่</th>
-                        <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">รายละเอียด</th>
-                        <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">สถานะ</th>
-                        <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">จัดการ</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-32">วันที่ / เวลา</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-1/3">อุปกรณ์ / วัตถุประสงค์</th>
+                        <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">ประเภท</th>
+                        <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">จำนวน</th>
+                        <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">สถานะ</th>
+                        <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">รายละเอียด</th>
+                        <th scope="col" class="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody id="transaction-table-body" class="bg-white divide-y divide-gray-200">
-                    {{-- Include table rows partial --}}
                     @include('transactions.partials._table_rows', ['transactions' => $transactions])
                 </tbody>
             </table>
         </div>
     </div>
-    {{-- End Transaction Table Wrapper --}}
 
-    {{-- Pagination Wrapper --}}
-    <div id="pagination-wrapper">
+    {{-- Pagination --}}
+    <div class="mt-4">
         {{ $transactions->links() }}
     </div>
-    {{-- End Pagination Wrapper --}}
 
-</div> {{-- Close page container --}}
+</div>
 
-{{-- Include Transaction Detail Modal --}}
-{{-- Make sure the included file path is correct --}}
-@include('partials.modals.transaction-modal')
+{{-- MODERN DETAILS MODAL --}}
+<div id="detailsModal" class="fixed inset-0 z-50 flex items-center justify-center hidden bg-gray-900 bg-opacity-60 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden transform transition-all scale-100 m-4 relative">
+        
+        {{-- 1. Header with Gradient --}}
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-white/20 p-2 rounded-lg text-white">
+                    <i class="fas fa-file-invoice text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">รายละเอียดธุรกรรม</h3>
+                    <p class="text-xs text-blue-100 opacity-90" id="modalTxDate">วันที่: -</p>
+                </div>
+            </div>
+            <button onclick="closeDetailsModal()" class="text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-1.5 transition-all focus:outline-none">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+
+        {{-- 2. Body Content --}}
+        <div class="p-6 sm:p-8 space-y-6">
+            
+            {{-- Top Section: Image & Key Info --}}
+            <div class="flex flex-col sm:flex-row gap-6">
+                {{-- Image Container --}}
+                <div class="flex-shrink-0 w-full sm:w-40 h-40 bg-gray-100 rounded-xl border border-gray-200 shadow-sm overflow-hidden relative group">
+                    <img id="modalImg" src="" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Equipment Image">
+                </div>
+
+                {{-- Text Info --}}
+                <div class="flex-1 space-y-3">
+                    <div>
+                        <span class="text-xs font-bold text-gray-400 uppercase tracking-wide">อุปกรณ์</span>
+                        <h4 class="text-xl font-bold text-gray-900 leading-tight" id="modalEquipment">-</h4>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-3">
+                        <div class="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                            <span class="text-[10px] text-gray-500 uppercase block mb-0.5">Serial Number</span>
+                            <span class="text-sm font-mono font-semibold text-gray-700" id="modalSerial">-</span>
+                        </div>
+                        <div class="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                            <span class="text-[10px] text-gray-500 uppercase block mb-0.5">Transaction ID</span>
+                            <span class="text-sm font-mono font-semibold text-indigo-600" id="modalTxId">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border-t border-gray-100"></div>
+
+            {{-- Middle Section: Status Grid --}}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {{-- User --}}
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                    <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold text-gray-400 uppercase">ผู้ทำรายการ</span>
+                        <p class="text-sm font-bold text-gray-800" id="modalUser">-</p>
+                    </div>
+                </div>
+
+                {{-- Type --}}
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-purple-50/50 border border-purple-100">
+                    <div class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
+                        <i class="fas fa-tag"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold text-gray-400 uppercase">ประเภท</span>
+                        <p class="text-sm font-bold text-gray-800" id="modalType">-</p>
+                    </div>
+                </div>
+
+                {{-- Status --}}
+                <div class="col-span-1 sm:col-span-2 flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-200">
+                    <div class="w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-500 flex items-center justify-center" id="modalStatusIconBg">
+                        <i class="fas fa-info-circle" id="modalStatusIcon"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold text-gray-400 uppercase">สถานะปัจจุบัน</span>
+                        <p class="text-sm font-bold text-gray-800" id="modalStatus">-</p>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Bottom Section: Notes --}}
+            <div>
+                <label class="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-2">
+                    <i class="fas fa-comment-alt text-gray-400"></i> วัตถุประสงค์ / หมายเหตุ
+                </label>
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 min-h-[80px]">
+                    <p class="text-sm text-gray-600 leading-relaxed whitespace-pre-line" id="modalNotes">-</p>
+                </div>
+            </div>
+
+        </div>
+        
+        {{-- 3. Modal Footer --}}
+        <div class="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-100">
+            <button onclick="closeDetailsModal()" class="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-100 hover:text-gray-900 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200">
+                ปิดหน้าต่าง
+            </button>
+        </div>
+    </div>
+</div>
 
 @endsection
 
 @push('scripts')
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const tableBody = document.getElementById('transaction-table-body');
-        const paginationWrapper = document.getElementById('pagination-wrapper');
-        const filterForm = document.getElementById('filter-form'); // For filters
-        let currentLatestTimestamp = {{ $transactions->isNotEmpty() ? \Carbon\Carbon::parse($transactions->first()->transaction_date)->timestamp : now()->timestamp }};
-        let isFetching = false; // Prevent multiple simultaneous fetches
+    // 1. Confirm Action Logic
+    function confirmAction(form, title, text, icon, confirmBtn, btnColor) {
+        Swal.fire({
+            title: title,
+            text: text,
+            icon: icon,
+            showCancelButton: true,
+            confirmButtonColor: btnColor || '#4f46e5',
+            cancelButtonColor: '#9ca3af',
+            confirmButtonText: confirmBtn || 'ยืนยัน',
+            cancelButtonText: 'ยกเลิก',
+            customClass: { popup: 'rounded-xl' }
+        }).then((result) => {
+            if (result.isConfirmed) form.submit();
+        });
+    }
 
-        // Function to show transaction details modal
-        window.showTransactionDetails = async function (transactionId) {
-            try {
-                const response = await fetch(`/transactions/${transactionId}`);
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`Fetch Error: ${response.status}`, errorText);
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const result = await response.json();
+    // 2. Modal Logic (Global Scope)
+    window.showTransactionDetails = async function (transactionId) {
+        const modal = document.getElementById('detailsModal');
+        const imgEl = document.getElementById('modalImg');
+        
+        // Reset & Show Loading
+        document.getElementById('modalEquipment').innerText = 'กำลังโหลด...';
+        document.getElementById('modalImg').src = '{{ asset("images/placeholder.webp.gif") }}';
+        modal.classList.remove('hidden');
 
-                if (result.success && result.data) {
-                    const tx = result.data;
-                    const modal = document.getElementById('transaction-details-modal');
+        try {
+            const response = await fetch(`/transactions/${transactionId}`);
+            const result = await response.json();
+            
+            if(result.success) {
+                const txn = result.data;
+                
+                // Populate Basic Info
+                document.getElementById('modalTxId').innerText = '#' + String(txn.id).padStart(5, '0');
+                document.getElementById('modalEquipment').innerText = txn.equipment?.name || '-';
+                document.getElementById('modalSerial').innerText = txn.equipment?.serial_number || '-';
+                document.getElementById('modalUser').innerText = txn.user?.fullname || '-';
+                document.getElementById('modalType').innerText = (txn.type || '').toUpperCase(); 
+                
+                // Date
+                const d = new Date(txn.transaction_date);
+                document.getElementById('modalTxDate').innerText = d.toLocaleDateString('th-TH') + ' ' + d.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) + ' น.';
 
-                    if (!modal) {
-                        console.error("CRITICAL: Modal Element 'transaction-details-modal' not found!");
-                        Swal.fire('Config Error!', 'ไม่พบ Element ของ Modal (ID: transaction-details-modal). กรุณาตรวจสอบไฟล์ Blade.', 'error');
-                        return;
-                    }
+                // Status Styling
+                const statusEl = document.getElementById('modalStatus');
+                const iconBg = document.getElementById('modalStatusIconBg');
+                const icon = document.getElementById('modalStatusIcon');
+                const status = txn.status;
 
-                    // --- Safely Populate Modal Elements ---
-                    const setText = (id, value) => {
-                        const el = modal.querySelector(`#${id}`);
-                        if (el) el.textContent = (value === null || typeof value === 'undefined') ? '-' : value;
-                    };
-                    const setHtml = (id, value) => { const el = modal.querySelector(`#${id}`); if (el) el.innerHTML = value || '-'; };
-                    const setAttr = (id, attr, value) => { const el = modal.querySelector(`#${id}`); if (el) el.setAttribute(attr, value || '#'); };
-                    const setVisibility = (id, visible) => { const el = modal.querySelector(`#${id}`); if (el) el.classList.toggle('hidden', !visible); };
-
-                    // Populate basic info
-                    setText('modal-tx-id', tx.id);
-                    setText('modal-tx-equipment-name', tx.equipment?.name || 'N/A');
-                    setText('modal-tx-equipment-serial', tx.equipment?.serial_number || 'N/A');
-                    setAttr('modal-tx-image', 'src', tx.equipment?.latest_image?.image_url || '{{ asset('images/placeholder.webp') }}');
-                    const imgEl = modal.querySelector('#modal-tx-image');
-                    if(imgEl) imgEl.onerror = function() { this.src = '{{ asset('images/placeholder.webp') }}'; };
-                    setText('modal-tx-type', formatTransactionType(tx.type));
-                    setText('modal-tx-quantity', Math.abs(tx.quantity_change || 0));
-                    setText('modal-tx-user', tx.user?.fullname || 'N/A');
-                    setText('modal-tx-date', formatDateTime(tx.transaction_date));
-                    setHtml('modal-tx-status', getStatusBadge(tx.status));
-                    setText('modal-tx-handler', tx.handler?.fullname || 'N/A');
-                    setText('modal-tx-admin-confirm-date', formatDateTime(tx.admin_confirmed_at));
-                    setText('modal-tx-user-confirm-date', formatDateTime(tx.user_confirmed_at));
-
-                    // --- ✅✅✅ START: Corrected Logic for Purpose, Notes, GLPI ---
-                    const isGlpiPurposeDirect = tx.purpose === 'glpi_ticket'; // Check dedicated field first
-                    const isGlpiPurposePrefixed = tx.purpose && tx.purpose.startsWith('glpi-'); // Check for prefix (e.g., glpi-it-123)
-                    const isGlpi = isGlpiPurposeDirect || isGlpiPurposePrefixed;
-
-                    const glpiId = tx.glpi_ticket_id; // Use the dedicated ID field
-                    const glpiRelation = tx.glpi_ticket_relation; // From Controller's load()
-                    const glpiBaseUrl = "{{ config('services.glpi.url', '') }}"; // Assuming you have this config
-
-                    // Purpose Section
-                    // Show this section ONLY if it's NOT a GLPI purpose
-                    setVisibility('modal-tx-purpose-section', !isGlpi);
-                    if (!isGlpi) {
-                        let purposeText = tx.purpose || '-';
-                        if (tx.purpose && tx.purpose.trim() === 'general_use') {
-                             purposeText = 'เบิกใช้งานทั่วไป';
-                         }
-                        // Add more mappings here if needed
-                        setText('modal-tx-purpose', purposeText);
-                    } else {
-                        setText('modal-tx-purpose', '-'); // Clear if it was GLPI
-                    }
-
-
-                    // GLPI Section
-                    // Show this section if it IS a GLPI purpose AND we have the ID and base URL
-                    const glpiVisible = isGlpi && glpiId && glpiBaseUrl;
-                    setVisibility('modal-tx-glpi-section', glpiVisible);
-                    if (glpiVisible) {
-                        setAttr('modal-tx-glpi-link', 'href', `${glpiBaseUrl}/front/ticket.form.php?id=${glpiId}`);
-                        // Try to display ticket name from relation, fallback to just ID
-                        setText('modal-tx-glpi-link', `ใบงาน #${glpiId}${glpiRelation ? ': ' + glpiRelation.name : ''}`);
-                    }
-
-                    // Notes Section
-                    // Always show the notes section, but display '-' if empty
-                    setText('modal-tx-notes', tx.notes || '-');
-                    // --- ✅✅✅ END: Corrected Logic ---
-
-
-                    // Safely call global showModal
-                    if(typeof showModal === 'function'){
-                        showModal('transaction-details-modal');
-                    } else {
-                        console.error('Global showModal function not found!');
-                        Swal.fire('Script Error!', 'ไม่พบฟังก์ชัน showModal หลักของระบบ', 'error');
-                    }
-
+                statusEl.innerText = status.toUpperCase();
+                
+                // Reset classes first
+                iconBg.className = 'w-10 h-10 rounded-full flex items-center justify-center transition-colors';
+                
+                if(status === 'completed') {
+                    statusEl.className = 'text-sm font-bold text-emerald-600';
+                    iconBg.classList.add('bg-emerald-100', 'text-emerald-600');
+                    icon.className = 'fas fa-check';
+                } else if(status === 'pending') {
+                    statusEl.className = 'text-sm font-bold text-yellow-600';
+                    iconBg.classList.add('bg-yellow-100', 'text-yellow-600');
+                    icon.className = 'fas fa-clock';
+                } else if(status === 'cancelled' || status === 'rejected') {
+                    statusEl.className = 'text-sm font-bold text-red-600 line-through';
+                    iconBg.classList.add('bg-red-100', 'text-red-600');
+                    icon.className = 'fas fa-times';
                 } else {
-                    console.error('API response unsuccessful or data missing:', result);
-                    if(typeof Swal !== 'undefined'){
-                        Swal.fire('ผิดพลาด!', result.message || 'ไม่สามารถโหลดข้อมูลรายละเอียดได้', 'error');
-                    } else {
-                        alert(result.message || 'ไม่สามารถโหลดข้อมูลรายละเอียดได้');
-                    }
+                    statusEl.className = 'text-sm font-bold text-blue-600';
+                    iconBg.classList.add('bg-blue-100', 'text-blue-600');
+                    icon.className = 'fas fa-info';
                 }
-            } catch (error) {
-                console.error('Error fetching/processing transaction details:', error);
-                 if(typeof Swal !== 'undefined'){
-                    Swal.fire('ผิดพลาด!', 'เกิดข้อผิดพลาดในการโหลดรายละเอียด: ' + error.message, 'error');
+
+                // ✅ FIXED: Notes & Purpose Logic
+                // รวมข้อมูลวัตถุประสงค์และหมายเหตุไว้ในตัวแปรเดียว โดยไม่ใส่คำนำหน้าซ้ำซ้อน
+                let displayText = '';
+                
+                if(txn.purpose) {
+                    let pText = txn.purpose;
+                    if (pText === 'general_use') pText = 'เบิกใช้งานทั่วไป';
+                    else if (pText && pText.startsWith('glpi-')) {
+                        pText = txn.glpi_ticket_id ? 'GLPI Ticket #' + txn.glpi_ticket_id : 'อ้างอิง Ticket';
+                    }
+                    // แสดงวัตถุประสงค์อย่างเดียว ไม่ต้องมี prefix เพราะหัวข้อ Modal บอกแล้ว
+                    displayText = pText;
+                }
+
+                if(txn.notes) {
+                    if(displayText) displayText += '\n'; // ขึ้นบรรทัดใหม่ถ้ามีวัตถุประสงค์ก่อนหน้า
+                    displayText += txn.notes;
+                }
+                
+                document.getElementById('modalNotes').innerText = displayText || '-';
+                
+                // Image
+                if(txn.equipment?.latest_image?.image_url) {
+                    imgEl.src = txn.equipment.latest_image.image_url; 
                 } else {
-                     alert('เกิดข้อผิดพลาดในการโหลดรายละเอียด: ' + error.message);
+                    imgEl.src = '{{ asset("images/placeholder.webp") }}';
                 }
+            } else {
+                document.getElementById('modalEquipment').innerText = 'ไม่พบข้อมูล';
             }
-        };
+        } catch(e) {
+            console.error(e);
+            document.getElementById('modalEquipment').innerText = 'เกิดข้อผิดพลาด';
+        }
+    };
 
-        // Helper functions
-        function formatTransactionType(type) {
-             switch (type) {
-                case 'withdraw': return 'เบิก'; case 'borrow': return 'ยืม';
-                case 'borrow_temporary': return 'ยืมชั่วคราว'; case 'return': 'คืน';
-                case 'receive': return 'รับเข้า'; case 'adjust': return 'ปรับสต็อก';
-                case 'dispose': return 'จำหน่าย'; case 'lost': return 'สูญหาย';
-                case 'found': return 'ตรวจพบ'; case 'transfer_in': return 'รับโอน';
-                case 'transfer_out': return 'โอนออก';
-                default: return type ? type.charAt(0).toUpperCase() + type.slice(1) : '-';
-            }
-        }
-        function formatDateTime(dateTimeString) {
-             if (!dateTimeString) return '-';
-            try {
-                const date = new Date(dateTimeString);
-                if (isNaN(date.getTime())) return '-';
-                return date.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
-            } catch (e) { console.error('Date formatting error:', e); return '-'; }
-        }
-        function getStatusBadge(status) {
-            let bgColor = 'bg-gray-100'; let textColor = 'text-gray-800'; let text = status || 'Unknown';
-            switch (status) {
-                case 'pending': bgColor = 'bg-yellow-100'; textColor = 'text-yellow-800'; text = 'รออนุมัติ'; break;
-                case 'approved': bgColor = 'bg-blue-100'; textColor = 'text-blue-800'; text = 'อนุมัติแล้ว'; break;
-                case 'shipped': bgColor = 'bg-cyan-100'; textColor = 'text-cyan-800'; text = 'จัดส่งแล้ว'; break;
-                case 'user_confirm_pending': bgColor = 'bg-orange-100'; textColor = 'text-orange-800'; text = 'รอยืนยันรับ'; break;
-                case 'completed': bgColor = 'bg-green-100'; textColor = 'text-green-800'; text = 'เสร็จสมบูรณ์'; break;
-                case 'rejected': bgColor = 'bg-red-100'; textColor = 'text-red-800'; text = 'ปฏิเสธ'; break;
-                case 'cancelled': bgColor = 'bg-gray-100'; textColor = 'text-gray-800'; text = 'ยกเลิก'; break;
-                case 'closed': bgColor = 'bg-purple-100'; textColor = 'text-purple-800'; text = 'ปิดงาน (คืนครบ/ตัดยอด)'; break;
-            }
-            const safeText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${bgColor} ${textColor}">${safeText}</span>`;
-        }
+    window.closeDetailsModal = function() {
+        document.getElementById('detailsModal').classList.add('hidden');
+    };
 
-        // AJAX Function to fetch transactions (used for polling)
-        async function fetchTransactions(url, isPolling = false) {
-            if (isFetching && isPolling) return;
-            isFetching = true;
-            try {
-                const response = await fetch(url, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-                });
-                if (!response.ok) {
-                     console.error(`Fetch error: Server responded with status ${response.status}`);
-                     isFetching = false; return;
-                }
-                const contentType = response.headers.get("content-type");
-                if (!contentType || !contentType.includes("application/json")) {
-                    console.error(`Fetch error: Expected JSON response, but got ${contentType || 'no content type'}`);
-                    const errorText = await response.text();
-                    console.error("Response text (non-JSON):", errorText.substring(0, 500));
-                    isFetching = false; return;
-                }
-                const data = await response.json();
-                if (data.html && data.timestamp) {
-                    if (isPolling) {
-                        if (data.timestamp > currentLatestTimestamp) {
-                            currentLatestTimestamp = data.timestamp;
-                            tableBody.innerHTML = data.html;
-                        }
-                    } else {
-                        currentLatestTimestamp = data.timestamp;
-                        tableBody.innerHTML = data.html;
-                        if (data.pagination) paginationWrapper.innerHTML = data.pagination;
-                        else paginationWrapper.innerHTML = '';
-                    }
-                }
-            } catch (error) {
-                console.error('Error fetching transactions:', error);
-                if (error instanceof SyntaxError) console.error("JSON Parsing Error: The server response was not valid JSON.");
-            } finally {
-                isFetching = false;
-            }
-        }
+    // 3. Global Helpers for Inline Calls
+    window.submitConfirmShipment = (form) => confirmAction(form, 'ยืนยันส่งของ', 'ยืนยันว่าได้ส่งมอบพัสดุแล้ว?', 'warning', 'ใช่, ส่งของ', '#4f46e5');
+    window.submitConfirmReceipt = (form) => confirmAction(form, 'ยืนยันรับของ', 'ได้รับของครบถ้วนแล้ว?', 'question', 'ได้รับแล้ว', '#10b981');
+    window.submitUserCancel = (form) => confirmAction(form, 'ยกเลิกคำขอ', 'คุณต้องการยกเลิกรายการนี้?', 'warning', 'ใช่, ยกเลิก', '#ef4444');
+    window.submitAdminReject = (form) => confirmAction(form, 'ปฏิเสธคำขอ', 'ต้องการปฏิเสธรายการนี้?', 'warning', 'ยืนยันปฏิเสธ', '#ef4444');
+    window.submitAdminCancel = (form) => confirmAction(form, 'ยกเลิก (Reversal)', 'รายการนี้เสร็จสิ้นแล้ว การยกเลิกจะคืนสต็อกกลับเข้าคลัง', 'error', 'ยืนยัน Reversal', '#ef4444');
 
-        // AJAX Polling function
-        async function checkForUpdates() {
-            if (isFetching) return;
-            try {
-                const response = await fetch('{{ route('ajax.transactions.latestTimestamp') }}', {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-                });
-                if (!response.ok) { console.error(`Timestamp check error: Server responded with status ${response.status}`); return; }
-                const contentType = response.headers.get("content-type");
-                if (!contentType || !contentType.includes("application/json")) {
-                    console.error(`Timestamp check error: Expected JSON, got ${contentType || 'none'}`);
-                    const errorText = await response.text(); console.error("Response text (non-JSON):", errorText.substring(0, 500)); return;
-                }
-                let data;
-                try { data = await response.json(); }
-                catch (jsonError) { console.error("Timestamp check error: Failed to parse JSON.", jsonError); return; }
-                if (data.latest_timestamp && data.latest_timestamp > currentLatestTimestamp) {
-                    const currentUrl = new URL(window.location.href);
-                    currentUrl.searchParams.delete('page'); // Go to page 1
-                    fetchTransactions(currentUrl.toString(), true); // Fetch new data (isPolling = true)
-                }
-            } catch (error) { console.error('Error checking for updates:', error); }
-        }
-
-        // Start polling if on the 'all_history' tab
-        if ('{{ $statusFilter ?? "" }}' === 'all_history') {
-            setInterval(checkForUpdates, 15000); // Check every 15 seconds
-        }
-
-    });
 </script>
 @endpush
-

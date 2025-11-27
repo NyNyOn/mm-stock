@@ -1,264 +1,225 @@
-@forelse($transactions as $tx)
-        <tr class="transition-colors hover:bg-gray-50">
-            
-            {{-- ✅✅✅ START: ใช้ตรรกะ `match` ใหม่สำหรับคอลัมน์ "ประเภท" ✅✅✅ --}}
-            <td class="px-4 py-3">
-                @php
-                    // ตรรกะ `match` ใหม่ที่รวมทุกประเภทไว้
-                    $details = match($tx->type) {
-                        'receive'    => ['icon' => 'fa-plus', 'color' => 'green', 'title' => 'เพิ่มสต็อกใหม่'],
-                        'withdraw'   => ['icon' => 'fa-minus', 'color' => 'red', 'title' => 'เบิกอุปกรณ์'],
-                        'borrow'     => ['icon' => 'fa-tag', 'color' => 'yellow', 'title' => 'ยืมอุปกรณ์'],
-                        'return'     => ['icon' => 'fa-undo-alt', 'color' => 'blue', 'title' => 'รับคืนอุปกรณ์'],
-                        'adjust'     => ['icon' => 'fa-sliders-h', 'color' => 'gray', 'title' => 'ปรับสต็อก'],
-                        'consumable' => ['icon' => 'fa-box-open', 'color' => 'red', 'title' => 'เบิก (ไม่ต้องคืน)'],
-                        'returnable' => ['icon' => 'fa-hand-holding-heart', 'color' => 'yellow', 'title' => 'ยืม (ต้องคืน)'],
-                        'partial_return' => ['icon' => 'fa-recycle', 'color' => 'red', 'title' => 'เบิก (เหลือคืนได้)'],
+@forelse($transactions as $txn)
+    @php
+        // 1. จัดการสีแถว (Row Styling)
+        $isCancelled = in_array($txn->status, ['cancelled', 'rejected']);
+        $rowClass = $isCancelled ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50 transition-colors duration-200';
+        if (isset($statusFilter) && $statusFilter == 'admin_pending') $rowClass .= ' bg-yellow-50/30';
 
-                        // --- ประเภทที่เพิ่มเข้ามาจากตรรกะเดิม (กันพลาด) ---
-                        'borrow_temporary' => ['icon' => 'fa-stopwatch', 'color' => 'gray', 'title' => 'ยืมชั่วคราว'],
-                        'dispose' => ['icon' => 'fa-trash-alt', 'color' => 'gray', 'title' => 'จำหน่าย'],
-                        'lost' => ['icon' => 'fa-search-minus', 'color' => 'gray', 'title' => 'สูญหาย'],
-                        'found' => ['icon' => 'fa-search-plus', 'color' => 'gray', 'title' => 'ตรวจพบ'],
-                        'transfer_in' => ['icon' => 'fa-sign-in-alt', 'color' => 'gray', 'title' => 'รับโอน'],
-                        'transfer_out' => ['icon' => 'fa-sign-out-alt', 'color' => 'gray', 'title' => 'โอนออก'],
-                        // --- สิ้นสุดประเภทที่เพิ่ม ---
+        // 2. จัดการข้อความวัตถุประสงค์ (Purpose) - แปลไทย
+        $purposeText = null;
+        if (!empty($txn->purpose)) {
+            if ($txn->purpose === 'general_use') {
+                $purposeText = 'เบิกใช้งานทั่วไป';
+            } elseif ($txn->purpose === 'glpi_ticket' || str_starts_with($txn->purpose, 'glpi-')) {
+                $purposeText = $txn->glpi_ticket_id ? 'GLPI #' . $txn->glpi_ticket_id : 'อ้างอิง Ticket';
+            } else {
+                $purposeText = $txn->purpose;
+            }
+        }
+    @endphp
 
-                        default      => ['icon' => 'fa-info-circle', 'color' => 'gray', 'title' => ucfirst($tx->type)]
-                    };
-                    
-                    // ตรรกะสีที่มาจากคุณ
-                    $colorClasses = [
-                        'green' => 'bg-green-100 text-green-600', 
-                        'red' => 'bg-red-100 text-red-600', 
-                        'yellow' => 'bg-yellow-100 text-yellow-600', 
-                        'blue' => 'bg-blue-100 text-blue-600', 
-                        'gray' => 'bg-gray-100 text-gray-600'
-                    ][$details['color'] ?? 'gray']; // ใช้ 'gray' เป็น fallback
-                @endphp
-
-                <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md {{ $colorClasses }}">
-                    {{-- เพิ่ม 'fas' เพื่อให้ Font Awesome ทำงาน --}}
-                    <i class="mr-2 fas {{ $details['icon'] }}"></i>
-                    {{ $details['title'] }}
+    <tr class="{{ $rowClass }} border-b border-gray-100 last:border-0 group">
+        
+        {{-- 1. วันที่ / เวลา --}}
+        <td class="px-6 py-4 whitespace-nowrap">
+            <div class="flex flex-col">
+                <span class="text-sm font-bold text-gray-700">
+                    {{ \Carbon\Carbon::parse($txn->transaction_date)->format('d/m/Y') }}
                 </span>
-            </td>
-            {{-- ✅✅✅ END: สิ้นสุดการแก้ไขคอลัมน์ "ประเภท" ✅✅✅ --}}
-            
-            {{-- ส่วนแสดงชื่ออุปกรณ์ (คงเดิม) --}}
-            <td class="px-4 py-3 text-sm font-medium text-gray-800" style="white-space: normal; max-width: 300px; word-wrap: break-word;">
-                {{ optional($tx->equipment)->name ?? 'N/A' }}
-                <p class="text-xs text-gray-500">#TXN-{{ str_pad($tx->id, 4, '0', STR_PAD_LEFT) }}</p>
-            </td>
+                <span class="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
+                    <i class="far fa-clock text-[10px]"></i>
+                    {{ \Carbon\Carbon::parse($txn->transaction_date)->format('H:i') }} น.
+                </span>
+            </div>
+        </td>
 
-            {{-- คอลัมน์ "ผู้ใช้" (คงเดิม) --}}
-            <td class="px-4 py-3 text-sm text-gray-700">
-                @if(in_array($tx->type, ['withdraw', 'borrow', 'borrow_temporary', 'consumable', 'returnable', 'partial_return']) && $tx->user)
-                    {{-- ประเภทที่ user เป็นคนเริ่ม --}}
-                    {{ $tx->user->fullname }}
-                @elseif($tx->handler)
-                    {{-- ประเภทที่ admin เป็นคนทำ (receive, adjust, return, ฯลฯ) --}}
-                    {{ $tx->handler->fullname }}
-                    <span class="text-xs text-gray-500">(ผู้ดำเนินการ)</span>
-                @else
-                    {{ optional($tx->user)->fullname ?? (optional($tx->handler)->fullname ?? 'System') }}
-                @endif
-            </td>
-
-            <td class="px-4 py-3 text-sm text-gray-600">
-                {{ \Carbon\Carbon::parse($tx->transaction_date)->format('d/m/Y H:i') }}</td>
-
-            <td class="px-4 py-3 text-center">
-                {{-- ปุ่มรายละเอียด --}}
-                <div class="text-blue-500 cursor-pointer" onclick="showTransactionDetails({{ $tx->id }})">
-                    <i class="fas fa-info-circle"></i>
+        {{-- 2. อุปกรณ์ & วัตถุประสงค์ --}}
+        <td class="px-6 py-4">
+            <div class="flex items-start space-x-3">
+                {{-- รูปภาพ --}}
+                <div class="flex-shrink-0 h-10 w-10 group-hover:scale-105 transition-transform duration-200">
+                    <img class="h-10 w-10 rounded-lg object-cover border border-gray-200 shadow-sm" 
+                         src="{{ $txn->equipment->latestImage ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}" 
+                         alt=""
+                         onerror="this.src='{{ asset('images/placeholder.webp') }}'">
                 </div>
-            </td>
-
-            {{-- ✅✅✅ START: อัปเดตคอลัมน์ "สถานะ" ✅✅✅ --}}
-            <td class="px-4 py-3 text-center">
-                @if($tx->status == 'pending')
-                    <span class="px-2 py-1 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full">รอจัดส่ง</span>
-                @elseif($tx->status == 'shipped')
-                    <span class="px-2 py-1 text-xs font-semibold text-blue-800 bg-blue-100 rounded-full">รอผู้ใช้รับ</span>
-                @elseif($tx->status == 'completed')
-                    <span class="px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">เสร็จสมบูรณ์</span>
                 
-                {{-- 🌟 เพิ่ม 'elseif' นี้สำหรับสถานะใหม่ 🌟 --}}
-                @elseif($tx->status == 'cancelled')
-                    <span class="px-2 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full line-through">ยกเลิกแล้ว</span>
-                
-                @else
-                    <span class="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 rounded-full">{{ ucfirst($tx->status) }}</span>
-                @endif
-            </td>
-            {{-- ✅✅✅ END: อัปเดตคอลัมน์ "สถานะ" ✅✅✅ --}}
-
-
-            {{-- ✅✅✅ START: อัปเดตคอลัมน์ "จัดการ" (อัปเดตครั้งที่ 4 - เพิ่มการตรวจสอบเวลา) ✅✅✅ --}}
-            <td class="px-4 py-3 text-sm text-center">
-                
-                @if($tx->status == 'pending')
+                {{-- ข้อความรายละเอียด --}}
+                <div class="flex flex-col min-w-0">
+                    <span class="text-sm font-bold text-gray-800 truncate" title="{{ $txn->equipment->name }}">
+                        {{ $txn->equipment->name }}
+                    </span>
                     
-                    <div class="flex items-center justify-center space-x-1">
-
-                        {{-- 1. Admin: ปุ่มยืนยันจัดส่ง --}}
-                        @can('permission:manage')
-                            <form action="{{ route('transactions.adminConfirmShipment', $tx->id) }}" method="POST" class="m-0">
-                                @csrf
-                                <button type="submit" class="px-3 py-1 text-xs font-medium text-white bg-green-500 rounded-lg hover:bg-green-600">
-                                    ยืนยันจัดส่ง
-                                </button>
-                            </form>
-                        @endcan
-    
-                        {{-- 2. User (ที่ไม่ใช่ Admin): ปุ่มยกเลิก --}}
-                        @if(Auth::id() === $tx->user_id && !Auth::user()->can('permission:manage'))
-                            <form action="{{ route('transactions.userCancel', $tx->id) }}" method="POST" class="m-0" 
-                                  onsubmit="event.preventDefault(); confirmCancelPending(this);">
-                                @csrf
-                                @method('PATCH')
-                                <button type="submit" class="px-3 py-1 text-xs font-medium text-white bg-red-500 rounded-lg hover:bg-red-600">
-                                    ยกเลิก
-                                </button>
-                            </form>
-                        @endif
-    
-                        {{-- 3. Admin: ปุ่มยกเลิก (Pending) --}}
-                        @can('permission:manage')
-                            <form action="{{ route('transactions.userCancel', $tx->id) }}" method="POST" class="m-0" 
-                                  onsubmit="event.preventDefault(); confirmCancelPendingAdmin(this);">
-                                @csrf
-                                @method('PATCH')
-                                <button type="submit" class="px-2 py-1 text-xs font-medium text-white bg-red-500 rounded-lg hover:bg-red-600" title="Admin: ยกเลิกรายการ Pending">
-                                    <i class="fas fa-times"></i> ยกเลิก
-                                </button>
-                            </form>
-                        @endcan
-    
-                    </div>
-
-                @elseif($tx->status == 'shipped' && (Auth::id() === $tx->user_id || Auth::user()->can('permission:manage')))
-                    {{-- 3. Shipped: ยืนยันรับของ --}}
-                    <form action="{{ route('transactions.userConfirmReceipt', $tx->id) }}" method="POST" class="m-0">
-                        @csrf
-                        <button type="submit" class="px-3 py-1 text-xs font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600">
-                            ยืนยันรับของ
-                        </button>
-                    </form>
-                
-                @elseif($tx->status == 'completed')
-                    {{-- 4. Completed: แสดงเครื่องหมายถูก และ (ถ้าเป็น Admin) แสดงปุ่มยกเลิก (Reversal) --}}
-                    <div class="flex items-center justify-center space-x-2">
-                        <span class="text-green-500" title="รายการเสร็จสมบูรณ์">
-                            <i class="fas fa-check-circle"></i>
+                    <div class="flex flex-wrap items-center gap-2 mt-1">
+                        {{-- Serial Number Badge --}}
+                        <span class="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 font-mono">
+                            SN: {{ $txn->equipment->serial_number ?? '-' }}
                         </span>
 
-                        {{-- 🌟🌟🌟 START: อัปเดตปุ่ม Reversal ของ Admin 🌟🌟🌟 --}}
-                        @can('permission:manage')
-                            {{-- 
-                                เพิ่มเงื่อนไข:
-                                5. ต้องมี confirmed_at
-                                6. confirmed_at ต้องไม่เกิน 24 ชั่วโมง
-                            --}}
-                            @if(
-                                $tx->quantity_change < 0 && 
-                                (is_null($tx->returned_quantity) || $tx->returned_quantity == 0) &&
-                                (!empty($tx->confirmed_at) && \Carbon\Carbon::parse($tx->confirmed_at)->diffInHours(\Carbon\Carbon::now()) <= 24)
-                            )
-                                <form action="{{ route('transactions.adminCancel', $tx->id) }}" method="POST" class="m-0" 
-                                      onsubmit="event.preventDefault(); confirmCancelCompleted(this);">
-                                    @csrf
-                                    @method('PATCH')
-                                    <button type="submit" class="px-2 py-0.5 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700" title="Admin: ยกเลิกและคืนสต็อก (ภายใน 24 ชม.)">
-                                        <i class="fas fa-history"></i> ยกเลิก
-                                    </button>
-                                </form>
-                            @endif
-                        @endcan
-                        {{-- 🌟🌟🌟 END: อัปเดตปุ่ม Reversal ของ Admin 🌟🌟🌟 --}}
+                        {{-- Purpose Badge (แสดงวัตถุประสงค์อย่างเดียว) --}}
+                        @if($purposeText)
+                            <span class="text-[10px] text-blue-800 bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 truncate max-w-[150px]" title="{{ $purposeText }}">
+                                <i class="fas fa-tag mr-1 text-[9px]"></i>{{ $purposeText }}
+                            </span>
+                        @endif
                     </div>
+                    
+                    {{-- Admin View: Requester Name --}}
+                    @if(Auth::user()->can('equipment:manage') || (isset($statusFilter) && $statusFilter == 'all_history'))
+                        <div class="text-xs text-gray-500 mt-1 flex items-center">
+                            <i class="fas fa-user-circle mr-1 text-gray-400"></i> 
+                            <span class="truncate max-w-[150px]">{{ $txn->user->fullname }}</span>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </td>
 
-                @elseif($tx->status == 'closed')
-                    {{-- 5. Closed (เช่น ถูก write-off ไปแล้ว): แสดงเครื่องหมายถูก --}}
-                    <div class="flex items-center justify-center text-green-500" title="รายการปิดสมบูรณ์">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
+        {{-- 3. ประเภท (Type Badge) --}}
+        <td class="px-6 py-4 text-center">
+            @php
+                $typeMap = [
+                    'withdraw' => ['bg' => 'bg-red-100', 'text' => 'text-red-800', 'label' => 'เบิกของ', 'icon' => 'fa-minus-circle'],
+                    'borrow' => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-800', 'label' => 'ยืมใช้', 'icon' => 'fa-clock'],
+                    'return' => ['bg' => 'bg-blue-100', 'text' => 'text-blue-800', 'label' => 'คืนของ', 'icon' => 'fa-undo'],
+                    'consumable' => ['bg' => 'bg-orange-100', 'text' => 'text-orange-800', 'label' => 'เบิกสิ้นเปลือง', 'icon' => 'fa-box-open'],
+                    'returnable' => ['bg' => 'bg-indigo-100', 'text' => 'text-indigo-800', 'label' => 'ยืมคืน', 'icon' => 'fa-exchange-alt'],
+                    'partial_return' => ['bg' => 'bg-purple-100', 'text' => 'text-purple-800', 'label' => 'เบิก(คืนได้)', 'icon' => 'fa-puzzle-piece'],
+                    'add' => ['bg' => 'bg-green-100', 'text' => 'text-green-800', 'label' => 'รับเข้า', 'icon' => 'fa-plus-circle'],
+                    'receive' => ['bg' => 'bg-green-100', 'text' => 'text-green-800', 'label' => 'รับเข้า', 'icon' => 'fa-plus-circle'],
+                    'adjust' => ['bg' => 'bg-gray-100', 'text' => 'text-gray-800', 'label' => 'ปรับปรุง', 'icon' => 'fa-sliders-h'],
+                ];
+                $tc = $typeMap[$txn->type] ?? ['bg' => 'bg-gray-100', 'text' => 'text-gray-600', 'label' => ucfirst($txn->type), 'icon' => 'fa-circle'];
+            @endphp
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold {{ $tc['bg'] }} {{ $tc['text'] }}">
+                <i class="fas {{ $tc['icon'] }} mr-1.5"></i> {{ $tc['label'] }}
+            </span>
+        </td>
+
+        {{-- 4. จำนวน --}}
+        <td class="px-6 py-4 text-center">
+            <div class="flex flex-col items-center justify-center">
+                <span class="text-sm font-bold {{ $isCancelled ? 'line-through text-gray-400' : ($txn->quantity_change < 0 ? 'text-red-600' : 'text-green-600') }}">
+                    {{ $txn->quantity_change > 0 ? '+' : '' }}{{ $txn->quantity_change }}
+                </span>
+                <span class="text-[10px] text-gray-400">{{ $txn->equipment->unit->name ?? 'หน่วย' }}</span>
+            </div>
+        </td>
+
+        {{-- 5. สถานะ (Status) --}}
+        <td class="px-6 py-4 text-center">
+            @php
+                $statusMap = [
+                    'pending' => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-800', 'label' => 'รออนุมัติ', 'icon' => 'fa-hourglass-start'],
+                    'approved' => ['bg' => 'bg-blue-100', 'text' => 'text-blue-800', 'label' => 'อนุมัติแล้ว', 'icon' => 'fa-check'],
+                    'shipped' => ['bg' => 'bg-blue-100', 'text' => 'text-blue-800', 'label' => 'จัดส่งแล้ว', 'icon' => 'fa-truck'],
+                    'user_confirm_pending' => ['bg' => 'bg-orange-100', 'text' => 'text-orange-800', 'label' => 'รอรับของ', 'icon' => 'fa-box'],
+                    'completed' => ['bg' => 'bg-green-100', 'text' => 'text-green-800', 'label' => 'สำเร็จ', 'icon' => 'fa-check-circle'],
+                    
+                    // สองสถานะนี้จะถูกจัดการเป็นพิเศษด้านล่าง (Red Strikethrough)
+                    'cancelled' => ['label' => 'ยกเลิก'], 
+                    'rejected' => ['label' => 'ปฏิเสธ'],
+                ];
                 
-                @elseif($tx->status == 'cancelled')
-                    {{-- 6. Cancelled: แสดงเครื่องหมาย X --}}
-                     <div class="flex items-center justify-center text-red-500" title="รายการถูกยกเลิก">
-                        <i class="fas fa-times-circle"></i>
-                    </div>
+                $sc = $statusMap[$txn->status] ?? ['bg' => 'bg-gray-100', 'text' => 'text-gray-600', 'label' => $txn->status, 'icon' => 'fa-circle'];
+            @endphp
 
-                @else
-                    {{-- 7. สถานะอื่นๆ --}}
-                    <span class="text-xs text-gray-400">-</span>
+            @if($isCancelled)
+                {{-- 🔥 สถานะยกเลิก: สีแดง + ขีดฆ่า --}}
+                <div class="flex items-center justify-center text-red-500 font-bold text-sm opacity-80">
+                    <i class="fas fa-times-circle mr-1.5"></i>
+                    <span class="line-through decoration-2 decoration-red-300">{{ $sc['label'] }}</span>
+                </div>
+            @else
+                {{-- 🟢 สถานะปกติ: Badge --}}
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium {{ $sc['bg'] }} {{ $sc['text'] }}">
+                    @if($txn->status == 'pending')
+                        <span class="relative flex h-2 w-2 mr-1.5">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+                        </span>
+                    @else
+                        <i class="fas {{ $sc['icon'] }} mr-1.5"></i>
+                    @endif
+                    {{ $sc['label'] }}
+                </span>
+            @endif
+        </td>
+
+        {{-- 6. รายละเอียด (Detail Button) --}}
+        <td class="px-6 py-4 text-center">
+            <button onclick="showTransactionDetails({{ $txn->id }})" 
+                    class="text-gray-400 hover:text-blue-600 transition-all duration-200 transform hover:scale-110 focus:outline-none p-1 rounded-full hover:bg-blue-50"
+                    title="ดูรายละเอียด">
+                <i class="fas fa-info-circle text-xl"></i>
+            </button>
+        </td>
+
+        {{-- 7. จัดการ (Actions) --}}
+        <td class="px-6 py-4 text-center">
+            <div class="flex items-center justify-center gap-2">
+                
+                {{-- ADMIN: Confirm Shipment --}}
+                @if($txn->status == 'pending' && Auth::user()->can('equipment:manage'))
+                    <form action="{{ route('transactions.adminConfirmShipment', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitConfirmShipment(this);">
+                        @csrf 
+                        <button type="submit" class="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-sm transition-colors hover:shadow-md" title="ยืนยันส่งของ">
+                            <i class="fas fa-paper-plane text-xs"></i>
+                        </button>
+                    </form>
+                    <form action="{{ route('transactions.userCancel', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitAdminReject(this);">
+                        @method('PATCH') @csrf 
+                        <button type="submit" class="p-1.5 bg-white border border-red-200 text-red-500 rounded-md hover:bg-red-50 transition-colors" title="ปฏิเสธ">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
+                    </form>
                 @endif
-            </td>
-            {{-- ✅✅✅ END: อัปเดตคอลัมน์ "จัดการ" (อัปเดตครั้งที่ 4) ✅✅✅ --}}
 
-        </tr>
-    @empty
-        <tr>
-            <td colspan="7" class="p-8 text-center text-gray-500">ไม่พบประวัติการทำธุรกรรม</td>
-        </tr>
-    @endforelse
+                {{-- USER: Confirm Receipt --}}
+                @if(in_array($txn->status, ['shipped', 'user_confirm_pending']) && Auth::id() == $txn->user_id)
+                    <form action="{{ route('transactions.userConfirmReceipt', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitConfirmReceipt(this);">
+                        @csrf 
+                        <button type="submit" class="inline-flex items-center px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-md hover:bg-green-600 shadow-sm transition-all hover:shadow-md" title="ได้รับของแล้ว">
+                            <i class="fas fa-check mr-1.5"></i> รับของ
+                        </button>
+                    </form>
+                @endif
 
-    {{-- 🌟🌟🌟 START: เพิ่ม JavaScript Functions 🌟🌟🌟 --}}
-    <script>
-        // (ฟังก์ชันเหล่านี้จะถูกเรียกโดย onsubmit ที่เราเพิ่งเพิ่มเข้าไป)
+                {{-- User Cancel --}}
+                @if($txn->status == 'pending' && Auth::id() == $txn->user_id)
+                    <form action="{{ route('transactions.userCancel', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitUserCancel(this);">
+                        @method('PATCH') @csrf 
+                        <button class="text-xs font-medium text-red-500 hover:text-red-700 underline decoration-red-200 underline-offset-2 hover:decoration-red-500 transition-all">
+                            ยกเลิก
+                        </button>
+                    </form>
+                @endif
 
-        function confirmCancelPending(formElement) {
-            Swal.fire({
-                title: 'ยกเลิกรายการ?',
-                text: 'คุณต้องการยกเลิกรายการเบิกนี้ใช่หรือไม่?',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33', // Red
-                cancelButtonColor: '#3085d6', // Blue
-                confirmButtonText: 'ใช่, ยกเลิกเลย',
-                cancelButtonText: 'ปิด'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    formElement.submit(); // Submit the form
-                }
-            });
-        }
+                {{-- Admin Reversal --}}
+                @can('equipment:manage')
+                    @if($txn->status == 'completed' && isset($txn->confirmed_at) && \Carbon\Carbon::parse($txn->confirmed_at)->diffInHours(now()) < 24 && $txn->quantity_change < 0)
+                        <form action="{{ route('transactions.adminCancel', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitAdminCancel(this);">
+                            @method('PATCH') @csrf
+                            <button type="submit" class="text-xs text-red-400 hover:text-red-600 flex items-center gap-1 px-2 py-1 rounded hover:bg-red-50 transition-colors" title="Reversal (ภายใน 24 ชม.)">
+                                <i class="fas fa-history"></i> ยกเลิก
+                            </button>
+                        </form>
+                    @endif
+                @endcan
 
-        function confirmCancelPendingAdmin(formElement) {
-            Swal.fire({
-                title: 'Admin: ยกเลิกรายการ Pending?',
-                text: 'คุณต้องการยกเลิกรายการที่กำลัง Pending นี้ใช่หรือไม่? (สต็อกจะไม่ถูกคืนเพราะยังไม่ได้ตัด)',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'ใช่, ยกเลิก',
-                cancelButtonText: 'ปิด'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    formElement.submit();
-                }
-            });
-        }
-
-        function confirmCancelCompleted(formElement) {
-            Swal.fire({
-                title: '!!! ⚠️ คำเตือน (Admin) !!!',
-                // (ใช้ html แทน text เพื่อให้ขึ้นบรรทัดใหม่ได้)
-                html: 'การดำเนินการนี้จะ <strong>[ยกเลิก]</strong> รายการที่เสร็จสมบูรณ์ และ <strong>[คืนสต็อก]</strong> กลับเข้าคลัง<br><br>คุณแน่ใจหรือไม่ว่าต้องการยกเลิกรายการนี้?',
-                icon: 'error',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'ใช่, ยืนยันยกเลิกและคืนสต็อก',
-                cancelButtonText: 'ปิด'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    formElement.submit();
-                }
-            });
-        }
-    </script>
-    {{-- 🌟🌟🌟 END: เพิ่ม JavaScript Functions 🌟🌟🌟 --}}
+            </div>
+        </td>
+    </tr>
+@empty
+    <tr>
+        <td colspan="7" class="px-6 py-16 text-center bg-white">
+            <div class="flex flex-col items-center justify-center text-gray-400">
+                <div class="bg-gray-50 p-4 rounded-full mb-3">
+                    <i class="fas fa-inbox text-3xl text-gray-300"></i>
+                </div>
+                <p class="text-sm font-medium text-gray-500">ไม่พบข้อมูลรายการ</p>
+                <p class="text-xs text-gray-400 mt-1">ลองเปลี่ยนตัวกรองหรือค้นหาใหม่อีกครั้ง</p>
+            </div>
+        </td>
+    </tr>
+@endforelse
