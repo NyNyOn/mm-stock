@@ -120,9 +120,10 @@
                             <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100" title="{{ $item->name }}">{{ Str::limit($item->name, 40) }}</h3>
                             <p class="text-sm text-gray-500 dark:text-gray-400">{{ $item->serial_number ?? 'N/A' }}</p>
                             
-                            {{-- แสดงดาวเหลือง 5 ดวง + จำนวนรีวิว --}}
+                            {{-- แสดงดาวเหลือง 5 ดวง + จำนวนรีวิว (แก้ไขให้ดึง rating_score) --}}
                             @php
-                                $avgRating = $item->ratings_avg_rating ?? $item->ratings->avg('rating') ?? 0;
+                                // ✅ [FIXED] ใช้ rating_score แทน rating เดิม
+                                $avgRating = $item->ratings_avg_rating_score ?? $item->ratings->avg('rating_score') ?? 0;
                                 $ratingCount = $item->ratings->count() ?? 0;
                             @endphp
                             <div class="flex items-center mt-2 space-x-0.5" title="คะแนนเฉลี่ย: {{ number_format($avgRating, 1) }}">
@@ -181,16 +182,16 @@
                                 @endphp
                                 @if ($btnData)
                                     <button class="{{ $target_class }} inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed {{ $btn_class }} @if($add_animation_class) btn-pulse-shadow @endif"
-                                        {!! $btn_onclick_attr !!} 
-                                        @if($btn_disabled) disabled @endif 
-                                        title="{{ $btn_title }}"
-                                        data-equipment-id="{{ $item->id }}" 
-                                        data-type="{{ $btnData['type'] }}" 
-                                        data-name="{{ $item->name }}" 
-                                        data-quantity="{{ $item->quantity }}" 
-                                        data-unit="{{ optional($item->unit)->name }}" 
-                                        data-dept-key="{{ $currentDeptKey }}">
-                                        <i class="mr-1 {{ $btnData['icon'] }}"></i> {{ $btnData['text'] }}
+                                            {!! $btn_onclick_attr !!} 
+                                            @if($btn_disabled) disabled @endif 
+                                            title="{{ $btn_title }}"
+                                            data-equipment-id="{{ $item->id }}" 
+                                            data-type="{{ $btnData['type'] }}" 
+                                            data-name="{{ $item->name }}" 
+                                            data-quantity="{{ $item->quantity }}" 
+                                            data-unit="{{ optional($item->unit)->name }}" 
+                                            data-dept-key="{{ $currentDeptKey }}">
+                                            <i class="mr-1 {{ $btnData['icon'] }}"></i> {{ $btnData['text'] }}
                                     </button>
                                 @endif
                             </div>

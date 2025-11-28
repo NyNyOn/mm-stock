@@ -1,31 +1,33 @@
 <?php
 
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\EquipmentController; // Ensure EquipmentController is imported
-use App\Http\Controllers\CategoryController;
-use App\Http\Controllers\LocationController;
-use App\Http\Controllers\UnitController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\TransactionController;
-use App\Http\Controllers\ReturnController;
-use App\Http\Controllers\AjaxController;
-use App\Http\Controllers\ReportController;
-use App\Http\Controllers\ReceiveController;
-use App\Http\Controllers\MaintenanceController; // ✅ 1. (มีอยู่แล้วในไฟล์ที่คุณให้มา)
+use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\TransactionController; // ✅ ตรวจสอบว่ามีบรรทัดนี้
 use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\StockCheckController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\ReturnController;
+use App\Http\Controllers\ConsumableReturnController;
+use App\Http\Controllers\DeadstockController;
 use App\Http\Controllers\DisposalController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\GroupManagementController;
-use App\Http\Controllers\StockCheckController; // ✅ (มีอยู่แล้วในไฟล์ที่คุณให้มา)
-use App\Http\Controllers\ConsumableReturnController;
-use App\Http\Controllers\JobOrderController;
-use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\HelpController;
-use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ApiTokenController;
+use App\Http\Controllers\LdapUserController;
+use App\Http\Controllers\AjaxController;
+use App\Http\Controllers\JobOrderController;
 use App\Http\Controllers\PurchaseTrackController;
+use App\Http\Controllers\ReceiveController;
+use App\Http\Controllers\LocationController;
 use App\Http\Controllers\ChangelogController;
+use App\Http\Controllers\HelpController;
+use App\Http\Controllers\MaintenanceController;
+use App\Http\Controllers\ImageController;
 use App\Http\Controllers\InventorySearchController;
 
 // --- Authentication Routes ---
@@ -96,6 +98,8 @@ Route::middleware('auth')->group(function () {
 
     // --- Admin & Staff Routes ---
     Route::resource('equipment', EquipmentController::class)->middleware('can:equipment:view');
+    
+    // ✅ [FIXED] เปลี่ยนจาก rateTransaction เป็น rate ให้ตรงกับ Controller ใหม่
     Route::post('/transactions/{transaction}/rate', [TransactionController::class, 'rateTransaction'])
         ->name('transactions.rate');
 
@@ -130,7 +134,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/{stockCheck}', [StockCheckController::class, 'show'])->name('show');
         Route::get('/{stockCheck}/perform', [StockCheckController::class, 'perform'])->name('perform');
         Route::put('/{stockCheck}', [StockCheckController::class, 'update'])->name('update');
-               
+                
     });
 
     // Purchase Order by Job

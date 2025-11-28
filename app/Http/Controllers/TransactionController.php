@@ -92,7 +92,7 @@ class TransactionController extends Controller
             $statusFilter = $request->query('status', $defaultTab);
 
             // 3. Query Builder
-            $query = Transaction::with(['equipment.latestImage', 'user', 'handler'])
+            $query = Transaction::with(['equipment.latestImage', 'user', 'handler', 'rating']) // Eager load rating
                                 ->orderBy('transaction_date', 'desc');
 
             // --- Logic การกรองข้อมูลตาม Tab ---
@@ -195,7 +195,8 @@ class TransactionController extends Controller
         
         try { 
             if (method_exists(Equipment::class, 'ratings')) {
-                $query->withAvg('ratings', 'rating');
+                // ✅ [Fixed] ใช้ rating_score แทน rating เดิม
+                $query->withAvg('ratings', 'rating_score');
                 $query->withCount('ratings');
             }
         } catch (\Throwable $e) { }
@@ -221,7 +222,9 @@ class TransactionController extends Controller
                 $item->image_url = asset('images/placeholder.webp');
             }
             $item->unit_name = $item->unit->name ?? 'N/A';
-            $item->avg_rating = $item->ratings_avg_rating ? (float)$item->ratings_avg_rating : 0;
+            
+            // ✅ [Fixed] รับค่า rating_score จาก alias ที่ Eloquent สร้างให้
+            $item->avg_rating = $item->ratings_avg_rating_score ? (float)$item->ratings_avg_rating_score : 0;
             $item->rating_count = $item->ratings_count ?? 0;
             
             // ส่ง Flag Frozen กลับไปให้ Frontend
@@ -645,39 +648,60 @@ class TransactionController extends Controller
             ->get();
     }
 
+    /**
+     * Store rating for a transaction (New System)
+     * ✅ RENAME: rateTransaction (เพื่อให้ตรงกับ Route ที่คุณใช้อยู่)
+     */
     public function rateTransaction(Request $request, Transaction $transaction)
     {
-        if (Auth::id() !== $transaction->user_id) return response()->json(['success' => false, 'message' => 'ไม่มีสิทธิ์'], 403);
-        
-        if ($transaction->rating()->exists()) {
-            return response()->json(['success' => false, 'message' => 'รายการนี้ประเมินไปแล้ว'], 400);
+        // 1. ตรวจสอบสิทธิ์
+        if (Auth::id() !== $transaction->user_id) {
+            return response()->json(['success' => false, 'message' => 'ไม่มีสิทธิ์ทำรายการนี้'], 403);
         }
 
+        // 2. ตรวจสอบข้อมูล
         $validator = Validator::make($request->all(), [
-            'rating' => 'required|integer|min:1|max:5',
-            'rating_comment' => 'nullable|string|max:500'
+            'q1' => 'required|integer|in:1,2,3',
+            'q2' => 'required|integer|in:1,2,3',
+            'q3' => 'required|integer|in:1,2,3',
+            'comment' => 'nullable|string|max:500',
         ]);
 
-        if ($validator->fails()) return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
+        }
+
+        // 3. คำนวณคะแนนด้วยสูตรใหม่ (Model Helper)
+        $score = \App\Models\EquipmentRating::calculateScore($request->q1, $request->q2, $request->q3);
 
         DB::beginTransaction();
         try {
-            EquipmentRating::create([
-                'transaction_id' => $transaction->id,
-                'equipment_id' => $transaction->equipment_id,
-                'rating' => (int) $request->input('rating'),
-                'comment' => $request->input('rating_comment'),
-            ]);
-            
-            DB::commit();
-            
-            $remainingCount = $this->getUnratedTransactions(Auth::id())->count();
-            return response()->json(['success' => true, 'message' => 'บันทึกคะแนนเรียบร้อย', 'remaining_count' => $remainingCount]);
+            // 4. บันทึกข้อมูลลงฐานข้อมูล
+            EquipmentRating::updateOrCreate(
+                ['transaction_id' => $transaction->id],
+                [
+                    'equipment_id' => $transaction->equipment_id,
+                    'q1_answer' => $request->q1,
+                    'q2_answer' => $request->q2,
+                    'q3_answer' => $request->q3,
+                    'rating_score' => $score, // บันทึกค่าทศนิยม เช่น 3.67 หรือ null
+                    'comment' => $request->comment,
+                    'rated_at' => now(), // ✅ มี column นี้ใน DB แล้ว
+                ]
+            );
 
-        } catch (\Exception $e) {
+            DB::commit();
+            return response()->json(['success' => true, 'message' => 'บันทึกการประเมินเรียบร้อยแล้ว']);
+
+        } catch (\Throwable $e) {
             DB::rollBack();
             Log::error("Rate Error: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'บันทึกไม่สำเร็จ'], 500);
+            
+            // ส่ง Error จริงกลับไปแสดงที่หน้าจอ (เพื่อ Debug ถ้ามีปัญหาอีก)
+            return response()->json([
+                'success' => false, 
+                'message' => 'System Error: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

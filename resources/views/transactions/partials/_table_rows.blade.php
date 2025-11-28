@@ -146,7 +146,50 @@
             @endif
         </td>
 
-        {{-- 6. รายละเอียด (Detail Button) --}}
+        {{-- [NEW] 6. คะแนน (Rating) --}}
+        <td class="px-6 py-4 text-center whitespace-nowrap">
+            @if($txn->status === 'completed' && in_array($txn->type, ['consumable', 'returnable', 'partial_return', 'borrow', 'withdraw']))
+                @if($txn->rating)
+                    @php $score = $txn->rating->rating_score; @endphp
+                    <div class="flex flex-col items-center justify-center cursor-help" title="คะแนนเฉลี่ย: {{ is_null($score) ? 'N/A' : number_format($score, 2) }}">
+                        @if(is_null($score))
+                            {{-- กรณีเลือก "ยังไม่เคยใช้งาน" --}}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                                📦 ยังไม่ใช้
+                            </span>
+                        @else
+                            {{-- กรณีมีคะแนน --}}
+                            <div class="flex text-yellow-400 space-x-0.5">
+                                @for($i=1; $i<=5; $i++)
+                                    @if($score >= $i)
+                                        <i class="fas fa-star text-[10px]"></i>
+                                    @elseif($score >= $i - 0.5)
+                                        <i class="fas fa-star-half-alt text-[10px]"></i>
+                                    @else
+                                        <i class="far fa-star text-gray-300 text-[10px]"></i>
+                                    @endif
+                                @endfor
+                            </div>
+                            <span class="text-[10px] font-bold text-gray-500 mt-0.5">({{ number_format($score, 1) }})</span>
+                        @endif
+                    </div>
+                @else
+                    {{-- ยังไม่ได้ประเมิน --}}
+                    @if(Auth::id() === $txn->user_id)
+                        <button onclick="openRatingModal('{{ route('transactions.rate', $txn->id) }}', '{{ $txn->type == 'borrow' ? 'borrow' : ($txn->equipment->is_consumable ? 'one_way' : 'return_consumable') }}')" 
+                                class="text-indigo-600 hover:text-indigo-800 text-xs font-bold hover:underline transition-all flex items-center justify-center gap-1 mx-auto">
+                            <i class="far fa-edit"></i> ประเมิน
+                        </button>
+                    @else
+                        <span class="text-gray-300 text-xs">-</span>
+                    @endif
+                @endif
+            @else
+                <span class="text-gray-300 text-xs">-</span>
+            @endif
+        </td>
+
+        {{-- 7. รายละเอียด (Detail Button) --}}
         <td class="px-6 py-4 text-center">
             <button onclick="showTransactionDetails({{ $txn->id }})" 
                     class="text-gray-400 hover:text-blue-600 transition-all duration-200 transform hover:scale-110 focus:outline-none p-1 rounded-full hover:bg-blue-50"
@@ -155,7 +198,7 @@
             </button>
         </td>
 
-        {{-- 7. จัดการ (Actions) --}}
+        {{-- 8. จัดการ (Actions) --}}
         <td class="px-6 py-4 text-center">
             <div class="flex items-center justify-center gap-2">
                 
@@ -212,7 +255,7 @@
     </tr>
 @empty
     <tr>
-        <td colspan="7" class="px-6 py-16 text-center bg-white">
+        <td colspan="8" class="px-6 py-16 text-center bg-white">
             <div class="flex flex-col items-center justify-center text-gray-400">
                 <div class="bg-gray-50 p-4 rounded-full mb-3">
                     <i class="fas fa-inbox text-3xl text-gray-300"></i>
