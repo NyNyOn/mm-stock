@@ -524,17 +524,27 @@ class TransactionController extends Controller
 
     public function userConfirmReceipt(Request $request, Transaction $transaction)
     {
-        if (Auth::id() !== $transaction->user_id && !Auth::user()->can('permission:manage')) return back()->with('error', 'ไม่มีสิทธิ์');
+        // ✅ [FIXED] อนุญาตให้ Owner หรือ Admin (permission:manage) กดรับได้
+        if (Auth::id() !== $transaction->user_id && !Auth::user()->can('permission:manage')) {
+            return back()->with('error', 'ไม่มีสิทธิ์ทำรายการนี้');
+        }
 
         if (in_array($transaction->status, ['shipped', 'user_confirm_pending'])) {
             DB::beginTransaction();
             try {
-                $transaction->update([
+                $updateData = [
                     'user_confirmed_at' => now(), 
                     'confirmed_at' => now(), 
                     'status' => 'completed',
                     'handler_id' => $transaction->handler_id ?? Auth::id()
-                ]);
+                ];
+
+                // ถ้าเป็น Admin กดรับแทน ให้ใส่ Note
+                if (Auth::id() !== $transaction->user_id) {
+                    $updateData['notes'] = $transaction->notes . "\n[System: Admin " . Auth::user()->fullname . " ยืนยันรับของแทน]";
+                }
+
+                $transaction->update($updateData);
 
                 if ($transaction->type === 'return') {
                     Equipment::where('id', $transaction->equipment_id)->increment('quantity', $transaction->quantity_change);
@@ -543,8 +553,11 @@ class TransactionController extends Controller
                 try { (new SynologyService())->notify(new UserConfirmedReceipt($transaction->load('equipment', 'user', 'handler'))); } catch (\Exception $e) {}
 
                 DB::commit();
-                return back()->with('success', 'ยืนยันเรียบร้อย');
-            } catch (\Exception $e) { DB::rollBack(); return back()->with('error', 'Error: ' . $e->getMessage()); }
+                return back()->with('success', 'ยืนยันรับของเรียบร้อย' . (Auth::id() !== $transaction->user_id ? ' (ดำเนินการแทนผู้ใช้)' : ''));
+            } catch (\Exception $e) { 
+                DB::rollBack(); 
+                return back()->with('error', 'Error: ' . $e->getMessage()); 
+            }
         }
         return back()->with('error', 'สถานะไม่ถูกต้อง');
     }
@@ -650,12 +663,12 @@ class TransactionController extends Controller
 
     /**
      * Store rating for a transaction (New System)
-     * ✅ RENAME: rateTransaction (เพื่อให้ตรงกับ Route ที่คุณใช้อยู่)
+     * ✅ NAME: rateTransaction (ตรงกับ Route)
      */
     public function rateTransaction(Request $request, Transaction $transaction)
     {
-        // 1. ตรวจสอบสิทธิ์
-        if (Auth::id() !== $transaction->user_id) {
+        // 1. ตรวจสอบสิทธิ์: ให้เจ้าของรายการ หรือ Admin (เผื่อในอนาคต)
+        if (Auth::id() !== $transaction->user_id && !Auth::user()->can('equipment:manage')) {
             return response()->json(['success' => false, 'message' => 'ไม่มีสิทธิ์ทำรายการนี้'], 403);
         }
 
@@ -669,6 +682,11 @@ class TransactionController extends Controller
 
         if ($validator->fails()) {
             return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
+        }
+
+        // เพิ่มการตรวจสอบ Model Method เพื่อป้องกัน Error 500 กรณีลืมอัปเดต Model
+        if (!method_exists(\App\Models\EquipmentRating::class, 'calculateScore')) {
+             return response()->json(['success' => false, 'message' => 'System Error: Please update App\Models\EquipmentRating.php to include calculateScore method.'], 500);
         }
 
         // 3. คำนวณคะแนนด้วยสูตรใหม่ (Model Helper)

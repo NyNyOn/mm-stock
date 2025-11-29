@@ -146,7 +146,7 @@
             @endif
         </td>
 
-        {{-- [NEW] 6. คะแนน (Rating) --}}
+        {{-- 6. คะแนน (Rating) --}}
         <td class="px-6 py-4 text-center whitespace-nowrap">
             @if($txn->status === 'completed' && in_array($txn->type, ['consumable', 'returnable', 'partial_return', 'borrow', 'withdraw']))
                 @if($txn->rating)
@@ -174,7 +174,7 @@
                         @endif
                     </div>
                 @else
-                    {{-- ยังไม่ได้ประเมิน --}}
+                    {{-- ยังไม่ได้ประเมิน (โชว์เฉพาะเจ้าของรายการ) --}}
                     @if(Auth::id() === $txn->user_id)
                         <button onclick="openRatingModal('{{ route('transactions.rate', $txn->id) }}', '{{ $txn->type == 'borrow' ? 'borrow' : ($txn->equipment->is_consumable ? 'one_way' : 'return_consumable') }}')" 
                                 class="text-indigo-600 hover:text-indigo-800 text-xs font-bold hover:underline transition-all flex items-center justify-center gap-1 mx-auto">
@@ -218,12 +218,18 @@
                     </form>
                 @endif
 
-                {{-- USER: Confirm Receipt --}}
-                @if(in_array($txn->status, ['shipped', 'user_confirm_pending']) && Auth::id() == $txn->user_id)
+                {{-- USER OR ADMIN: Confirm Receipt --}}
+                @if(in_array($txn->status, ['shipped', 'user_confirm_pending']) && (Auth::id() == $txn->user_id || Auth::user()->can('permission:manage')))
                     <form action="{{ route('transactions.userConfirmReceipt', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitConfirmReceipt(this);">
                         @csrf 
-                        <button type="submit" class="inline-flex items-center px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-md hover:bg-green-600 shadow-sm transition-all hover:shadow-md" title="ได้รับของแล้ว">
-                            <i class="fas fa-check mr-1.5"></i> รับของ
+                        <button type="submit" 
+                                class="inline-flex items-center px-3 py-1.5 {{ Auth::id() == $txn->user_id ? 'bg-green-500 hover:bg-green-600' : 'bg-purple-500 hover:bg-purple-600' }} text-white text-xs font-bold rounded-md shadow-sm transition-all hover:shadow-md" 
+                                title="{{ Auth::id() == $txn->user_id ? 'ได้รับของแล้ว' : 'ยืนยันแทนผู้ใช้' }}">
+                            @if(Auth::id() == $txn->user_id)
+                                <i class="fas fa-check mr-1.5"></i> รับของ
+                            @else
+                                <i class="fas fa-user-check mr-1.5"></i> รับแทน
+                            @endif
                         </button>
                     </form>
                 @endif
