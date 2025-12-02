@@ -96,9 +96,8 @@
                                             <span class="block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">คงเหลือ: {{ $item->stock_sum_quantity }} {{ optional($item->unit)->name }}</span>
                                             
                                             <div class="mt-auto pt-2 flex gap-1">
-                                                {{-- ✅ Live Search: เช็คแผนกเทียบกับ Default (หรือ Current) --}}
+                                                {{-- ✅ Live Search: เช็คแผนก --}}
                                                 @php
-                                                    // เช็คว่าของชิ้นนี้ตรงกับแผนกหลัก (Default) หรือไม่
                                                     $isSameDept = ($result['dept_key'] == $defaultDeptKey);
                                                     $isDisabled = ($item->stock_sum_quantity <= 0) || !$isSameDept;
                                                     
@@ -109,11 +108,22 @@
                                                         $btnTitle = 'เป็นของแผนก ' . $result['dept_name'];
                                                         $btnOnClick = "handleOtherDeptClick('{$result['dept_name']}')";
                                                     } else {
-                                                        $btnClass = 'bg-indigo-600 hover:bg-indigo-700 text-white';
-                                                        $btnText = 'เบิก';
-                                                        $btnIcon = 'fas fa-bolt';
+                                                        // 🎨 COLOR UPDATE: Live Search
+                                                        $btnStates = [ 
+                                                            'consumable' => [ 'text' => 'เบิกด่วน', 'icon' => 'fas fa-bolt', 'class' => 'bg-red-600 hover:bg-red-700' ], 
+                                                            'returnable' => [ 'text' => 'ยืมใช้', 'icon' => 'fas fa-hand-holding', 'class' => 'bg-blue-600 hover:bg-blue-700' ], 
+                                                            'partial_return' => [ 'text' => 'เบิก', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600' ], 
+                                                            'unset' => [ 'text' => 'รอระบุ', 'icon' => 'fas fa-clock', 'class' => 'bg-gray-400 cursor-not-allowed' ] 
+                                                        ];
+                                                        
+                                                        $typeKey = $item->withdrawal_type ?? 'unset';
+                                                        $state = $btnStates[$typeKey] ?? $btnStates['unset'];
+                                                        
+                                                        $btnClass = $state['class'] . ' text-white';
+                                                        $btnText = $state['text'];
+                                                        $btnIcon = $state['icon'];
                                                         $btnTitle = 'คลิกเพื่อเบิก';
-                                                        $btnOnClick = "handleTransaction({$item->id}, 'consumable', '" . addslashes($item->name) . "', {$item->stock_sum_quantity}, '" . optional($item->unit)->name . "', '{$result['dept_key']}')";
+                                                        $btnOnClick = "handleTransaction({$item->id}, '{$typeKey}', '" . addslashes($item->name) . "', {$item->stock_sum_quantity}, '" . optional($item->unit)->name . "', '{$result['dept_key']}')";
                                                     }
                                                 @endphp
                                                 
@@ -177,9 +187,8 @@
                             <div class="pt-4 mt-auto space-y-2">
                                 @php
                                     // 🌟 FIXED LOGIC: ตรวจสอบแผนกปัจจุบัน เทียบกับ แผนกหลัก (Default)
-                                    // ถ้าเราดูหน้าแผนกอื่น ($currentDeptKey) ที่ไม่ใช่แผนกหลัก ($defaultDeptKey) -> ห้ามเบิก
-                                    
-                                    $isSameDept = ($currentDeptKey == $defaultDeptKey);
+                                    $itemDeptKey = $item->dept_key ?? $currentDeptKey; 
+                                    $isSameDept = ($itemDeptKey == $currentDeptKey);
 
                                     // ถ้าไม่ตรง ให้หาชื่อแผนกที่กำลังดูอยู่มาแสดง
                                     $viewingDeptName = $departments[$currentDeptKey]['name'] ?? 'แผนกอื่น';
@@ -202,24 +211,23 @@
                                         $btnTitle = "รายการนี้เป็นของ {$viewingDeptName} คุณไม่สามารถเบิกได้";
                                         $btnOnClick = "handleOtherDeptClick('{$viewingDeptName}')";
                                     } elseif ($isDisabled) {
-                                        // กรณีถูกบล็อกด้วยเงื่อนไขอื่น (สต็อก/ค้างรับ)
                                         $btnClass = 'bg-gray-400 text-gray-600 cursor-not-allowed';
                                         $btnIcon = $isStockEmpty ? 'fas fa-times' : 'fas fa-clock';
                                         $btnText = 'เบิกไม่ได้';
                                         $btnTitle = $isStockEmpty ? 'สินค้าหมดสต็อก' : 'กรุณายืนยันการรับของที่ค้างอยู่ก่อน';
                                         $btnOnClick = '';
                                     } else {
-                                        // กรณีปกติ
+                                        // กรณีปกติ - COLOR UPDATE
                                         $btnStates = [ 
-                                            'consumable' => [ 'text' => 'เบิกด่วน', 'icon' => 'fas fa-bolt', 'class' => 'bg-indigo-600 hover:bg-indigo-700' ], 
-                                            'returnable' => [ 'text' => 'ยืมใช้', 'icon' => 'fas fa-hand-holding', 'class' => 'bg-purple-600 hover:bg-purple-700' ], 
-                                            'partial_return' => [ 'text' => 'เบิก', 'icon' => 'fas fa-box-open', 'class' => 'bg-blue-600 hover:bg-blue-700' ], 
+                                            'consumable' => [ 'text' => 'เบิกด่วน', 'icon' => 'fas fa-bolt', 'class' => 'bg-red-600 hover:bg-red-700' ], 
+                                            'returnable' => [ 'text' => 'ยืมใช้', 'icon' => 'fas fa-hand-holding', 'class' => 'bg-blue-600 hover:bg-blue-700' ], 
+                                            'partial_return' => [ 'text' => 'เบิก', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600' ], 
                                             'unset' => [ 'text' => 'รอระบุ', 'icon' => 'fas fa-clock', 'class' => 'bg-gray-400 cursor-not-allowed' ] 
                                         ];
                                         
                                         $typeKey = $item->withdrawal_type ?? 'unset';
                                         $state = $btnStates[$typeKey] ?? $btnStates['unset'];
-                                        $btnClass = $state['class'];
+                                        $btnClass = $state['class'] . ' text-white';
                                         $btnIcon = $state['icon'];
                                         $btnText = $state['text'];
                                         $btnTitle = 'คลิกเพื่อทำรายการ';
@@ -343,6 +351,15 @@
 {{-- Scanner Modal --}}
 <div class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75" id="scanner-modal"><div class="w-full max-w-md p-6 mx-4 bg-white rounded-2xl soft-card animate-slide-up-soft dark:bg-gray-800"><div class="flex items-start justify-between pb-4 border-b border-gray-200 dark:border-gray-700"><h3 class="text-xl font-bold dark:text-gray-100">ค้นหาด้วย QR Code</h3><button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onclick="closeScannerModal()"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div><div class="py-5"><p class="mb-4 text-center text-gray-600 dark:text-gray-300">กรุณาหันกล้องไปที่ QR Code</p><div id="qr-reader" class="border rounded-lg overflow-hidden dark:border-gray-600" style="width: 100%;"></div></div><div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700"><button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-600 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-500" onclick="closeScannerModal()">ยกเลิก</button></div></div></div>
 
+{{-- ✅✅✅ ประกาศตัวแปร URL ให้ไฟล์ JS ใช้ (แก้ 404) ✅✅✅ --}}
+<script>
+    window.laravelRoutes = {
+        ajaxHandler: "{{ route('ajax.handler') }}",
+        checkStatus: "{{ route('transactions.check_status') }}",
+        bulkWithdraw: "{{ route('transactions.bulkWithdraw') }}"
+    };
+</script>
+
 @endsection
 
 @push('scripts')
@@ -416,10 +433,8 @@
         showModal('transaction-details-modal');
     }
 
-    // ✅ FIXED: ปรับปรุงฟังก์ชัน Submit ให้จัดการ Error และส่ง requestor_id เป็น null/ID ได้ถูกต้อง
     async function submitTransaction() {
         const requestorType = $('input[name="requestor_type"]:checked').val();
-        // ถ้าเบิกให้ตัวเอง (self) ต้องส่ง requestor_id เป็น null
         const requestorId = (requestorType === 'other') ? $('#modal_requestor_id').val() : null;
         
         const equipmentId = document.getElementById('modal_equipment_id').value;
@@ -435,7 +450,6 @@
         if (!quantity || quantity <= 0) return Swal.fire('ข้อมูลไม่ถูกต้อง!', 'กรุณาระบุจำนวนที่ต้องการอย่างน้อย 1', 'warning');
         if (quantity > maxQuantity) return Swal.fire('จำนวนเกินสต็อก!', `คุณสามารถเบิก/ยืมได้สูงสุด ${maxQuantity} ${unitName}`, 'warning');
         
-        // ตรวจสอบ Requestor ID (ถ้าเป็น 'other' และไม่มี ID)
         if (requestorType === 'other' && (!requestorId || requestorId === '')) {
             return Swal.fire('ข้อมูลไม่ครบ!', 'กรุณาเลือกชื่อผู้ใช้ที่ต้องการเบิกให้', 'warning');
         }
@@ -454,7 +468,7 @@
                     notes: '', 
                     quantity: quantity, 
                     requestor_type: requestorType, 
-                    requestor_id: requestorId, // ส่ง null หรือ ID ตัวเลข
+                    requestor_id: requestorId, 
                     dept_key: deptKey 
                 })
             });
@@ -472,10 +486,8 @@
                       return;
                 }
                 
-                // ✅ แสดง Validation Error ที่ถูกต้องจาก Server
                 let errorMsg = data.message || `ไม่สามารถทำรายการได้ (${response.status})`;
                 if (response.status === 422 && data.errors) {
-                    // Collect all validation errors and display them clearly
                     let errorDetails = Object.values(data.errors).map(arr => arr.join('<br>')).join('<br>');
                     errorMsg = errorMsg + '<br><br><b>ข้อผิดพลาดในการตรวจสอบข้อมูล:</b><br>' + errorDetails;
                 }

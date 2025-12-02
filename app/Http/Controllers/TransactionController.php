@@ -348,7 +348,6 @@ class TransactionController extends Controller
         $canAutoConfirm = $loggedInUser->can('transaction:auto_confirm');
 
         $requestorType = $request->input('requestor_type');
-        // ✅ ป้องกันค่า requestor_id เป็นสตริงว่าง ("")
         $requestorIdInput = $request->input('requestor_id');
         $targetUserId = ($requestorType === 'other' && !empty($requestorIdInput)) 
                         ? (int)$requestorIdInput : $loggedInUser->id;
@@ -464,24 +463,21 @@ class TransactionController extends Controller
         }
     }
 
-    // ✅✅✅ FIXED: แก้ไขบั๊กเช็คสต็อก และ loop notification, และรองรับ receiver_id รายชิ้น ✅✅✅
+    // ✅✅✅ FIXED: แก้ไข Bulk ให้รองรับ Auto-Confirm ✅✅✅
     public function bulkWithdraw(Request $request)
     {
         $this->authorize('equipment:borrow'); 
         $loggedInUser = Auth::user();
+        $canAutoConfirm = $loggedInUser->can('transaction:auto_confirm'); // ✅ ตรวจสิทธิ์
         
         $request->validate([
             'items' => 'required|array|min:1',
             'items.*.equipment_id' => 'required|exists:equipments,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.notes' => 'nullable|string', 
-            // ✅ ตรวจสอบ ID ผู้รับ (ถ้าส่งมา)
             'items.*.receiver_id' => 'nullable|integer|exists:depart_it_db.sync_ldap,id', 
-            'dept_key' => 'nullable|string' // ✅ รับค่า dept_key จาก request
+            'dept_key' => 'nullable|string' 
         ]);
-
-        // ตรวจสอบว่า Dept Key ที่ส่งมา ตรงกับที่ User เข้าถึงได้หรือไม่ (Optional Security Layer)
-        // แต่ที่สำคัญคือ "อุปกรณ์ที่เบิก" ต้องตรงกับ "dept_key" ที่ระบุมา
 
         DB::beginTransaction();
         try {
@@ -489,17 +485,15 @@ class TransactionController extends Controller
             foreach ($request->items as $itemData) {
                 $equipment = Equipment::lockForUpdate()->find($itemData['equipment_id']);
                 
-                // ⚠️ แก้ไขจุดสำคัญ: เปลี่ยนจาก stock_quantity เป็น quantity ให้ตรงกับ database
                 if ($equipment->quantity < $itemData['quantity']) {
                     throw new \Exception("สินค้า {$equipment->name} มีไม่พอ (คงเหลือ: {$equipment->quantity})");
                 }
 
-                // ✅✅✅ SECURITY CHECK: ห้ามเบิกของข้ามแผนก ✅✅✅
-                // ถ้า request มี dept_key ส่งมา (จากหน้าเว็บ) ต้องเช็คว่าของชิ้นนี้ตรงแผนกไหม
+                // Security Check: ข้ามแผนก
                 if ($request->filled('dept_key')) {
                     $currentDeptKey = $request->input('dept_key');
                     if ($equipment->dept_key && $equipment->dept_key !== $currentDeptKey) {
-                        throw new \Exception("ไม่สามารถเบิก '{$equipment->name}' ได้ เนื่องจากอยู่คนละแผนก ({$equipment->dept_key})");
+                        throw new \Exception("ไม่สามารถเบิก '{$equipment->name}' ได้ เนื่องจากอยู่คนละแผนก");
                     }
                 }
 
@@ -508,21 +502,32 @@ class TransactionController extends Controller
                      throw new \Exception("อุปกรณ์ '{$equipment->name}' ถูกระงับ (Frozen)");
                 }
 
-                // ✅ ใช้ receiver_id ที่ส่งมา ถ้าไม่มีใช้ User คนทำรายการ
                 $targetUserId = !empty($itemData['receiver_id']) ? $itemData['receiver_id'] : $loggedInUser->id;
+                
+                // ✅ LOGIC: ถ้าเบิกให้ตัวเอง และมีสิทธิ์ Auto-Confirm -> ให้ Completed เลย
+                $isSelfWithdrawal = ($targetUserId === $loggedInUser->id);
+                $isCompleted = ($canAutoConfirm && $isSelfWithdrawal);
+
+                // ถ้า Completed ให้ตัดสต็อกจริง
+                if ($isCompleted) {
+                    $equipment->decrement('quantity', $itemData['quantity']);
+                }
 
                 $transaction = Transaction::create([
                     'user_id' => $targetUserId,
                     'equipment_id' => $equipment->id,
                     'quantity' => $itemData['quantity'], 
-                    // ตาม handleUserTransaction ใช้ quantity_change = -quantity
                     'quantity_change' => -((int)$itemData['quantity']),
                     'action' => 'withdrawal', 
                     'type' => $equipment->withdrawal_type ?? 'consumable', 
                     'notes' => $itemData['notes'] ?? '-',
                     'purpose' => $itemData['notes'] ?? 'General Use',
-                    'status' => 'pending', 
+                    'status' => $isCompleted ? 'completed' : 'pending',  // ✅ Status ตามเงื่อนไข
                     'transaction_date' => now(),
+                    'admin_confirmed_at' => $isCompleted ? now() : null,
+                    'user_confirmed_at' => $isCompleted ? now() : null,
+                    'confirmed_at' => $isCompleted ? now() : null,
+                    'handler_id' => $isCompleted ? $loggedInUser->id : null,
                     'return_condition' => ($equipment->withdrawal_type === 'returnable') ? 'allowed' : 'not_allowed'
                 ]);
                 
@@ -531,13 +536,15 @@ class TransactionController extends Controller
 
             DB::commit();
             
-            // ✅ แก้ไข: วนลูปส่ง Notification ให้ครบทุกรายการ
+            // ส่ง Notification เฉพาะรายการที่ยัง Pending หรือให้คนอื่น
             if (count($results) > 0) {
                 foreach ($results as $tx) {
-                    try {
-                        (new SynologyService())->notify(new EquipmentRequested($tx->load('equipment', 'user'), $loggedInUser));
-                    } catch (\Exception $e) { 
-                        Log::error("Notification Error for Tx #{$tx->id}: " . $e->getMessage());
+                    if ($tx->status === 'pending') {
+                        try {
+                            (new SynologyService())->notify(new EquipmentRequested($tx->load('equipment', 'user'), $loggedInUser));
+                        } catch (\Exception $e) { 
+                            Log::error("Notification Error for Tx #{$tx->id}: " . $e->getMessage());
+                        }
                     }
                 }
             }
