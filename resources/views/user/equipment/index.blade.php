@@ -23,9 +23,10 @@
 @endpush
 
 @section('content')
-{{-- ✅ เตรียมตัวแปร defaultDeptKey --}}
+{{-- ✅ กำหนดแผนกของคุณที่นี่ --}}
 @php
-    $defaultDeptKey = $defaultDeptKey ?? Illuminate\Support\Facades\Config::get('department_stocks.default_nas_dept_key', 'mm');
+    $myDepartment = 'mm'; 
+    $defaultDeptKey = $myDepartment;
 @endphp
 
 <div class="space-y-6 page animate-slide-up-soft">
@@ -96,11 +97,13 @@
                                             <span class="block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">คงเหลือ: {{ $item->stock_sum_quantity }} {{ optional($item->unit)->name }}</span>
                                             
                                             <div class="mt-auto pt-2 flex gap-1">
-                                                {{-- ✅ Live Search: เช็คแผนก --}}
                                                 @php
                                                     $isSameDept = ($result['dept_key'] == $defaultDeptKey);
                                                     $isDisabled = ($item->stock_sum_quantity <= 0) || !$isSameDept;
                                                     
+                                                    // ✅ แก้ไข 1: เพิ่มตัวแปรเช็ค class เพื่อไม่ให้ JS ทำงานซ้อนกับ onclick
+                                                    $btnTriggerClass = $isSameDept ? 'live-search-withdraw-btn' : ''; 
+
                                                     if (!$isSameDept) {
                                                         $btnClass = 'bg-gray-400 text-gray-600 cursor-not-allowed';
                                                         $btnText = 'เบิกไม่ได้';
@@ -108,27 +111,31 @@
                                                         $btnTitle = 'เป็นของแผนก ' . $result['dept_name'];
                                                         $btnOnClick = "handleOtherDeptClick('{$result['dept_name']}')";
                                                     } else {
-                                                        // 🎨 COLOR UPDATE: Live Search
                                                         $btnStates = [ 
                                                             'consumable' => [ 'text' => 'เบิกด่วน', 'icon' => 'fas fa-bolt', 'class' => 'bg-red-600 hover:bg-red-700' ], 
                                                             'returnable' => [ 'text' => 'ยืมใช้', 'icon' => 'fas fa-hand-holding', 'class' => 'bg-blue-600 hover:bg-blue-700' ], 
                                                             'partial_return' => [ 'text' => 'เบิก', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600' ], 
                                                             'unset' => [ 'text' => 'รอระบุ', 'icon' => 'fas fa-clock', 'class' => 'bg-gray-400 cursor-not-allowed' ] 
                                                         ];
-                                                        
                                                         $typeKey = $item->withdrawal_type ?? 'unset';
                                                         $state = $btnStates[$typeKey] ?? $btnStates['unset'];
-                                                        
                                                         $btnClass = $state['class'] . ' text-white';
                                                         $btnText = $state['text'];
                                                         $btnIcon = $state['icon'];
                                                         $btnTitle = 'คลิกเพื่อเบิก';
-                                                        $btnOnClick = "handleTransaction({$item->id}, '{$typeKey}', '" . addslashes($item->name) . "', {$item->stock_sum_quantity}, '" . optional($item->unit)->name . "', '{$result['dept_key']}')";
+                                                        // ✅ แก้ไข 2: ถ้าเป็นของแผนกตัวเอง ให้ onclick ว่างไว้ (เพราะ class 'live-search-withdraw-btn' จะทำงานแทน)
+                                                        $btnOnClick = ""; 
                                                     }
                                                 @endphp
                                                 
                                                 <button onclick="{!! $btnOnClick !!}"
-                                                        class="flex-1 text-xs py-1.5 rounded transition {{ $btnClass }}"
+                                                        class="flex-1 text-xs py-1.5 rounded transition {{ $btnClass }} {{ $btnTriggerClass }}" 
+                                                        data-equipment-id="{{ $item->id }}" 
+                                                        data-type="{{ $item->withdrawal_type ?? 'unset' }}" 
+                                                        data-name="{{ addslashes($item->name) }}" 
+                                                        data-quantity="{{ $item->stock_sum_quantity }}" 
+                                                        data-unit="{{ optional($item->unit)->name }}" 
+                                                        data-dept-key="{{ $result['dept_key'] }}"
                                                         @if($isDisabled && $isSameDept) disabled @endif 
                                                         title="{{ $btnTitle }}">
                                                     <i class="mr-1 {{ $btnIcon }}"></i> {{ $btnText }}
@@ -186,25 +193,16 @@
                             
                             <div class="pt-4 mt-auto space-y-2">
                                 @php
-                                    // 🌟 FIXED LOGIC: ตรวจสอบแผนกปัจจุบัน เทียบกับ แผนกหลัก (Default)
-                                    $itemDeptKey = $item->dept_key ?? $currentDeptKey; 
-                                    $isSameDept = ($itemDeptKey == $currentDeptKey);
-
-                                    // ถ้าไม่ตรง ให้หาชื่อแผนกที่กำลังดูอยู่มาแสดง
+                                    $isSameDept = ($currentDeptKey == $defaultDeptKey);
                                     $viewingDeptName = $departments[$currentDeptKey]['name'] ?? 'แผนกอื่น';
-
                                     $isStockEmpty = $item->quantity <= 0;
                                     $hasUnconfirmed = ($unconfirmedCount ?? 0) > 0;
-                                    
                                     $isDisabled = $isStockEmpty || $hasUnconfirmed || !$isSameDept;
 
-                                    $btn_title = '';
-                                    $btnClass = '';
-                                    $btnText = '';
-                                    $btnIcon = '';
-                                    
+                                    // ✅ แก้ไข: เพิ่มตัวแปรเช็ค class
+                                    $btnTriggerClass = $isSameDept ? 'live-search-withdraw-btn' : '';
+
                                     if (!$isSameDept) {
-                                        // กรณีดูแผนกอื่น (ปุ่มเทา)
                                         $btnClass = 'bg-gray-400 text-gray-600 cursor-not-allowed';
                                         $btnIcon = 'fas fa-ban';
                                         $btnText = 'เบิกไม่ได้';
@@ -217,14 +215,12 @@
                                         $btnTitle = $isStockEmpty ? 'สินค้าหมดสต็อก' : 'กรุณายืนยันการรับของที่ค้างอยู่ก่อน';
                                         $btnOnClick = '';
                                     } else {
-                                        // กรณีปกติ - COLOR UPDATE
                                         $btnStates = [ 
                                             'consumable' => [ 'text' => 'เบิกด่วน', 'icon' => 'fas fa-bolt', 'class' => 'bg-red-600 hover:bg-red-700' ], 
                                             'returnable' => [ 'text' => 'ยืมใช้', 'icon' => 'fas fa-hand-holding', 'class' => 'bg-blue-600 hover:bg-blue-700' ], 
                                             'partial_return' => [ 'text' => 'เบิก', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600' ], 
                                             'unset' => [ 'text' => 'รอระบุ', 'icon' => 'fas fa-clock', 'class' => 'bg-gray-400 cursor-not-allowed' ] 
                                         ];
-                                        
                                         $typeKey = $item->withdrawal_type ?? 'unset';
                                         $state = $btnStates[$typeKey] ?? $btnStates['unset'];
                                         $btnClass = $state['class'] . ' text-white';
@@ -233,15 +229,20 @@
                                         $btnTitle = 'คลิกเพื่อทำรายการ';
                                         
                                         $isUnset = ($typeKey === 'unset');
-                                        $btnOnClick = $isUnset 
-                                            ? "handleUnsetTypeClick()" 
-                                            : "handleTransaction({$item->id}, '{$typeKey}', '" . addslashes($item->name) . "', {$item->quantity}, '" . optional($item->unit)->name . "', '{$currentDeptKey}')";
+                                        // ✅ แก้ไข: ปุ่มเบิกของแผนกตัวเอง ไม่ใส่ onclick (เพราะใช้ class แทน)
+                                        $btnOnClick = $isUnset ? "handleUnsetTypeClick()" : "";
                                     }
                                 @endphp
 
                                 <div class="flex gap-2">
-                                    <button class="live-search-withdraw-btn flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md {{ $btnClass }}"
+                                    <button class="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md {{ $btnClass }} {{ $btnTriggerClass }}"
                                             onclick="{!! $btnOnClick !!}" 
+                                            data-equipment-id="{{ $item->id }}"
+                                            data-type="{{ $item->withdrawal_type ?? 'unset' }}"
+                                            data-name="{{ addslashes($item->name) }}"
+                                            data-quantity="{{ $item->quantity }}"
+                                            data-unit="{{ optional($item->unit)->name }}"
+                                            data-dept-key="{{ $currentDeptKey }}"
                                             @if($isDisabled && $isSameDept) disabled @endif 
                                             title="{{ $btnTitle }}">
                                         <i class="mr-1 {{ $btnIcon }}"></i> {{ $btnText }}
@@ -265,6 +266,7 @@
     </div> 
 </div>
 
+{{-- Cart Button & Modals --}}
 <div class="fixed bottom-8 right-8 z-40">
     <button onclick="openCartModal()" class="relative group bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-2xl transition-all transform hover:scale-110 focus:outline-none focus:ring-4 focus:ring-indigo-300">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -286,6 +288,7 @@
     <img id="image-viewer-img" src="" alt="Full Size" class="max-w-full max-h-[100vh] sm:max-h-[90vh] object-contain shadow-2xl transform transition-transform duration-300 scale-100" onclick="event.stopPropagation()">
 </div>
 
+{{-- Transaction Modal --}}
 <div class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75" id="transaction-details-modal">
     <div class="w-full max-w-lg p-6 mx-4 bg-white rounded-2xl soft-card animate-slide-up-soft dark:bg-gray-800">
         <form id="transaction-details-form" onsubmit="event.preventDefault(); submitTransaction();">
@@ -329,29 +332,10 @@
     </div>
 </div>
 
-<div id="purpose-options-template" class="hidden">
-    <option value="">-- กรุณาเลือก --</option>
-    <option value="general_use">เบิกใช้งานทั่วไป</option>
-    @if(isset($allOpenTickets) && $allOpenTickets->isNotEmpty()) 
-        <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI - IT)"> 
-            @foreach ($allOpenTickets->where('source', 'it') as $ticket) 
-                <option value="glpi-it-{{ $ticket->id }}">[IT] #{{ $ticket->id }}: {{ Str::limit($ticket->name, 50) }}</option> 
-            @endforeach
-        </optgroup> 
-        <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI - EN)"> 
-            @foreach ($allOpenTickets->where('source', 'en') as $ticket) 
-                <option value="glpi-en-{{ $ticket->id }}">[EN] #{{ $ticket->id }}: {{ Str::limit($ticket->name, 50) }}</option> 
-            @endforeach
-        </optgroup> 
-    @else 
-        <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI)"><option disabled>ไม่พบใบงาน</option></optgroup> 
-    @endif
-</div>
-
 {{-- Scanner Modal --}}
 <div class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black bg-opacity-75" id="scanner-modal"><div class="w-full max-w-md p-6 mx-4 bg-white rounded-2xl soft-card animate-slide-up-soft dark:bg-gray-800"><div class="flex items-start justify-between pb-4 border-b border-gray-200 dark:border-gray-700"><h3 class="text-xl font-bold dark:text-gray-100">ค้นหาด้วย QR Code</h3><button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onclick="closeScannerModal()"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div><div class="py-5"><p class="mb-4 text-center text-gray-600 dark:text-gray-300">กรุณาหันกล้องไปที่ QR Code</p><div id="qr-reader" class="border rounded-lg overflow-hidden dark:border-gray-600" style="width: 100%;"></div></div><div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700"><button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-600 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-500" onclick="closeScannerModal()">ยกเลิก</button></div></div></div>
 
-{{-- ✅✅✅ ประกาศตัวแปร URL ให้ไฟล์ JS ใช้ (แก้ 404) ✅✅✅ --}}
+{{-- ✅ ประกาศ URL ให้ไฟล์ JS ใช้ --}}
 <script>
     window.laravelRoutes = {
         ajaxHandler: "{{ route('ajax.handler') }}",
@@ -367,6 +351,8 @@
 <script src="{{ asset('js/cart.js') }}"></script>
 
 <script>
+    const userDefaultDeptKey = "{{ $defaultDeptKey }}";
+
     function openImageViewer(url) {
         const modal = document.getElementById('image-viewer-modal');
         const img = document.getElementById('image-viewer-img');
@@ -446,6 +432,7 @@
         const maxQuantity = parseInt(quantityInput.max);
         const unitName = document.getElementById('modal_unit_name').textContent || 'ชิ้น';
 
+        // ✅ แก้ไข: อนุญาตให้ค่า 'general_use' ผ่านการตรวจสอบ
         if (!purpose || !purpose.trim()) return Swal.fire('ข้อมูลไม่ครบ!', 'กรุณาเลือกวัตถุประสงค์', 'warning');
         if (!quantity || quantity <= 0) return Swal.fire('ข้อมูลไม่ถูกต้อง!', 'กรุณาระบุจำนวนที่ต้องการอย่างน้อย 1', 'warning');
         if (quantity > maxQuantity) return Swal.fire('จำนวนเกินสต็อก!', `คุณสามารถเบิก/ยืมได้สูงสุด ${maxQuantity} ${unitName}`, 'warning');
@@ -487,9 +474,8 @@
                 }
                 
                 let errorMsg = data.message || `ไม่สามารถทำรายการได้ (${response.status})`;
-                if (response.status === 422 && data.errors) {
-                    let errorDetails = Object.values(data.errors).map(arr => arr.join('<br>')).join('<br>');
-                    errorMsg = errorMsg + '<br><br><b>ข้อผิดพลาดในการตรวจสอบข้อมูล:</b><br>' + errorDetails;
+                if (data.errors) {
+                    errorMsg = Object.values(data.errors).flat()[0];
                 }
                 
                 await Swal.fire('เกิดข้อผิดพลาด!', errorMsg, 'error');
@@ -546,9 +532,6 @@
                     .then(data => {
                         spinner.style.display = 'none';
                         
-                        const currentDeptKey = new URLSearchParams(window.location.search).get('dept') || 'it'; // ดึง dept key ปัจจุบัน
-
-                        // 1. My Stock Results
                         if (data.myStock && data.myStock.length > 0) {
                             let myHtml = `<div class="p-5 soft-card rounded-2xl gentle-shadow"><h2 class="mb-4 text-xl font-bold text-gray-800 dark:text-gray-100"><i class="fas fa-store text-green-500"></i> สต็อกของคุณ (เบิกได้)</h2><div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">`;
                             data.myStock.forEach(item => {
@@ -571,11 +554,17 @@
                                 const unconfirmed = {{ $unconfirmedCount ?? 0 }};
                                 if (unconfirmed > 0) { btnDis = true; btnTit = 'เคลียร์ของเก่าก่อน'; } else if (item.quantity <= 0) { btnDis = true; btnTit = 'หมด'; } else if (!btnData.type) { btnDis = true; btnTit = 'ยังไม่กำหนดประเภท'; btnCls = btnStates['unset'].class; }
                                 
-                                // ✅ เช็คว่าอุปกรณ์นี้เป็นของแผนกปัจจุบันหรือไม่
-                                const isSameDept = item.dept_key === currentDeptKey;
-                                const buttonDisabled = btnDis || !isSameDept;
-                                const buttonTitle = !isSameDept ? 'เบิกข้ามแผนกไม่ได้' : btnTit;
+                                // ✅ 3. เช็คว่าแผนกของของชิ้นนี้ ตรงกับแผนกของผู้ใช้ (userDefaultDeptKey) หรือไม่
+                                const isSameDept = item.dept_key === userDefaultDeptKey; 
                                 
+                                const buttonDisabled = btnDis || !isSameDept;
+                                const buttonTitle = !isSameDept ? `ของแผนก ${item.dept_name || 'อื่น'} เบิกไม่ได้` : btnTit;
+                                
+                                // ✅ 4. ตัวแปรสำหรับ Class ปุ่มเปิด Modal (ป้องกัน JS ทำงานซ้อนกับ onclick)
+                                const btnTriggerClass = isSameDept ? 'live-search-withdraw-btn' : '';
+                                
+                                if (!isSameDept) { btnCls = 'bg-gray-400 cursor-not-allowed opacity-50'; }
+
                                 myHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800">
                                     <div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700 group">
                                         <img src="${imgUrl}" class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" onclick="openImageViewer('${imgUrl}')">
@@ -583,15 +572,17 @@
                                     </div>
                                     <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.serial_number||'N/A'}</p>${starsHtml}<span class="block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">คงเหลือ: ${item.quantity} ${unit}</span></div>
                                     <div class="p-3 pt-0 mt-auto flex gap-2">
-                                        <button type="button" class="live-search-withdraw-btn flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md ${buttonDisabled?'disabled:opacity-50 disabled:cursor-not-allowed':''} ${btnCls}" data-equipment-id="${item.id}" data-type="${btnData.type}" data-name="${item.name.replace(/"/g,'&quot;')}" data-quantity="${item.quantity}" data-unit="${unit.replace(/"/g,'&quot;')}" data-dept-key="${item.dept_key}" ${buttonDisabled?'disabled':''} title="${buttonTitle}"><i class="mr-1 ${btnData.icon}"></i> ${btnData.text}</button>
+                                        <button type="button" class="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md ${buttonDisabled?'disabled:opacity-50 disabled:cursor-not-allowed':''} ${btnCls} ${btnTriggerClass}" 
+                                            onclick="${!isSameDept ? `handleOtherDeptClick('${item.dept_name}')` : ''}"
+                                            data-equipment-id="${item.id}" data-type="${btnData.type}" data-name="${item.name.replace(/"/g,'&quot;')}" data-quantity="${item.quantity}" data-unit="${unit.replace(/"/g,'&quot;')}" data-dept-key="${item.dept_key}" ${buttonDisabled?'disabled':''} title="${buttonTitle}"><i class="mr-1 ${!isSameDept ? 'fas fa-ban' : btnData.icon}"></i> ${!isSameDept ? 'เบิกไม่ได้' : btnData.text}</button>
                                         
-                                        <button type="button" onclick="addToCart(${item.id}, '${item.name.replace(/'/g, "\\'")}', '${imgUrl}', ${item.quantity})" class="flex-none inline-flex items-center justify-center px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out bg-emerald-500 border border-transparent rounded-md hover:bg-emerald-600 ${buttonDisabled?'disabled:opacity-50 disabled:cursor-not-allowed':''}" ${buttonDisabled?'disabled':''} title="เพิ่มลงตะกร้า"><i class="fas fa-cart-plus"></i></button>
+                                        <button type="button" onclick="addToCart(${item.id}, '${item.name.replace(/'/g, "\\'")}', '${imgUrl}', ${item.quantity})" class="flex-none inline-flex items-center justify-center px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out bg-emerald-500 border border-transparent rounded-md hover:bg-emerald-600 ${buttonDisabled?'disabled:opacity-50 disabled:cursor-not-allowed':''}" ${buttonDisabled?'disabled':''} title="เพิ่มลงตะกร้า"><i class="fas ${!isSameDept ? 'fas fa-ban' : 'fa-cart-plus'}"></i></button>
                                     </div></div>`;
                             });
                             myHtml += '</div></div>'; myResultsDiv.innerHTML = myHtml;
                         } else { myResultsDiv.innerHTML = '<p class="p-8 text-center text-gray-500 dark:text-gray-400">ไม่พบอุปกรณ์ในสต็อกของคุณ</p>'; }
 
-                        // 2. Other Stock (Non-actionable)
+                        // 2. Other Stock
                         if (data.otherStock && data.otherStock.length > 0) {
                              let otherHtml = `<div class="p-5 soft-card rounded-2xl gentle-shadow"><h2 class="mb-4 text-xl font-bold text-gray-800 dark:text-gray-100">พบในแผนกอื่น</h2><div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">`;
                              data.otherStock.forEach(item => {
@@ -602,13 +593,7 @@
                                      <div class="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"><i class="fas fa-search-plus"></i></div>
                                  </div>
                                  <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.dept_name}</p><span class="block mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">มี: ${item.quantity} ${unit}</span></div><div class="p-3 pt-0 mt-auto">
-                                 
-                                 {{-- ✅ FIXED: ปุ่มเบิกไม่ได้ของแผนกอื่น --}}
-                                 <button onclick="handleOtherDeptClick('${item.dept_name}')" 
-                                         class="inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white border border-transparent rounded-md bg-gray-400 opacity-90 cursor-not-allowed">
-                                     <i class="mr-1 fas fa-ban"></i> เบิกไม่ได้
-                                 </button>
-                                 
+                                 <button onclick="handleOtherDeptClick('${item.dept_name}')" class="inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white border border-transparent rounded-md bg-gray-400 opacity-90 cursor-not-allowed"><i class="mr-1 fas fa-ban"></i> เบิกไม่ได้</button>
                                  </div></div>`;
                              });
                              otherHtml += '</div></div>'; otherResultsDiv.innerHTML = otherHtml;

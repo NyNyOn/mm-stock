@@ -30,7 +30,6 @@
                             <span class="ml-2 text-gray-700 group-hover:text-indigo-700 transition">เบิกให้ผู้อื่น / แผนกอื่น (ระบุรายชื่อในตารางด้านล่าง)</span>
                         </label>
                     </div>
-                    {{-- ❌ ลบ Dropdown ด้านบนออกแล้ว --}}
                 </div>
                 <div class="overflow-hidden border border-gray-200 rounded-lg shadow-sm">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -42,7 +41,6 @@
                                     วัตถุประสงค์ (Purpose)
                                     <button onclick="applyPurposeToAll()" class="ml-2 text-[10px] bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 px-2 py-0.5 rounded shadow-sm transition" title="คัดลอกวัตถุประสงค์ช่องแรกไปใส่ทุกช่อง">ใช้เหมือนกันหมด</button>
                                 </th>
-                                {{-- ✅ คอลัมน์ผู้รับรายคน --}}
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-1/4 receiver-col hidden">
                                     ผู้รับ (รายคน)
                                 </th>
@@ -68,4 +66,25 @@
         </div>
     </div>
     <style>.animate-fade-in-down { animation: fadeInDown 0.3s ease-out; } @keyframes fadeInDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } } .select2-container { z-index: 9999; } .select2-dropdown { z-index: 10000; }</style>
+
+    {{-- ✅ เพิ่ม Template สำหรับ Purpose (ซ่อนอยู่) เพื่อให้ Javascript ดึงไปใช้ --}}
+    <div id="purpose-options-template" class="hidden">
+        <option value="">-- กรุณาเลือก --</option>
+        <option value="general_use">เบิกใช้งานทั่วไป</option>
+        
+        @if(isset($allOpenTickets) && $allOpenTickets->isNotEmpty()) 
+            <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI - IT)"> 
+                @foreach ($allOpenTickets->where('source', 'it') as $ticket) 
+                    <option value="glpi-it-{{ $ticket->id }}">[IT] #{{ $ticket->id }}: {{ \Illuminate\Support\Str::limit($ticket->name, 50) }}</option> 
+                @endforeach
+            </optgroup> 
+            <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI - EN)"> 
+                @foreach ($allOpenTickets->where('source', 'en') as $ticket) 
+                    <option value="glpi-en-{{ $ticket->id }}">[EN] #{{ $ticket->id }}: {{ \Illuminate\Support\Str::limit($ticket->name, 50) }}</option> 
+                @endforeach
+            </optgroup> 
+        @elseif(isset($allOpenTickets))
+            <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI)"><option disabled>ไม่พบใบงานที่เปิดอยู่</option></optgroup> 
+        @endif
+    </div>
 </div>
