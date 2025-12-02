@@ -463,12 +463,12 @@ class TransactionController extends Controller
         }
     }
 
-    // ✅✅✅ FIXED: แก้ไข Bulk ให้รองรับ Auto-Confirm ✅✅✅
+    // ✅✅✅ FIXED: แก้ไข Bulk ให้รองรับ Auto-Confirm และไม่บันทึก 'general_use' ซ้ำซ้อนใน Notes ✅✅✅
     public function bulkWithdraw(Request $request)
     {
         $this->authorize('equipment:borrow'); 
         $loggedInUser = Auth::user();
-        $canAutoConfirm = $loggedInUser->can('transaction:auto_confirm'); // ✅ ตรวจสิทธิ์
+        $canAutoConfirm = $loggedInUser->can('transaction:auto_confirm'); 
         
         $request->validate([
             'items' => 'required|array|min:1',
@@ -489,7 +489,6 @@ class TransactionController extends Controller
                     throw new \Exception("สินค้า {$equipment->name} มีไม่พอ (คงเหลือ: {$equipment->quantity})");
                 }
 
-                // Security Check: ข้ามแผนก
                 if ($request->filled('dept_key')) {
                     $currentDeptKey = $request->input('dept_key');
                     if ($equipment->dept_key && $equipment->dept_key !== $currentDeptKey) {
@@ -504,13 +503,27 @@ class TransactionController extends Controller
 
                 $targetUserId = !empty($itemData['receiver_id']) ? $itemData['receiver_id'] : $loggedInUser->id;
                 
-                // ✅ LOGIC: ถ้าเบิกให้ตัวเอง และมีสิทธิ์ Auto-Confirm -> ให้ Completed เลย
                 $isSelfWithdrawal = ($targetUserId === $loggedInUser->id);
                 $isCompleted = ($canAutoConfirm && $isSelfWithdrawal);
 
-                // ถ้า Completed ให้ตัดสต็อกจริง
                 if ($isCompleted) {
                     $equipment->decrement('quantity', $itemData['quantity']);
+                }
+
+                // ✅ LOGIC แก้ไข: จัดการ Purpose และ Notes ไม่ให้ซ้ำกัน
+                $rawNote = $itemData['notes'] ?? null;
+                $purpose = $rawNote;
+                $noteToSave = $rawNote;
+
+                // ถ้าเลือก "เบิกใช้งานทั่วไป" (ค่าคือ general_use)
+                // - ให้ Purpose = 'general_use'
+                // - ให้ Notes = null (เพื่อไม่ให้แสดงคำว่า general_use ซ้ำ)
+                if ($rawNote === 'general_use') {
+                    $purpose = 'general_use';
+                    $noteToSave = null; 
+                } elseif (empty($rawNote)) {
+                    $purpose = 'general_use'; // กรณีไม่ใส่อะไรมาเลย
+                    $noteToSave = '-';
                 }
 
                 $transaction = Transaction::create([
@@ -520,9 +533,9 @@ class TransactionController extends Controller
                     'quantity_change' => -((int)$itemData['quantity']),
                     'action' => 'withdrawal', 
                     'type' => $equipment->withdrawal_type ?? 'consumable', 
-                    'notes' => $itemData['notes'] ?? '-',
-                    'purpose' => $itemData['notes'] ?? 'General Use',
-                    'status' => $isCompleted ? 'completed' : 'pending',  // ✅ Status ตามเงื่อนไข
+                    'notes' => $noteToSave,   // ✅ บันทึก Notes ที่เคลียร์ค่าแล้ว
+                    'purpose' => $purpose,    // ✅ บันทึก Purpose ปกติ
+                    'status' => $isCompleted ? 'completed' : 'pending',
                     'transaction_date' => now(),
                     'admin_confirmed_at' => $isCompleted ? now() : null,
                     'user_confirmed_at' => $isCompleted ? now() : null,
@@ -536,7 +549,6 @@ class TransactionController extends Controller
 
             DB::commit();
             
-            // ส่ง Notification เฉพาะรายการที่ยัง Pending หรือให้คนอื่น
             if (count($results) > 0) {
                 foreach ($results as $tx) {
                     if ($tx->status === 'pending') {
