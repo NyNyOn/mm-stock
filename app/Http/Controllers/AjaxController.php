@@ -17,11 +17,9 @@ use Illuminate\Validation\Rule;
 use Illuminate\Support\Carbon;
 use App\Models\LdapUser;
 use App\Models\Setting;
+use App\Models\User;
 use Illuminate\Support\Facades\Log;
-// --- 🐞 BUG FIX: START ---
-// (เพิ่ม use Config เพื่อดึงค่าจากไฟล์ .env หรือ config)
 use Illuminate\Support\Facades\Config;
-// --- 🐞 BUG FIX: END ---
 
 class AjaxController extends Controller
 {
@@ -33,7 +31,6 @@ class AjaxController extends Controller
         $action = $request->input('action');
 
         switch ($action) {
-            // --- (โค้ดส่วนอื่น ๆ เหมือนเดิม) ---
             case 'get_dashboard_data':
                 return $this->getDashboardData();
             case 'get_equipment_details':
@@ -47,7 +44,7 @@ class AjaxController extends Controller
             case 'delete_equipment':
                 return $this->deleteEquipment($request);
             case 'search_items':
-                return $this->searchItems($request); // <-- เมธอดที่เราแก้ไข
+                return $this->searchItems($request);
             case 'store_withdrawal':
                 return $this->storeWithdrawal($request);
             case 'get_category_details':
@@ -77,178 +74,156 @@ class AjaxController extends Controller
             case 'check_low_stock':
                 return $this->checkLowStock();
             
-            // 
-            // 📍 (แก้ไขแล้ว) 📍
-            // นี่คือฟังก์ชันที่ Select2 เรียกใช้
-            // 
+            // ✅ ส่วนที่แก้ไข: ใช้ฟังก์ชันใหม่สำหรับค้นหาชื่อ (Select2)
             case 'get_ldap_users':
-                $searchTerm = $request->input('q', '');
-                try {
+                return $this->getLdapUsersForSelect2($request);
 
-                    if ($searchTerm) {
-                        // 
-                        // 1. ถ้าผู้ใช้ "กำลังพิมพ์" (Search Mode)
-                        // 
-                        $query = DB::connection('depart_it_db')->table('sync_ldap')
-                            ->select('id', 'username', 'fullname', 'employeecode') 
-                            ->whereNotNull('fullname')
-                            ->where('fullname', '!=', '');
-
-                        $query->where(function ($q) use ($searchTerm) {
-                            $q->where('fullname', 'like', '%' . $searchTerm . '%')
-                              ->orWhere('username', 'like', '%' . $searchTerm . '%')
-                              ->orWhere('employeecode', 'like', '%' . $searchTerm . '%');
-                        });
-
-                        $users = $query->orderBy('fullname', 'asc')->limit(20)->get(); // (แสดง 20 รายการเมื่อค้นหา)
-
-                        // Format ผลลัพธ์
-                        $formattedUsers = $users->map(fn($user) => $this->formatLdapUserForSelect2($user));
-                        
-                        // ส่งกลับแบบปกติ (flat array)
-                        return response()->json(['items' => $formattedUsers]);
-
-                    } else {
-                        // 
-                        // 2. ถ้าผู้ใช้ "ยังไม่พิมพ์" (Default - เบิกบ่อย)
-                        // 
-                        
-                        // 2a. ดึง Top 10 User IDs จาก 'transactions' (DB หลัก 'mysql')
-                        $topUserIds = DB::connection('mysql') // <-- 🌟 ใช้ DB หลัก (it_stock)
-                            ->table('transactions')
-                            ->select('user_id', DB::raw('count(*) as transaction_count'))
-                            ->where('type', '!=', 'return')
-                            ->where('transaction_date', '>=', now()->subMonths(3))
-                            ->groupBy('user_id')
-                            ->orderBy('transaction_count', 'desc')
-                            ->limit(10) // 🌟 (10 รายการ ตามที่คุณต้องการ)
-                            ->pluck('user_id');
-
-                        if ($topUserIds->isEmpty()) {
-                            return response()->json(['items' => []]); // ไม่มีคนเบิกบ่อย
-                        }
-
-                        // 2b. ดึง User Details จาก 'depart_it_db'
-                        $users = DB::connection('depart_it_db')->table('sync_ldap')
-                            ->whereIn('id', $topUserIds)
-                            ->select('id', 'username', 'fullname', 'employeecode')
-                            ->get()
-                            ->keyBy('id'); // Key by ID เพื่อเรียงลำดับ
-
-                        // 2c. เรียงลำดับ User ตาม $topUserIds
-                        $sortedUsers = $topUserIds->map(fn($id) => $users->get($id))->filter();
-                        
-                        // 2d. Format ผลลัพธ์
-                        $formattedFrequentUsers = $sortedUsers->map(fn($user) => $this->formatLdapUserForSelect2($user));
-
-                        // 2e. 🌟 (สำคัญ) 🌟 สร้าง Group "เบิกบ่อย"
-                        $responseItems = [
-                            [
-                                'text' => 'คนที่เบิกบ่อย (10 รายการล่าสุด)',
-                                'children' => $formattedFrequentUsers
-                            ]
-                        ];
-                        
-                        // ส่งกลับแบบมี Optgroup
-                        return response()->json(['items' => $responseItems]);
-                    }
-
-                } catch (\Exception $e) {
-                    Log::error('Error in getLdapUsers (Select2): ' . $e->getMessage() . ' ' . $e->getFile() . ':' . $e->getLine());
-                    return response()->json(['items' => [], 'error' => $e->getMessage()], 500);
-                }
-                break; // (จบ case)
-            // ✅✅✅ END: โค้ดที่แก้ไข ✅✅✅
-
-             // --- ✅ เพิ่มเคส getUserDetails กลับเข้ามา ---
+            // ✅ คืนค่าฟังก์ชันที่เคยหายไป
             case 'get_user_details':
-                return $this->getUserDetails($request); // Assuming getUserDetails exists
-             // --- ✅ เพิ่มเคส updateUserGroup กลับเข้ามา ---
+                return $this->getUserDetails($request);
             case 'update_user_group':
-                return $this->updateUserGroup($request); // Assuming updateUserGroup exists
-             // --- ✅ เพิ่มเคส searchEquipmentForChart กลับเข้ามา ---
+                return $this->updateUserGroup($request);
             case 'search_equipment_for_chart':
-                return $this->searchEquipmentForChart($request); // Assuming searchEquipmentForChart exists
+                return $this->searchEquipmentForChart($request);
 
             default:
                 return response()->json(['success' => false, 'message' => 'Invalid action specified.']);
         }
     }
 
-    /**
-     * 🌟 (เพิ่ม) 🌟
-     * Helper function สำหรับจัดรูปแบบ User
-     */
-    private function formatLdapUserForSelect2($user)
+    // =========================================================================
+    // 🌟 [NEW] ค้นหาพนักงาน (LDAP) สำหรับหน้าเบิก/ตะกร้า
+    // =========================================================================
+    private function getLdapUsersForSelect2(Request $request)
     {
-        return [
-            'id'   => $user->id,
-            'text' => $user->fullname . ' (' . ($user->employeecode ?? 'N/A') . ')'
-        ];
-    }
-
-    /**
-     * ตรวจสอบอุปกรณ์ที่สต๊อกต่ำและยังไม่มีการสั่งซื้อ (พร้อมระบบดีบัค)
-     */
-    private function checkLowStock()
-    {
-        // --- DEBUG: เริ่มการทำงาน ---
-        Log::channel('daily')->debug('=============== AJAX: checkLowStock START ===============');
-
+        $term = $request->input('q');
+        
         try {
-            // สร้าง Query Builder
-            $lowStockItemsQuery = Equipment::whereColumn('quantity', '<=', 'minimum_stock')
-                ->where('minimum_stock', '>', 0)
-                ->whereDoesntHave('purchaseOrderItems.purchaseOrder', function ($query) {
-                    $query->whereIn('status', ['pending', 'ordered']);
+            // ใช้ Model LdapUser (ปลอดภัยและถูกต้องกว่า DB::connection)
+            $query = LdapUser::select('id', 'fullname', 'username', 'employeecode')
+                ->whereNotNull('fullname')
+                ->where('fullname', '!=', '');
+
+            if ($term) {
+                // 🔍 กรณีพิมพ์ค้นหา: ค้นจาก ชื่อ, รหัสพนักงาน, หรือ Username
+                $query->where(function($q) use ($term) {
+                    $q->where('fullname', 'like', "%{$term}%")
+                      ->orWhere('employeecode', 'like', "%{$term}%")
+                      ->orWhere('username', 'like', "%{$term}%");
+                });
+                $query->limit(30); // จำกัดผลลัพธ์
+                
+                $users = $query->orderBy('fullname', 'asc')->get();
+                
+                $results = $users->map(function($user) {
+                    return $this->formatUserForResponse($user);
                 });
 
-            // --- DEBUG: ดึง SQL query ที่จะรันออกมาดู ---
-            // เราจะแปลง Query Builder เป็น SQL string เพื่อดูหน้าตาของมันก่อนที่จะรันจริง
-            $sqlQuery = $lowStockItemsQuery->toSql();
-            $bindings = $lowStockItemsQuery->getBindings();
-            Log::channel('daily')->debug('Generated SQL Query:', ['sql' => $sqlQuery, 'bindings' => $bindings]);
+                return response()->json(['items' => $results]);
 
-            // รัน Query จริง
-            $lowStockItems = $lowStockItemsQuery->get();
+            } else {
+                // ⭐ กรณีไม่ได้พิมพ์: ดึงคนที่เบิกบ่อยที่สุด (Top 10)
+                // ใช้ Transaction Model เพื่อดึงข้อมูลประวัติการเบิก
+                $topUserIds = Transaction::select('user_id', DB::raw('count(*) as total'))
+                    ->whereNotNull('user_id')
+                    ->groupBy('user_id')
+                    ->orderByDesc('total')
+                    ->limit(10)
+                    ->pluck('user_id')
+                    ->toArray();
 
-            Log::channel('daily')->debug("Found {$lowStockItems->count()} low stock items.");
+                if (!empty($topUserIds)) {
+                    // ดึงรายละเอียด User จาก LdapUser Model
+                    $users = LdapUser::whereIn('id', $topUserIds)
+                        ->select('id', 'fullname', 'username', 'employeecode')
+                        ->get();
+                        
+                    // เรียงลำดับตามความถี่
+                    $users = $users->sortBy(function($user) use ($topUserIds) {
+                        return array_search($user->id, $topUserIds);
+                    });
 
-            if ($lowStockItems->isEmpty()) {
-                Log::channel('daily')->debug('Result: No items found or already ordered.');
-                Log::channel('daily')->debug('=============== AJAX: checkLowStock END ===============');
-                return response()->json([
-                    'success' => true,
-                    'message' => 'ไม่พบอุปกรณ์ที่สต็อกต่ำ หรือรายการที่สต็อกต่ำได้ถูกสั่งซื้อไปแล้ว'
-                ]);
+                    $formattedUsers = $users->map(function($user) {
+                        return $this->formatUserForResponse($user);
+                    })->values();
+
+                    return response()->json(['items' => [
+                        [
+                            'text' => '🔥 คนที่เบิกบ่อย',
+                            'children' => $formattedUsers
+                        ]
+                    ]]);
+                } else {
+                    return response()->json(['items' => []]);
+                }
             }
 
-            Log::channel('daily')->debug('Result: Found items, rendering HTML.');
-            $html = view('partials.modals._low_stock_list', compact('lowStockItems'))->render();
-            Log::channel('daily')->debug('=============== AJAX: checkLowStock END ===============');
-            return response()->json(['success' => true, 'html' => $html]);
-
         } catch (\Exception $e) {
-            // --- DEBUG: บันทึก Error ที่เกิดขึ้นอย่างละเอียด ---
-            Log::channel('daily')->error('!!! EXCEPTION in checkLowStock !!!');
-            Log::channel('daily')->error('Error Message: ' . $e->getMessage());
-            // บันทึก Stack Trace เพื่อให้รู้ว่า Error มาจากไฟล์ไหน บรรทัดไหน
-            Log::channel('daily')->error('Stack Trace: ' . $e->getTraceAsString());
-            Log::channel('daily')->debug('=============== AJAX: checkLowStock END (WITH ERROR) ===============');
-
-            // ส่งข้อความ Error กลับไปให้ละเอียดขึ้น
-            return response()->json([
-                'success' => false,
-                'message' => 'เกิดข้อผิดพลาดรุนแรง: ' . $e->getMessage(),
-                'debug_info' => 'โปรดตรวจสอบไฟล์ log ล่าสุดใน storage/logs/'
-            ], 500);
+            Log::error('Error in getLdapUsersForSelect2: ' . $e->getMessage());
+            return response()->json(['items' => [], 'error' => 'Server Error: ' . $e->getMessage()], 500);
         }
     }
 
+    private function formatUserForResponse($user)
+    {
+        $text = $user->fullname;
+        if (!empty($user->employeecode)) {
+            $text .= " ({$user->employeecode})";
+        }
+        return [
+            'id' => $user->id,
+            'text' => $text
+        ];
+    }
 
-    // ==================================================================
-    // ========== โค้ดส่วนที่เหลือของไฟล์ (จากไฟล์ที่คุณอัปโหลด) ==============
-    // ==================================================================
+    // =========================================================================
+    // 🔄 [RESTORED] ฟังก์ชันเดิมที่ถูกกู้คืนกลับมา
+    // =========================================================================
+
+    private function getUserDetails(Request $request)
+    {
+        $id = $request->input('id');
+        if (!$id) return response()->json(['success' => false, 'message' => 'User ID is required']);
+
+        // ใช้ Model User
+        $user = User::with('userGroup')->find($id);
+        if (!$user) return response()->json(['success' => false, 'message' => 'User not found']);
+
+        return response()->json(['success' => true, 'user' => $user]);
+    }
+
+    private function updateUserGroup(Request $request)
+    {
+        $userId = $request->input('user_id');
+        $groupId = $request->input('group_id');
+
+        $user = User::find($userId);
+        if (!$user) return response()->json(['success' => false, 'message' => 'User not found']);
+
+        $user->user_group_id = $groupId;
+        $user->save();
+
+        return response()->json(['success' => true, 'message' => 'User group updated successfully']);
+    }
+
+    private function searchEquipmentForChart(Request $request)
+    {
+        $term = $request->input('term');
+        $equipments = Equipment::where('name', 'like', "%{$term}%")
+            ->select('id', 'name')
+            ->limit(10)
+            ->get();
+
+        $results = $equipments->map(function ($item) {
+            return ['id' => $item->id, 'text' => $item->name];
+        });
+
+        return response()->json(['results' => $results]);
+    }
+
+    // =========================================================================
+    // 🔽 ฟังก์ชันเดิมที่ไม่มีการแก้ไข (Equipment, Settings, etc.) 🔽
+    // =========================================================================
 
     private function addEquipment(Request $request)
     {
@@ -265,13 +240,8 @@ class AjaxController extends Controller
 
         try {
             $data = $request->except(['action', 'image', '_token']);
+            $data['price'] = $request->input('price') ?? 0.00;
 
-            $data['price'] = $request->input('price');
-            if (empty($data['price'])) {
-                $data['price'] = 0.00;
-            }
-
-            // status calc
             $quantity  = (int)$request->input('quantity', 0);
             $min_stock = (int)$request->input('min_stock', 1);
 
@@ -313,13 +283,8 @@ class AjaxController extends Controller
         try {
             $id = $request->input('equipment_id');
             $data = $request->except(['action', 'image', '_token', 'equipment_id']);
+            $data['price'] = $request->input('price') ?? 0.00;
 
-            $data['price'] = $request->input('price');
-            if (empty($data['price'])) {
-                $data['price'] = 0.00;
-            }
-
-            // status re-calc (preserve special)
             $oldEquipment = DB::table('equipments')->where('id', $id)->first();
             $quantity  = (int)$request->input('quantity', 0);
             $min_stock = (int)$request->input('min_stock', 1);
@@ -341,7 +306,6 @@ class AjaxController extends Controller
                 if ($oldImage && File::exists(public_path('uploads/' . $oldImage))) {
                     File::delete(public_path('uploads/' . $oldImage));
                 }
-
                 $file = $request->file('image');
                 $fileName = time() . '_' . $file->getClientOriginalName();
                 $file->move(public_path('uploads'), $fileName);
@@ -359,18 +323,14 @@ class AjaxController extends Controller
     private function deleteEquipment(Request $request)
     {
         $id = $request->input('id');
-        if (!$id) {
-            return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี ID']);
-        }
+        if (!$id) return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี ID']);
 
         try {
             $image = DB::table('equipments')->where('id', $id)->value('image');
             if ($image && File::exists(public_path('uploads/' . $image))) {
                 File::delete(public_path('uploads/' . $image));
             }
-
             DB::table('equipments')->where('id', $id)->delete();
-
             return response()->json(['success' => true, 'message' => 'ลบอุปกรณ์เรียบร้อยแล้ว']);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
@@ -391,22 +351,17 @@ class AjaxController extends Controller
         }
 
         $items = json_decode($request->input('items'), true);
-        if (empty($items)) {
-            return response()->json(['success' => false, 'message' => 'ไม่มีรายการอุปกรณ์'], 422);
-        }
+        if (empty($items)) return response()->json(['success' => false, 'message' => 'ไม่มีรายการอุปกรณ์'], 422);
 
         DB::beginTransaction();
         try {
             foreach ($items as $item) {
                 $equipment = Equipment::lockForUpdate()->find($item['id']);
-
                 if (!$equipment || $equipment->quantity < $item['quantity']) {
                     DB::rollBack();
                     return response()->json(['success' => false, 'message' => "สต็อกของ {$equipment->name} ไม่เพียงพอ"], 422);
                 }
-
                 $equipment->decrement('quantity', $item['quantity']);
-
                 Transaction::create([
                     'equipment_id'    => $item['id'],
                     'user_id'         => Auth::id() ?? 1,
@@ -416,7 +371,6 @@ class AjaxController extends Controller
                     'transaction_date'  => now(),
                 ]);
             }
-
             DB::commit();
             return response()->json(['success' => true, 'message' => 'บันทึกรายการเรียบร้อยแล้ว']);
         } catch (\Exception $e) {
@@ -428,32 +382,11 @@ class AjaxController extends Controller
     private function mapSetting(string $type): array
     {
         $map = [
-            'category' => [
-                'table'      => 'categories',
-                'fields'     => ['name', 'prefix'],
-                'unique'     => 'name',
-                'fk_column'  => 'category_id',
-                'label'      => 'ประเภท',
-            ],
-            'location' => [
-                'table'      => 'locations',
-                'fields'     => ['name'],
-                'unique'     => 'name',
-                'fk_column'  => 'location_id',
-                'label'      => 'สถานที่',
-            ],
-            'unit' => [
-                'table'      => 'units',
-                'fields'     => ['name'],
-                'unique'     => 'name',
-                'fk_column'  => 'unit_id',
-                'label'      => 'หน่วยนับ',
-            ],
+            'category' => ['table' => 'categories', 'fields' => ['name', 'prefix'], 'unique' => 'name', 'fk_column' => 'category_id', 'label' => 'ประเภท'],
+            'location' => ['table' => 'locations', 'fields' => ['name'], 'unique' => 'name', 'fk_column' => 'location_id', 'label' => 'สถานที่'],
+            'unit' => ['table' => 'units', 'fields' => ['name'], 'unique' => 'name', 'fk_column' => 'unit_id', 'label' => 'หน่วยนับ'],
         ];
-
-        if (!isset($map[$type])) {
-            throw new \InvalidArgumentException('Invalid setting type');
-        }
+        if (!isset($map[$type])) throw new \InvalidArgumentException('Invalid setting type');
         return $map[$type];
     }
 
@@ -461,44 +394,26 @@ class AjaxController extends Controller
     {
         $meta = $this->mapSetting($type);
         $id = (int) $request->input('id');
-        if (!$id) {
-            return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี ID']);
-        }
+        if (!$id) return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี ID']);
 
         $item = DB::table($meta['table'])->where('id', $id)->first();
-        if (!$item) {
-            return response()->json(['success' => false, 'message' => 'ไม่พบข้อมูล']);
-        }
+        if (!$item) return response()->json(['success' => false, 'message' => 'ไม่พบข้อมูล']);
         return response()->json(['success' => true, 'data' => $item]);
     }
 
     private function createSettingType(Request $request, string $type)
     {
         $meta = $this->mapSetting($type);
-
-        $rules = [
-            'name' => ['required', 'string', 'max:255', Rule::unique($meta['table'], 'name')],
-        ];
-        if ($type === 'category') {
-            $rules['prefix'] = ['nullable', 'string', 'max:20'];
-        }
+        $rules = ['name' => ['required', 'string', 'max:255', Rule::unique($meta['table'], 'name')]];
+        if ($type === 'category') $rules['prefix'] = ['nullable', 'string', 'max:20'];
 
         $validator = Validator::make($request->all(), $rules);
-        if ($validator->fails()) {
-            return response()->json(['success' => false, 'message' => $validator->errors()->first()]);
-        }
+        if ($validator->fails()) return response()->json(['success' => false, 'message' => $validator->errors()->first()]);
 
-        $insert = [
-            'name'       => $request->input('name'),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ];
-        if ($type === 'category') {
-            $insert['prefix'] = $request->input('prefix');
-        }
+        $insert = ['name' => $request->input('name'), 'created_at' => now(), 'updated_at' => now()];
+        if ($type === 'category') $insert['prefix'] = $request->input('prefix');
 
         DB::table($meta['table'])->insert($insert);
-
         return response()->json(['success' => true, 'message' => 'บันทึกข้อมูลสำเร็จ']);
     }
 
@@ -506,37 +421,21 @@ class AjaxController extends Controller
     {
         $meta = $this->mapSetting($type);
         $id = (int) $request->input('id');
-        if (!$id) {
-            return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี ID']);
-        }
+        if (!$id) return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี ID']);
 
         $exists = DB::table($meta['table'])->where('id', $id)->exists();
-        if (!$exists) {
-            return response()->json(['success' => false, 'message' => 'ไม่พบข้อมูลที่จะอัปเดต']);
-        }
+        if (!$exists) return response()->json(['success' => false, 'message' => 'ไม่พบข้อมูลที่จะอัปเดต']);
 
-        $rules = [
-            'name' => ['required', 'string', 'max:255', Rule::unique($meta['table'], 'name')->ignore($id)],
-        ];
-        if ($type === 'category') {
-            $rules['prefix'] = ['nullable', 'string', 'max:20'];
-        }
+        $rules = ['name' => ['required', 'string', 'max:255', Rule::unique($meta['table'], 'name')->ignore($id)]];
+        if ($type === 'category') $rules['prefix'] = ['nullable', 'string', 'max:20'];
 
         $validator = Validator::make($request->all(), $rules);
-        if ($validator->fails()) {
-            return response()->json(['success' => false, 'message' => $validator->errors()->first()]);
-        }
+        if ($validator->fails()) return response()->json(['success' => false, 'message' => $validator->errors()->first()]);
 
-        $update = [
-            'name'       => $request->input('name'),
-            'updated_at' => now(),
-        ];
-        if ($type === 'category') {
-            $update['prefix'] = $request->input('prefix');
-        }
+        $update = ['name' => $request->input('name'), 'updated_at' => now()];
+        if ($type === 'category') $update['prefix'] = $request->input('prefix');
 
         DB::table($meta['table'])->where('id', $id)->update($update);
-
         return response()->json(['success' => true, 'message' => 'อัปเดตข้อมูลสำเร็จ']);
     }
 
@@ -544,51 +443,34 @@ class AjaxController extends Controller
     {
         $meta = $this->mapSetting($type);
         $id = (int) $request->input('id');
-        if (!$id) {
-            return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี ID']);
-        }
+        if (!$id) return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี ID']);
 
         $item = DB::table($meta['table'])->where('id', $id)->first();
-        if (!$item) {
-            return response()->json(['success' => false, 'message' => 'ไม่พบข้อมูลที่จะลบ']);
-        }
+        if (!$item) return response()->json(['success' => false, 'message' => 'ไม่พบข้อมูลที่จะลบ']);
 
-        // ป้องกันลบเมื่อถูกใช้งานในอุปกรณ์
         $inUse = DB::table('equipments')->where($meta['fk_column'], $id)->exists();
-        if ($inUse) {
-            return response()->json(['success' => false, 'message' => 'ไม่สามารถลบได้ เนื่องจากมีข้อมูลอุปกรณ์ผูกอยู่']);
-        }
+        if ($inUse) return response()->json(['success' => false, 'message' => 'ไม่สามารถลบได้ เนื่องจากมีข้อมูลอุปกรณ์ผูกอยู่']);
 
         DB::table($meta['table'])->where('id', $id)->delete();
-
         return response()->json(['success' => true, 'message' => 'ลบข้อมูลเรียบร้อยแล้ว']);
     }
 
     private function getNextSerialNumber(Request $request)
     {
         $categoryId = $request->input('category_id');
-        if (!$categoryId) {
-            return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี Category ID']);
-        }
+        if (!$categoryId) return response()->json(['success' => false, 'message' => 'จำเป็นต้องมี Category ID']);
 
         try {
             $category = DB::table('categories')->where('id', $categoryId)->first();
-            if (!$category || !$category->prefix) {
-                return response()->json(['success' => false, 'message' => 'ไม่พบคำนำหน้า (Prefix) สำหรับประเภทนี้ในฐานข้อมูล']);
-            }
+            if (!$category || !$category->prefix) return response()->json(['success' => false, 'message' => 'ไม่พบคำนำหน้า (Prefix) สำหรับประเภทนี้ในฐานข้อมูล']);
 
             $prefix = $category->prefix . '-';
-
             $latestSerial = DB::table('equipments')
                 ->where('serial_number', 'like', $prefix . '%')
                 ->select(DB::raw('MAX(CAST(SUBSTRING(serial_number, ' . (strlen($prefix) + 1) . ') AS UNSIGNED)) as max_num'))
                 ->first();
 
-            $nextNumber = 1;
-            if ($latestSerial && $latestSerial->max_num) {
-                $nextNumber = $latestSerial->max_num + 1;
-            }
-
+            $nextNumber = ($latestSerial && $latestSerial->max_num) ? $latestSerial->max_num + 1 : 1;
             $newSerialNumber = $prefix . str_pad($nextNumber, 5, '0', STR_PAD_LEFT);
 
             return response()->json(['success' => true, 'serial_number' => $newSerialNumber]);
@@ -600,9 +482,7 @@ class AjaxController extends Controller
     private function getEquipmentDetails(Request $request)
     {
         $equipmentId = $request->input('id');
-        if (!$equipmentId) {
-            return response()->json(['success' => false, 'message' => 'Equipment ID is required.']);
-        }
+        if (!$equipmentId) return response()->json(['success' => false, 'message' => 'Equipment ID is required.']);
 
         try {
             $equipment = DB::table('equipments as e')
@@ -614,9 +494,7 @@ class AjaxController extends Controller
                 ->first();
 
             if ($equipment) {
-                if ($equipment->image) {
-                    $equipment->image = asset('uploads/'. $equipment->image);
-                }
+                if ($equipment->image) $equipment->image = asset('uploads/'. $equipment->image);
                 return response()->json(['success' => true, 'equipment' => $equipment]);
             } else {
                 return response()->json(['success' => false, 'message' => 'ไม่พบอุปกรณ์']);
@@ -651,40 +529,33 @@ class AjaxController extends Controller
         }
     }
 
-    // --- ✅✅✅ START: โค้ดที่แก้ไข (สำหรับหน้า Settings) ✅✅✅
-    public function getLdapUsers(Request $request)
+    private function checkLowStock()
     {
         try {
-            // ดึงค่า settingKey จาก request
-            $settingKey = $request->query('settingKey');
-            $currentSetting = null;
+            $lowStockItemsQuery = Equipment::whereColumn('quantity', '<=', 'minimum_stock')
+                ->where('minimum_stock', '>', 0)
+                ->whereDoesntHave('purchaseOrderItems.purchaseOrder', function ($query) {
+                    $query->whereIn('status', ['pending', 'ordered']);
+                });
 
-            // ถ้ามี settingKey, ดึงค่าปัจจุบัน
-            if ($settingKey) {
-                $currentSetting = Setting::where('key', $settingKey)->first();
+            $lowStockItems = $lowStockItemsQuery->get();
+
+            if ($lowStockItems->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'ไม่พบอุปกรณ์ที่สต็อกต่ำ หรือรายการที่สต็อกต่ำได้ถูกสั่งซื้อไปแล้ว'
+                ]);
             }
 
-            // ดึงรายชื่อผู้ใช้ทั้งหมด
-            // ✅✅✅ 1. แก้ไข: เปลี่ยน 'email' เป็น 'employeecode'
-            $users = LdapUser::select('id', 'username', 'fullname', 'employeecode')
-                            ->whereNotNull('fullname')
-                            ->where('fullname', '!=', '')
-                            ->orderBy('fullname', 'asc')
-                            ->get();
-
-            return response()->json([
-                'users' => $users,
-                'current_requester_id' => $currentSetting ? $currentSetting->value : null
-            ]);
+            $html = view('partials.modals._low_stock_list', compact('lowStockItems'))->render();
+            return response()->json(['success' => true, 'html' => $html]);
 
         } catch (\Exception $e) {
-            Log::error('Error in getLdapUsers (Settings): ' . $e->getMessage());
-            return response()->json(['message' => 'เกิดข้อผิดพลาดในการโหลดรายชื่อผู้ใช้: ' . $e->getMessage()], 500);
+            Log::error('Exception in checkLowStock: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
         }
     }
-    // --- ✅✅✅ END: โค้ดที่แก้ไข (สำหรับหน้า Settings) ✅✅✅
 
-    // --- ✅ Method searchItems จากไฟล์ที่แก้แล้ว ---
     private function searchItems(Request $request)
     {
         $queryTerm = $request->input('q');
@@ -706,24 +577,17 @@ class AjaxController extends Controller
             });
         }
 
-        $items = $query->with(['unit', 'images']) // 'images' ถูกโหลดมาแล้ว
-                        ->orderBy('name', 'asc')
-                        ->paginate(10);
+        $items = $query->with(['unit', 'images'])
+                       ->orderBy('name', 'asc')
+                       ->paginate(10);
 
-        // --- 🐞 BUG FIX: START ---
-        // 1. ดึง Default Dept Key จาก Config (เพราะ View Partial '..._reorganized_item_list' ต้องการ)
-        // เราใช้ Config::get() ซึ่งต้อง 'use Illuminate\Support\Facades\Config;' ด้านบน
-        $defaultDeptKey = Config::get('department_stocks.default_nas_dept_key', 'it');
+        // ใช้ Config เพื่อดึงค่า default dept key
+        $defaultDeptKey = Config::get('department_stocks.default_nas_dept_key', 'mm');
 
-        // 2. ส่ง 'items' และ 'defaultDeptKey' ไปยัง View
         $itemsHtml = view('partials.modals._reorganized_item_list', [
             'items' => $items,
             'defaultDeptKey' => $defaultDeptKey
         ])->render();
-        // --- 🐞 BUG FIX: END ---
-        
-        // --- โค้ดเดิมที่ทำให้เกิดบัค (KO) ---
-        // $itemsHtml = view('partials.modals._reorganized_item_list', ['items' => $items])->render();
         
         $paginationHtml = $items->appends($request->except('page'))->links()->toHtml();
 
@@ -734,20 +598,26 @@ class AjaxController extends Controller
         ]);
     }
 
-    // --- ✅ เพิ่ม getUserDetails กลับเข้ามา ---
-    private function getUserDetails(Request $request) {
-        // Implement logic if needed, otherwise return placeholder
-        return response()->json(['success' => false, 'message' => 'getUserDetails not implemented yet.'], 501);
-    }
-     // --- ✅ เพิ่ม updateUserGroup กลับเข้ามา ---
-    private function updateUserGroup(Request $request) {
-        // Implement logic if needed, otherwise return placeholder
-         return response()->json(['success' => false, 'message' => 'updateUserGroup not implemented yet.'], 501);
-    }
-     // --- ✅ เพิ่ม searchEquipmentForChart กลับเข้ามา ---
-     private function searchEquipmentForChart(Request $request) {
-         // Implement logic if needed, otherwise return placeholder
-         return response()->json(['success' => false, 'message' => 'searchEquipmentForChart not implemented yet.'], 501);
-    }
+    // --- ฟังก์ชันอื่นๆ ที่ใช้โดยหน้า Setting (คงเดิม) ---
+    public function getLdapUsers(Request $request)
+    {
+        try {
+            $settingKey = $request->query('settingKey');
+            $currentSetting = null;
+            if ($settingKey) {
+                $currentSetting = Setting::where('key', $settingKey)->first();
+            }
+            // ใช้ Model LdapUser
+            $users = LdapUser::select('id', 'username', 'fullname', 'employeecode')
+                ->whereNotNull('fullname')->where('fullname', '!=', '')
+                ->orderBy('fullname', 'asc')->get();
 
-} // <-- ปิด Class AjaxController
+            return response()->json([
+                'users' => $users,
+                'current_requester_id' => $currentSetting ? $currentSetting->value : null
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
+        }
+    }
+}

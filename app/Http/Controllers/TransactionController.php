@@ -29,14 +29,10 @@ class TransactionController extends Controller
     use AuthorizesRequests;
 
     // =========================================================================
-    // 🛡️ HELPER: ระบบบังคับแช่แข็ง (Self-Healing Frozen State)
+    // 🛡️ HELPER
     // =========================================================================
-    /**
-     * ตรวจสอบและบังคับแช่แข็งทันทีถ้าหมดอายุ (ป้องกันการเบิกของที่หมดอายุแต่สถานะยังไม่เปลี่ยน)
-     */
     private function checkAndEnforceFrozenState(Equipment $equipment)
     {
-        // ถ้าสถานะเป็น frozen, sold, disposed อยู่แล้ว ไม่ต้องเช็คซ้ำ
         if (in_array($equipment->status, ['frozen', 'sold', 'disposed'])) {
             return;
         }
@@ -45,21 +41,18 @@ class TransactionController extends Controller
         $isExpired = false;
 
         if (is_null($equipment->last_stock_check_at)) {
-            // ถ้าไม่เคยนับเลย -> หมดอายุทันที
             $isExpired = true;
         } else {
-            // ถ้านับล่าสุด นานกว่า 105 วัน -> หมดอายุ
             $daysSinceCheck = Carbon::parse($equipment->last_stock_check_at)->diffInDays(now());
             if ($daysSinceCheck >= $limitDays) {
                 $isExpired = true;
             }
         }
 
-        // 🔥 ถ้าหมดอายุจริง แต่สถานะยังไม่ Frozen -> สั่งแช่แข็งเดี๋ยวนี้!
         if ($isExpired) {
             $equipment->status = 'frozen';
             $equipment->save();
-            $equipment->refresh(); // โหลดค่าใหม่มาใช้
+            $equipment->refresh();
             Log::info("Force Frozen Triggered: Equipment ID {$equipment->id} ({$equipment->name})");
         }
     }
@@ -71,47 +64,36 @@ class TransactionController extends Controller
     public function index(Request $request)
     {
         try {
-            // 1. Badge Counters (นับจำนวนแจ้งเตือนจุดแดง)
             $adminPendingCount = 0;
             $myPendingCount = 0;
             $user = Auth::user();
 
-            // ถ้าเป็น Admin: นับรายการที่รออนุมัติ (Pending)
             if ($user->can('equipment:manage')) {
                 $adminPendingCount = Transaction::where('status', 'pending')->count();
             }
 
-            // User: นับรายการที่ตนเองต้องกดรับของ (Shipped / User Confirm Pending)
             $myPendingCount = Transaction::where('user_id', $user->id)
                 ->whereIn('status', ['shipped', 'user_confirm_pending'])
                 ->count();
 
-            // 2. ตั้งค่า Default Tab
-            // ถ้าเป็น Admin ให้ไปหน้า admin_pending ก่อน ถ้าไม่ใช่ให้ไป my_history
             $defaultTab = ($user->can('equipment:manage')) ? 'admin_pending' : 'my_history';
             $statusFilter = $request->query('status', $defaultTab);
 
-            // 3. Query Builder
-            $query = Transaction::with(['equipment.latestImage', 'user', 'handler', 'rating']) // Eager load rating
+            $query = Transaction::with(['equipment.latestImage', 'user', 'handler', 'rating'])
                                 ->orderBy('transaction_date', 'desc');
 
-            // --- Logic การกรองข้อมูลตาม Tab ---
             if ($statusFilter == 'admin_pending') {
-                // Tab 1: รอจัดส่ง (Admin)
                 $this->authorize('equipment:manage');
                 $query->where('status', 'pending');
 
             } elseif ($statusFilter == 'my_pending') {
-                // Tab 2: รายการที่ต้องจัดการ (User)
                 $query->where('user_id', $user->id)
                         ->whereIn('status', ['shipped', 'user_confirm_pending']);
 
             } elseif ($statusFilter == 'my_history') {
-                // Tab 3: ประวัติของฉัน
                 $query->where('user_id', $user->id);
 
             } elseif ($statusFilter == 'all_history') {
-                // Tab 4: ประวัติทั้งหมด (Admin Report)
                 $this->authorize('report:view');
 
                 if ($search = $request->get('search')) {
@@ -140,7 +122,6 @@ class TransactionController extends Controller
 
             $transactions = $query->paginate(15)->appends($request->query());
 
-            // AJAX Response (กรณีใช้ Pagination แบบไม่รีโหลดหน้า)
             if ($request->ajax()) {
                 return response()->json([
                     'html' => view('transactions.partials._table_rows', compact('transactions', 'statusFilter'))->render(),
@@ -161,7 +142,6 @@ class TransactionController extends Controller
                 'adjust' => 'ปรับสต็อก'
             ];
 
-            // ส่งตัวแปร Counts ไปที่ View
             return view('transactions.index', compact(
                 'transactions', 'users', 'types', 'statusFilter', 
                 'adminPendingCount', 'myPendingCount'
@@ -189,13 +169,11 @@ class TransactionController extends Controller
     public function searchItems(Request $request)
     {
         $term = $request->input('q', '');
-        // ไม่กรอง status frozen ออกที่นี่ เพื่อให้ user เห็นว่าของมีอยู่จริง แต่เบิกไม่ได้ (จะไปบล็อกตอนกดเลือก)
         $query = Equipment::where('quantity', '>', 0)
                           ->whereNotIn('status', ['sold', 'disposed']); 
         
         try { 
             if (method_exists(Equipment::class, 'ratings')) {
-                // ✅ [Fixed] ใช้ rating_score แทน rating เดิม
                 $query->withAvg('ratings', 'rating_score');
                 $query->withCount('ratings');
             }
@@ -210,25 +188,25 @@ class TransactionController extends Controller
         }
         $items = $query->with('images', 'unit')->orderBy('name')->paginate(10);
         $defaultDeptKey = config('department_stocks.default_nas_dept_key', 'mm');
+
         $items->getCollection()->transform(function ($item) use ($defaultDeptKey) {
-            // 🟢 Force Check ทุกครั้งที่ค้นหา
             $this->checkAndEnforceFrozenState($item);
 
             $primaryImage = $item->images->firstWhere('is_primary', true) ?? $item->images->first();
             $imageFileName = $primaryImage->file_name ?? null;
+            $deptKey = $item->dept_key ?? $defaultDeptKey;
+
             try {
-                $item->image_url = $imageFileName ? route('nas.image', ['deptKey' => $defaultDeptKey, 'filename' => $imageFileName]) : asset('images/placeholder.webp');
+                $item->image_url = $imageFileName ? url("nas-images/{$deptKey}/{$imageFileName}") : asset('images/placeholder.webp');
             } catch (\Exception $e) {
                 $item->image_url = asset('images/placeholder.webp');
             }
             $item->unit_name = $item->unit->name ?? 'N/A';
             
-            // ✅ [Fixed] รับค่า rating_score จาก alias ที่ Eloquent สร้างให้
             $item->avg_rating = $item->ratings_avg_rating_score ? (float)$item->ratings_avg_rating_score : 0;
             $item->rating_count = $item->ratings_count ?? 0;
-            
-            // ส่ง Flag Frozen กลับไปให้ Frontend
             $item->is_frozen = $item->status === 'frozen';
+            $item->dept_key = $deptKey;
 
             return $item;
         });
@@ -242,7 +220,7 @@ class TransactionController extends Controller
     public function storeWithdrawal(Request $request)
     {
         Log::debug('===== storeWithdrawal Start =====');
-        $this->authorize('equipment:manage'); // Admin withdraw
+        $this->authorize('equipment:manage'); 
 
         $validator = Validator::make($request->all(), [
             'type'             => ['required', Rule::in(['withdraw', 'borrow'])],
@@ -283,10 +261,8 @@ class TransactionController extends Controller
                     return response()->json(['success' => false, 'message' => "สต็อกของ " . ($equipment->name ?? "ID: {$itemData['id']}") . " ไม่เพียงพอ"], 400);
                 }
 
-                // ✅ [Safety Check] ตรวจสอบและบังคับแช่แข็ง
                 $this->checkAndEnforceFrozenState($equipment);
 
-                // ✅ [Frozen Check] บล็อกถ้าระงับ (ยกเว้นมีสิทธิ์ Bypass)
                 if ($equipment->status === 'frozen') {
                     $canBypass = method_exists($loggedInUser, 'canBypassFrozenState') ? $loggedInUser->canBypassFrozenState() : false;
                     if (!$canBypass) {
@@ -297,8 +273,6 @@ class TransactionController extends Controller
 
                 $purpose = $request->input('purpose');
                 $notes = $request->input('notes');
-                
-                // ⚠️ FIXED: ไม่เอาวัตถุประสงค์ไปต่อท้ายใน notes แล้ว เพื่อแก้ปัญหาซ้ำซ้อนใน View
                 $combinedNotes = $notes ?? ''; 
                 
                 $glpiTicketId = null;
@@ -309,11 +283,9 @@ class TransactionController extends Controller
                     if (count($parts) === 3) {
                         $glpiTicketId = (int) $parts[2];
                         $purposeForDb = 'glpi_ticket';
-                        // สำหรับ GLPI เราอาจจะยังเก็บอ้างอิงไว้ใน notes ได้ ถ้าต้องการ
                         $combinedNotes = "อ้างอิงใบงาน GLPI #{$glpiTicketId}\n" . $combinedNotes;
                     }
                 } 
-                // ถ้าไม่ใช่ GLPI เราจะไม่เอา purpose ไปต่อใน notes แล้ว เพราะมีฟิลด์ purpose เก็บแยกต่างหาก
 
                 $returnCondition = match ($request->type) {
                     'borrow' => 'allowed',
@@ -370,16 +342,17 @@ class TransactionController extends Controller
     public function handleUserTransaction(Request $request)
     {
         Log::debug('===== handleUserTransaction Start =====');
-        $this->authorize('equipment:borrow'); // User withdraw
+        $this->authorize('equipment:borrow'); 
 
         $loggedInUser = Auth::user();
         $canAutoConfirm = $loggedInUser->can('transaction:auto_confirm');
 
         $requestorType = $request->input('requestor_type');
-        $targetUserId = ($requestorType === 'other' && $request->filled('requestor_id')) 
-                        ? (int)$request->input('requestor_id') : $loggedInUser->id;
+        // ✅ ป้องกันค่า requestor_id เป็นสตริงว่าง ("")
+        $requestorIdInput = $request->input('requestor_id');
+        $targetUserId = ($requestorType === 'other' && !empty($requestorIdInput)) 
+                        ? (int)$requestorIdInput : $loggedInUser->id;
 
-        // Check if user is blocked (unrated transactions)
         if ($targetUserId === $loggedInUser->id) {
             $unratedTransactions = $this->getUnratedTransactions($targetUserId);
             if ($unratedTransactions->count() > 0) {
@@ -418,15 +391,11 @@ class TransactionController extends Controller
                 return response()->json(['success' => false, 'message' => "สต็อกไม่เพียงพอ"], 400);
             }
 
-            // ✅✅✅ [STEP 1]: บังคับเช็คและแช่แข็ง ถ้าหมดอายุจริง ✅✅✅
             $this->checkAndEnforceFrozenState($equipment);
 
             $bypassed = false;
-
-            // ✅✅✅ [STEP 2]: บล็อกการเบิก ถ้าถูกแช่แข็ง (และไม่มีสิทธิ์ Bypass) ✅✅✅
             if ($equipment->status === 'frozen') {
                 $canBypass = method_exists($loggedInUser, 'canBypassFrozenState') ? $loggedInUser->canBypassFrozenState() : false;
-                
                 if (!$canBypass) {
                     DB::rollBack();
                     return response()->json(['success' => false, 'message' => "❌ ทำรายการไม่สำเร็จ: อุปกรณ์นี้ถูกระงับ (Frozen) เนื่องจากไม่ได้นับสต็อกเกิน 105 วัน กรุณาติดต่อ Admin"], 403);
@@ -438,8 +407,6 @@ class TransactionController extends Controller
 
             $purpose = $request->input('purpose');
             $combinedNotes = $request->input('notes') ?? '';
-            // ⚠️ FIXED: ไม่เอา purpose ไปต่อใน combinedNotes เพื่อลดความซ้ำซ้อน
-            
             $glpiTicketId = null;
 
              if (str_starts_with($purpose, 'glpi-')) {
@@ -449,7 +416,6 @@ class TransactionController extends Controller
                     $combinedNotes = "อ้างอิง GLPI #{$glpiTicketId}\n" . $combinedNotes;
                 }
             } 
-            // else: purpose is stored separately, no need to append to notes
 
             $returnCondition = ($transactionType === 'returnable' || $transactionType === 'partial_return') ? 'allowed' : 'not_allowed';
             $transaction = null;
@@ -498,8 +464,94 @@ class TransactionController extends Controller
         }
     }
 
+    // ✅✅✅ FIXED: แก้ไขบั๊กเช็คสต็อก และ loop notification, และรองรับ receiver_id รายชิ้น ✅✅✅
+    public function bulkWithdraw(Request $request)
+    {
+        $this->authorize('equipment:borrow'); 
+        $loggedInUser = Auth::user();
+        
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.equipment_id' => 'required|exists:equipments,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.notes' => 'nullable|string', 
+            // ✅ ตรวจสอบ ID ผู้รับ (ถ้าส่งมา)
+            'items.*.receiver_id' => 'nullable|integer|exists:depart_it_db.sync_ldap,id', 
+            'dept_key' => 'nullable|string' // ✅ รับค่า dept_key จาก request
+        ]);
+
+        // ตรวจสอบว่า Dept Key ที่ส่งมา ตรงกับที่ User เข้าถึงได้หรือไม่ (Optional Security Layer)
+        // แต่ที่สำคัญคือ "อุปกรณ์ที่เบิก" ต้องตรงกับ "dept_key" ที่ระบุมา
+
+        DB::beginTransaction();
+        try {
+            $results = [];
+            foreach ($request->items as $itemData) {
+                $equipment = Equipment::lockForUpdate()->find($itemData['equipment_id']);
+                
+                // ⚠️ แก้ไขจุดสำคัญ: เปลี่ยนจาก stock_quantity เป็น quantity ให้ตรงกับ database
+                if ($equipment->quantity < $itemData['quantity']) {
+                    throw new \Exception("สินค้า {$equipment->name} มีไม่พอ (คงเหลือ: {$equipment->quantity})");
+                }
+
+                // ✅✅✅ SECURITY CHECK: ห้ามเบิกของข้ามแผนก ✅✅✅
+                // ถ้า request มี dept_key ส่งมา (จากหน้าเว็บ) ต้องเช็คว่าของชิ้นนี้ตรงแผนกไหม
+                if ($request->filled('dept_key')) {
+                    $currentDeptKey = $request->input('dept_key');
+                    if ($equipment->dept_key && $equipment->dept_key !== $currentDeptKey) {
+                        throw new \Exception("ไม่สามารถเบิก '{$equipment->name}' ได้ เนื่องจากอยู่คนละแผนก ({$equipment->dept_key})");
+                    }
+                }
+
+                $this->checkAndEnforceFrozenState($equipment);
+                if ($equipment->status === 'frozen') {
+                     throw new \Exception("อุปกรณ์ '{$equipment->name}' ถูกระงับ (Frozen)");
+                }
+
+                // ✅ ใช้ receiver_id ที่ส่งมา ถ้าไม่มีใช้ User คนทำรายการ
+                $targetUserId = !empty($itemData['receiver_id']) ? $itemData['receiver_id'] : $loggedInUser->id;
+
+                $transaction = Transaction::create([
+                    'user_id' => $targetUserId,
+                    'equipment_id' => $equipment->id,
+                    'quantity' => $itemData['quantity'], 
+                    // ตาม handleUserTransaction ใช้ quantity_change = -quantity
+                    'quantity_change' => -((int)$itemData['quantity']),
+                    'action' => 'withdrawal', 
+                    'type' => $equipment->withdrawal_type ?? 'consumable', 
+                    'notes' => $itemData['notes'] ?? '-',
+                    'purpose' => $itemData['notes'] ?? 'General Use',
+                    'status' => 'pending', 
+                    'transaction_date' => now(),
+                    'return_condition' => ($equipment->withdrawal_type === 'returnable') ? 'allowed' : 'not_allowed'
+                ]);
+                
+                $results[] = $transaction;
+            }
+
+            DB::commit();
+            
+            // ✅ แก้ไข: วนลูปส่ง Notification ให้ครบทุกรายการ
+            if (count($results) > 0) {
+                foreach ($results as $tx) {
+                    try {
+                        (new SynologyService())->notify(new EquipmentRequested($tx->load('equipment', 'user'), $loggedInUser));
+                    } catch (\Exception $e) { 
+                        Log::error("Notification Error for Tx #{$tx->id}: " . $e->getMessage());
+                    }
+                }
+            }
+
+            return response()->json(['message' => 'บันทึกรายการเบิกแบบกลุ่มเรียบร้อยแล้ว']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
     // =========================================================================
-    // 3. ADMIN & USER ACTIONS (Confirm, Cancel, WriteOff)
+    // 3. ADMIN & USER ACTIONS
     // =========================================================================
 
     public function adminConfirmShipment(Request $request, Transaction $transaction)
@@ -524,7 +576,6 @@ class TransactionController extends Controller
 
     public function userConfirmReceipt(Request $request, Transaction $transaction)
     {
-        // ✅ [FIXED] อนุญาตให้ Owner หรือ Admin (permission:manage) กดรับได้
         if (Auth::id() !== $transaction->user_id && !Auth::user()->can('permission:manage')) {
             return back()->with('error', 'ไม่มีสิทธิ์ทำรายการนี้');
         }
@@ -539,7 +590,6 @@ class TransactionController extends Controller
                     'handler_id' => $transaction->handler_id ?? Auth::id()
                 ];
 
-                // ถ้าเป็น Admin กดรับแทน ให้ใส่ Note
                 if (Auth::id() !== $transaction->user_id) {
                     $updateData['notes'] = $transaction->notes . "\n[System: Admin " . Auth::user()->fullname . " ยืนยันรับของแทน]";
                 }
@@ -661,18 +711,12 @@ class TransactionController extends Controller
             ->get();
     }
 
-    /**
-     * Store rating for a transaction (New System)
-     * ✅ NAME: rateTransaction (ตรงกับ Route)
-     */
     public function rateTransaction(Request $request, Transaction $transaction)
     {
-        // 1. ตรวจสอบสิทธิ์: ให้เจ้าของรายการ หรือ Admin (เผื่อในอนาคต)
         if (Auth::id() !== $transaction->user_id && !Auth::user()->can('equipment:manage')) {
             return response()->json(['success' => false, 'message' => 'ไม่มีสิทธิ์ทำรายการนี้'], 403);
         }
 
-        // 2. ตรวจสอบข้อมูล
         $validator = Validator::make($request->all(), [
             'q1' => 'required|integer|in:1,2,3',
             'q2' => 'required|integer|in:1,2,3',
@@ -684,17 +728,14 @@ class TransactionController extends Controller
             return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
         }
 
-        // เพิ่มการตรวจสอบ Model Method เพื่อป้องกัน Error 500 กรณีลืมอัปเดต Model
         if (!method_exists(\App\Models\EquipmentRating::class, 'calculateScore')) {
-             return response()->json(['success' => false, 'message' => 'System Error: Please update App\Models\EquipmentRating.php to include calculateScore method.'], 500);
+             return response()->json(['success' => false, 'message' => 'System Error: Please update App\Models\EquipmentRating.php'], 500);
         }
 
-        // 3. คำนวณคะแนนด้วยสูตรใหม่ (Model Helper)
         $score = \App\Models\EquipmentRating::calculateScore($request->q1, $request->q2, $request->q3);
 
         DB::beginTransaction();
         try {
-            // 4. บันทึกข้อมูลลงฐานข้อมูล
             EquipmentRating::updateOrCreate(
                 ['transaction_id' => $transaction->id],
                 [
@@ -702,9 +743,9 @@ class TransactionController extends Controller
                     'q1_answer' => $request->q1,
                     'q2_answer' => $request->q2,
                     'q3_answer' => $request->q3,
-                    'rating_score' => $score, // บันทึกค่าทศนิยม เช่น 3.67 หรือ null
+                    'rating_score' => $score,
                     'comment' => $request->comment,
-                    'rated_at' => now(), // ✅ มี column นี้ใน DB แล้ว
+                    'rated_at' => now(), 
                 ]
             );
 
@@ -714,8 +755,6 @@ class TransactionController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
             Log::error("Rate Error: " . $e->getMessage());
-            
-            // ส่ง Error จริงกลับไปแสดงที่หน้าจอ (เพื่อ Debug ถ้ามีปัญหาอีก)
             return response()->json([
                 'success' => false, 
                 'message' => 'System Error: ' . $e->getMessage()

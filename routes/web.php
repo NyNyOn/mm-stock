@@ -102,6 +102,8 @@ Route::middleware('auth')->group(function () {
     // ✅ [FIXED] เปลี่ยนจาก rateTransaction เป็น rate ให้ตรงกับ Controller ใหม่
     Route::post('/transactions/{transaction}/rate', [TransactionController::class, 'rateTransaction'])
         ->name('transactions.rate');
+    Route::post('/transactions/bulk-withdraw', [TransactionController::class, 'bulkWithdraw'])
+        ->name('transactions.bulkWithdraw');
 
     // --- Receive Management (Updated for Cloning Approach) ---
     Route::get('/receive', [ReceiveController::class, 'index'])
