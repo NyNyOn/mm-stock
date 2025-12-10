@@ -1,7 +1,7 @@
 /**
  * File: public/js/equipment.js
  * Description: Complete Equipment Management Logic
- * Version: Fully Restored (Original Form Logic + New Details/QR Features)
+ * Version: Fix Edit Button Disappearing (Robust Clone Logic)
  */
 
 // ==========================================================================
@@ -82,7 +82,7 @@ function createStatusBadgeInternal(status) {
     return badge;
 }
 
-// Helper: Close any modal by ID
+// Helper: Close any modal by ID (UPDATED: Force Clear Files)
 window.closeModal = function(modalId) {
     if (modalId === 'equipment-details-modal') {
         window.closeDetailsModal();
@@ -103,6 +103,15 @@ window.closeModal = function(modalId) {
         const form = modal.querySelector('form');
         if (form) {
             form.reset();
+            
+            // ✅ FORCE CLEAR FILE INPUTS (แก้ปัญหารูปค้างเมื่อปิด Modal)
+            const fileInputs = form.querySelectorAll('input[type="file"]');
+            fileInputs.forEach(input => {
+                input.value = ''; 
+                try { input.files = (new DataTransfer()).files; } catch(e) {}
+                input.dispatchEvent(new Event('change'));
+            });
+
             // Clear plugins and dynamic elements
             if(typeof clearImagePreviews === 'function') clearImagePreviews(form);
             if(typeof clearServerErrors === 'function') clearServerErrors(form);
@@ -129,6 +138,18 @@ window.showAddModal = async function() {
     const modalBody = document.getElementById('add-form-content-wrapper');
 
     if (modal) {
+        // ✅ FORCE RESET BEFORE SHOWING (ป้องกันค่าค้าง)
+        const existingForm = modal.querySelector('form');
+        if (existingForm) {
+            existingForm.reset();
+            existingForm.querySelectorAll('input[type="file"]').forEach(i => {
+                i.value = '';
+                try { i.files = (new DataTransfer()).files; } catch(e) {}
+                i.dispatchEvent(new Event('change'));
+            });
+            if(typeof clearImagePreviews === 'function') clearImagePreviews(existingForm);
+        }
+
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         
@@ -147,7 +168,7 @@ window.showAddModal = async function() {
                      attachFormEventListeners(form);
                      // Initialize Select2 for Add Form
                      if (typeof $ !== 'undefined' && $.fn.select2) {
-                         $(form).find('.select2').select2({ dropdownParent: $(modal), width: '100%' });
+                        $(form).find('.select2').select2({ dropdownParent: $(modal), width: '100%' });
                      }
                  }
                  
@@ -165,6 +186,18 @@ window.showEditModal = async function(id) {
     const modalBody = document.getElementById('edit-form-content-wrapper');
 
     if (!modal) return;
+
+    // ✅ FORCE RESET BEFORE SHOWING (ป้องกันค่าค้าง)
+    const existingForm = modal.querySelector('form');
+    if (existingForm) {
+        existingForm.reset();
+        existingForm.querySelectorAll('input[type="file"]').forEach(i => {
+            i.value = '';
+            try { i.files = (new DataTransfer()).files; } catch(e) {}
+            i.dispatchEvent(new Event('change'));
+        });
+        if(typeof clearImagePreviews === 'function') clearImagePreviews(existingForm);
+    }
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -243,6 +276,28 @@ function attachFormEventListeners(form) {
     // Attach helpers
     setupImagePreviews(form);
     setupExistingImageDeletion(form);
+    setupPasteHandler(form); // ✅ เพิ่ม Paste Handler
+
+    // ✅ Attach Close/Cancel Button Handler (เพิ่มการล้างค่า)
+    const closeBtns = form.querySelectorAll('.close-modal-btn');
+    closeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modal = form.closest('.fixed');
+            if(modal && modal.id) {
+                window.closeModal(modal.id);
+            } else {
+                form.reset();
+                const fileInput = form.querySelector('input[type="file"]');
+                if(fileInput) { 
+                    fileInput.value = ''; 
+                    try { fileInput.files = (new DataTransfer()).files; } catch(e) {}
+                    fileInput.dispatchEvent(new Event('change')); 
+                }
+                clearImagePreviews(form);
+                if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); document.body.style.overflow = ''; }
+            }
+        });
+    });
 
     // Stepper Logic (for Add/Edit)
     const suffix = form.id.split('-').pop();
@@ -299,6 +354,12 @@ async function handleFormSubmit(event) {
             method: 'POST', body: formData,
             headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') }
         });
+
+        // ✅ ตรวจสอบ Error 413 (Payload Too Large)
+        if (response.status === 413) {
+            throw new Error('ไฟล์รูปภาพมีขนาดรวมใหญ่เกินกว่าที่ Server รองรับ (Error 413). กรุณาลดจำนวนรูปหรือลดขนาดไฟล์');
+        }
+
         const result = await response.json();
 
         if (!response.ok) {
@@ -314,13 +375,16 @@ async function handleFormSubmit(event) {
         }
     } catch(e) {
         console.error(e);
-        Swal.fire('Error', e.message, 'error');
+        // แสดง Error ที่ชัดเจน
+        let msg = e.message;
+        if(msg.includes('Unexpected token')) msg = 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์ (อาจไม่ใช่ JSON)';
+        Swal.fire('Error', msg, 'error');
     } finally {
         if(submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
     }
 }
 
-// --- Image Preview Logic ---
+// --- Image Preview Logic (UPDATED: Fix Remove Button Logic) ---
 function setupImagePreviews(form) {
     const suffix = form.id.split('-').pop();
     const input = document.getElementById(`images-${suffix}`);
@@ -329,16 +393,96 @@ function setupImagePreviews(form) {
 
     input.addEventListener('change', (e) => {
         container.innerHTML = '';
-        Array.from(e.target.files).forEach(file => {
+        
+        // ถ้าไม่มีไฟล์ (เช่นถูกเคลียร์ค่า) ให้จบการทำงาน
+        if (!input.files || input.files.length === 0) return;
+
+        const files = Array.from(input.files);
+
+        files.forEach((file, index) => {
+            const div = document.createElement('div');
+            div.className = 'relative w-20 h-20 group';
+            container.appendChild(div); // Append placeholder first to keep order
+
             const reader = new FileReader();
             reader.onload = (ev) => {
-                const div = document.createElement('div');
-                div.className = 'relative w-20 h-20 group';
-                div.innerHTML = `<img src="${ev.target.result}" class="w-full h-full object-cover rounded border"><button type="button" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow opacity-0 group-hover:opacity-100 transition" onclick="this.parentElement.remove()">&times;</button>`;
-                container.appendChild(div);
+                const img = document.createElement('img');
+                img.src = ev.target.result;
+                img.className = "w-full h-full object-cover rounded border";
+                
+                const btn = document.createElement('button');
+                btn.type = "button";
+                btn.innerHTML = "&times;";
+                btn.className = "absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow opacity-0 group-hover:opacity-100 transition";
+                
+                // ✅ แก้ไข: เมื่อกดลบ ให้สร้าง FileList ใหม่ที่ตัดไฟล์นั้นออกแล้วใส่กลับ input
+                btn.onclick = () => {
+                    const dt = new DataTransfer();
+                    const currentFiles = input.files;
+                    for (let i = 0; i < currentFiles.length; i++) {
+                        if (i !== index) { // ข้ามไฟล์ที่ลบ
+                            dt.items.add(currentFiles[i]);
+                        }
+                    }
+                    input.files = dt.files; // อัปเดต input
+                    input.dispatchEvent(new Event('change')); // Trigger change เพื่อรีเฟรช preview
+                };
+
+                div.appendChild(img);
+                div.appendChild(btn);
             };
             reader.readAsDataURL(file);
         });
+    });
+}
+
+// --- Paste Image Handler (NEW: Support Ctrl+V) ---
+function setupPasteHandler(form) {
+    const suffix = form.id.split('-').pop();
+    const fileInput = document.getElementById(`images-${suffix}`);
+    
+    if (!fileInput) return;
+
+    form.addEventListener('paste', (e) => {
+        const clipboardData = e.clipboardData || e.originalEvent.clipboardData;
+        if (!clipboardData) return;
+
+        const items = clipboardData.items;
+        let hasImage = false;
+        const dt = new DataTransfer();
+
+        // 1. เก็บไฟล์เดิมที่มีอยู่
+        if (fileInput.files && fileInput.files.length > 0) {
+            for (let i = 0; i < fileInput.files.length; i++) {
+                dt.items.add(fileInput.files[i]);
+            }
+        }
+
+        // 2. วนลูปหาไฟล์ภาพจาก Clipboard
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === 'file' && item.type.includes('image/')) {
+                const blob = item.getAsFile();
+                const fileName = `pasted-image-${Date.now()}-${i}.png`;
+                const newFile = new File([blob], fileName, { type: blob.type });
+                dt.items.add(newFile);
+                hasImage = true;
+            }
+        }
+
+        // 3. ถ้าเจอภาพ ให้อัปเดต input
+        if (hasImage) {
+            e.preventDefault(); 
+            fileInput.files = dt.files; 
+            fileInput.dispatchEvent(new Event('change'));
+
+            if (typeof Swal !== 'undefined') {
+                const Toast = Swal.mixin({
+                    toast: true, position: 'top-end', showConfirmButton: false, timer: 2000, timerProgressBar: true
+                });
+                Toast.fire({ icon: 'success', title: 'วางรูปภาพเรียบร้อยแล้ว' });
+            }
+        }
     });
 }
 
@@ -613,7 +757,7 @@ function populateDetails(item) {
     }
 
     setupGallery(item);
-    setupDetailButtons(item); // ✅ เรียกใช้ฟังก์ชันที่ถูกแก้ไข
+    setupDetailButtons(item); // ✅ เรียกใช้ฟังก์ชันที่แก้ไขแล้ว
 }
 
 function setupGallery(item) {
@@ -653,44 +797,46 @@ function setupGallery(item) {
     }
 }
 
-// ✅✅✅ ฟังก์ชันที่ถูกแก้ไขเพื่อควบคุมปุ่ม Edit ✅✅✅
+// ✅✅✅ แก้ไข: Setup Detail Buttons (Clone & Reset Logic) ✅✅✅
 function setupDetailButtons(item) {
     const editBtn = document.getElementById('details-edit-btn');
     const printBtn = document.getElementById('details-print-btn');
 
-    // 🔑 START FIX: Frozen Lock Logic for Edit Button 🔑
-    // 1. ตรวจสอบสิทธิ์ผู้ใช้จาก Meta Tag
+    // --- ตรวจสอบสิทธิ์ Frozen ---
     const userCanBypass = document.querySelector('meta[name="can-bypass-frozen"]')?.content === 'true';
-    // 2. ตรวจสอบสถานะ Frozen
     const isFrozen = item.status && item.status.toLowerCase() === 'frozen';
-    // 3. กำหนดลอจิก: ซ่อนถ้า Frozen และผู้ใช้ไม่มีสิทธิ์ Bypass
     const shouldLock = isFrozen && !userCanBypass;
     
     if (editBtn) {
+        // 1. สร้างปุ่มใหม่จากต้นฉบับเสมอ (เพื่อล้าง Event Listener เก่า และค่า Display เก่า)
+        const newEdit = editBtn.cloneNode(true);
+
+        // 2. กำหนดการแสดงผลตามเงื่อนไข Locked
         if (shouldLock) {
-            // ซ่อนปุ่มถ้าติดล็อค
-            editBtn.style.display = 'none';
+            newEdit.style.display = 'none'; // ซ่อน
+            // ไม่ต้องใส่ Event Listener ถ้าถูกล็อค
         } else {
-            // สำคัญ: สั่งให้แสดงปุ่มถ้าผ่านเงื่อนไข (เพื่อ override style="display: none;" ใน Blade)
-            editBtn.style.display = 'inline-flex'; 
-
-            // Clone and replace to clear old listeners
-            const newEdit = editBtn.cloneNode(true);
-            editBtn.parentNode.replaceChild(newEdit, editBtn); 
-
+            newEdit.style.display = 'inline-flex'; // แสดง (บังคับ display ใหม่)
             newEdit.setAttribute('data-equipment-id', item.id);
+            
             // ผูก Event Handler
             newEdit.addEventListener('click', () => {
                 window.closeDetailsModal();
                 if (typeof window.showEditModal === 'function') window.showEditModal(item.id);
             });
         }
+
+        // 3. แทนที่ปุ่มเก่าด้วยปุ่มใหม่ใน DOM
+        if(editBtn.parentNode) {
+            editBtn.parentNode.replaceChild(newEdit, editBtn); 
+        }
     }
-    // 🔑 END FIX 🔑
 
     if (printBtn) {
         const newPrint = printBtn.cloneNode(true);
-        printBtn.parentNode.replaceChild(newPrint, printBtn);
+        if(printBtn.parentNode) {
+            printBtn.parentNode.replaceChild(newPrint, printBtn);
+        }
         newPrint.setAttribute('data-equipment-id', item.id);
         newPrint.addEventListener('click', () => {
             const sn = item.serial_number && item.serial_number !== '-' ? item.serial_number : String(item.id);
@@ -705,7 +851,6 @@ function setupDetailButtons(item) {
         });
     }
 }
-// ✅✅✅ สิ้นสุดฟังก์ชันที่ถูกแก้ไข ✅✅✅
 
 window.switchDetailsTab = function(selectedBtn, targetPanelId) {
     document.querySelectorAll('.details-tab-btn').forEach(btn => {
