@@ -188,8 +188,8 @@ class EquipmentController extends Controller
                     $this->switchToDb($targetDbName);
 
                     $query = Equipment::with(['category', 'location', 'unit'])
-                                        ->whereIn('status', ['available', 'low_stock'])
-                                        ->where('quantity', '>', 0);
+                                            ->whereIn('status', ['available', 'low_stock'])
+                                            ->where('quantity', '>', 0);
                     if ($request->filled('category')) {
                         $query->where('category_id', $request->category);
                     }
@@ -218,13 +218,13 @@ class EquipmentController extends Controller
                 $this->switchToDefaultDb();
                 
                 $myEquipmentQuery = Transaction::with([
-                                        'equipment' => function ($query) {
-                                            $query->select('id', 'name', 'unit_id'); 
-                                        }, 
-                                        'equipment.unit' => function ($query) {
-                                            $query->select('id', 'name');
-                                        }
-                                    ])
+                                                    'equipment' => function ($query) {
+                                                        $query->select('id', 'name', 'unit_id'); 
+                                                    }, 
+                                                    'equipment.unit' => function ($query) {
+                                                        $query->select('id', 'name');
+                                                    }
+                                                ])
                     ->where('user_id', Auth::id())
                     ->where(function ($query) {
                         $query->whereIn('type', ['borrow', 'returnable', 'partial_return', 'borrow_temporary'])
@@ -248,13 +248,13 @@ class EquipmentController extends Controller
                 $showGlpiSection = true; 
                 try {
                     $itTickets = GlpiTicket::on('glpi_it') 
-                                        ->open()
-                                        ->orderBy('id', 'desc')
-                                        ->get(['id', 'name'])
-                                        ->map(function ($ticket) {
-                                            $ticket->source = 'it'; 
-                                            return $ticket;
-                                        });
+                                            ->open()
+                                            ->orderBy('id', 'desc')
+                                            ->get(['id', 'name'])
+                                            ->map(function ($ticket) {
+                                                $ticket->source = 'it'; 
+                                                return $ticket;
+                                            });
                     $allOpenTickets = $allOpenTickets->merge($itTickets);
                 } catch (\Exception $e) {
                     Log::error('Error fetching GLPI IT tickets: ' . $e->getMessage());
@@ -265,13 +265,13 @@ class EquipmentController extends Controller
                 $showGlpiSection = true; 
                 try {
                     $enTickets = GlpiTicket::on('glpi_en') 
-                                        ->open()
-                                        ->orderBy('id', 'desc')
-                                        ->get(['id', 'name'])
-                                        ->map(function ($ticket) {
-                                            $ticket->source = 'en';
-                                            return $ticket;
-                                        });
+                                            ->open()
+                                            ->orderBy('id', 'desc')
+                                            ->get(['id', 'name'])
+                                            ->map(function ($ticket) {
+                                                $ticket->source = 'en';
+                                                return $ticket;
+                                            });
                     $allOpenTickets = $allOpenTickets->merge($enTickets);
                 } catch (\Exception $e) {
                     Log::error('Error fetching GLPI EN tickets: ' . $e->getMessage());
@@ -296,7 +296,7 @@ class EquipmentController extends Controller
 
 
     // --- create ---
-     public function create()
+    public function create()
     {
         $this->authorize('equipment:manage');
         $this->switchToDefaultDb();
@@ -316,7 +316,7 @@ class EquipmentController extends Controller
             $query->with('user')->latest('transaction_date')->limit(5);
         }]);
 
-         $equipmentData = [
+        $equipmentData = [
             'id' => $equipment->id,
             'name' => $equipment->name,
             'part_no' => $equipment->part_no,
@@ -410,15 +410,38 @@ class EquipmentController extends Controller
 
 
     // --- getValidationRules ---
-     private function getValidationRules($equipmentId = null)
+    private function getValidationRules($equipmentId = null)
     {
+        // กำหนดค่า Placeholder SNs ที่อนุญาตให้ซ้ำได้ (เพราะไม่ใช่ Serial Number จริง)
+        $placeholderSNs = ['N/A', 'NONE']; 
+
         return [
             'name'          => 'required|string|max:255',
             'part_no'       => 'nullable|string|max:100',
             'model_name'    => 'nullable|string|max:100',
             'model_number'  => 'nullable|string|max:100',
             'category_id'   => 'required|exists:categories,id', 
-            'serial_number' => ['nullable', 'string', 'max:100', Rule::unique('equipments', 'serial_number')->ignore($equipmentId)->where(function ($query) { return $query->whereNotNull('serial_number')->whereNull('deleted_at'); })], 
+            // FIX: ปรับ Rule::unique ให้ไม่ตรวจสอบความซ้ำซ้อนสำหรับค่า Placeholder
+            'serial_number' => [
+                'nullable', 
+                'string', 
+                'max:100', 
+                Rule::unique('equipments', 'serial_number')
+                    ->ignore($equipmentId)
+                    ->where(function ($query) use ($placeholderSNs) { 
+                        // ตรวจสอบกับเรคคอร์ดที่ยังไม่ถูกลบ
+                        $query->whereNull('deleted_at')
+                              ->whereNotNull('serial_number');
+
+                        // EXCLUDE: ละเว้นเรคคอร์ดที่มีค่า Serial Number เป็น Placeholder 
+                        // เพื่ออนุญาตให้มี SN ซ้ำกันได้หลายรายการสำหรับค่าเหล่านี้ (เช่น N/A ที่มาจาก maintenance)
+                        foreach ($placeholderSNs as $placeholder) {
+                            $query->where('serial_number', '!=', $placeholder);
+                        }
+                        
+                        return $query;
+                    })
+            ], 
             'location_id'   => 'required|exists:locations,id', 
             'unit_id'       => 'required|exists:units,id', 
             'quantity'      => 'required|integer|min:0',
@@ -435,7 +458,7 @@ class EquipmentController extends Controller
             'delete_images.*' => 'integer|exists:equipment_images,id', 
             'primary_image' => 'nullable|integer|exists:equipment_images,id', 
             'withdrawal_type' => ['required', Rule::in(['consumable', 'returnable', 'partial_return'])],
-            'has_msds'        => 'nullable|boolean',
+            'has_msds'      => 'nullable|boolean',
             'msds_file'       => 'nullable|file|mimes:pdf,doc,docx,xls,xlsx,jpg,png,txt|max:10240',
             'msds_details'    => 'nullable|string',
         ];
@@ -484,24 +507,24 @@ class EquipmentController extends Controller
                     'notes'           => 'เพิ่มอุปกรณ์ใหม่เข้าระบบ',
                     'transaction_date' => now(),
                     'status'          => 'completed', 
-                   ]);
+                    ]);
             }
 
-             if ($purchaseOrderItemId) {
-                 $poItem = PurchaseOrderItem::find($purchaseOrderItemId);
-                 if ($poItem) {
-                     $poItem->update([
-                         'status' => 'received',
-                         'quantity_received' => $equipment->quantity 
-                     ]);
-                 }
-             }
+            if ($purchaseOrderItemId) {
+                $poItem = PurchaseOrderItem::find($purchaseOrderItemId);
+                if ($poItem) {
+                    $poItem->update([
+                        'status' => 'received',
+                        'quantity_received' => $equipment->quantity 
+                    ]);
+                }
+            }
         });
 
         $message = 'เพิ่มอุปกรณ์ "' . ($equipment ? $equipment->name : 'N/A') . '" เรียบร้อยแล้ว';
-         if ($purchaseOrderItemId) {
-             $message .= ' และอัปเดตสถานะใบสั่งซื้อแล้ว';
-         }
+        if ($purchaseOrderItemId) {
+            $message .= ' และอัปเดตสถานะใบสั่งซื้อแล้ว';
+        }
 
         if ($request->wantsJson()) {
             return response()->json(['success' => true, 'message' => $message]);
@@ -619,7 +642,7 @@ class EquipmentController extends Controller
         return redirect()->route('equipment.index')->with('success', $message);
     }
 
-     public function destroy(Equipment $equipment)
+    public function destroy(Equipment $equipment)
     {
         $this->authorize('equipment:manage');
         $this->switchToDefaultDb();
@@ -630,7 +653,7 @@ class EquipmentController extends Controller
             return back()->with('error', $message);
         }
         DB::transaction(function () use ($equipment) {
-             $equipment->loadMissing('images');
+            $equipment->loadMissing('images');
             foreach ($equipment->images as $image) {
                 try {
                     $this->smbService->resetShare()->delete($image->file_name);
@@ -650,7 +673,7 @@ class EquipmentController extends Controller
 
 
     // --- handleImageUploads, handleImageUpdates ---
-     private function handleImageUploads(Request $request, Equipment $equipment)
+    private function handleImageUploads(Request $request, Equipment $equipment)
     {
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $key => $file) {
@@ -669,7 +692,7 @@ class EquipmentController extends Controller
     private function handleImageUpdates(Request $request, Equipment $equipment)
     {
         if ($request->has('delete_images')) {
-             $equipment->loadMissing('images');
+            $equipment->loadMissing('images');
             $imagesToDelete = EquipmentImage::whereIn('id', $request->delete_images)->where('equipment_id', $equipment->id)->get();
             foreach ($imagesToDelete as $image) {
                 try {
@@ -685,7 +708,7 @@ class EquipmentController extends Controller
             EquipmentImage::where('id', $request->primary_image)->where('equipment_id', $equipment->id)->update(['is_primary' => true]);
         }
         elseif ($equipment->images()->exists() && $equipment->images()->where('is_primary', true)->doesntExist()) {
-             $equipment->images()->first()?->update(['is_primary' => true]);
+            $equipment->images()->first()?->update(['is_primary' => true]);
         }
     }
 
@@ -700,23 +723,23 @@ class EquipmentController extends Controller
             $msdsData['msds_details'] = $request->input('msds_details');
             if ($request->hasFile('msds_file')) {
                 if ($existingEquipment && $existingEquipment->msds_file_path) {
-                     try { Storage::disk('public')->delete($existingEquipment->msds_file_path); }
-                     catch (\Exception $e) { Log::warning('Failed to delete old MSDS file: ' . $e->getMessage(), ['path' => $existingEquipment->msds_file_path]); }
+                    try { Storage::disk('public')->delete($existingEquipment->msds_file_path); }
+                    catch (\Exception $e) { Log::warning('Failed to delete old MSDS file: ' . $e->getMessage(), ['path' => $existingEquipment->msds_file_path]); }
                 }
                 try {
                     $path = $request->file('msds_file')->store('msds_files', 'public');
                     $msdsData['msds_file_path'] = $path;
                 } catch (\Exception $e) { Log::error('MSDS File Upload Error: ' . $e->getMessage()); throw new \Exception('ไม่สามารถอัปโหลดไฟล์ MSDS ได้: ' . $e->getMessage()); }
             } else {
-                 $msdsData['msds_file_path'] = $existingEquipment?->msds_file_path;
+                $msdsData['msds_file_path'] = $existingEquipment?->msds_file_path;
             }
         } else {
-             $msdsData['msds_details'] = null;
-             $msdsData['msds_file_path'] = null;
-             if ($existingEquipment && $existingEquipment->msds_file_path) {
-                 try { Storage::disk('public')->delete($existingEquipment->msds_file_path); }
-                 catch (\Exception $e) { Log::warning('Failed to delete old MSDS file when unchecked: ' . $e->getMessage(), ['path' => $existingEquipment->msds_file_path]); }
-             }
+            $msdsData['msds_details'] = null;
+            $msdsData['msds_file_path'] = null;
+            if ($existingEquipment && $existingEquipment->msds_file_path) {
+                try { Storage::disk('public')->delete($existingEquipment->msds_file_path); }
+                catch (\Exception $e) { Log::warning('Failed to delete old MSDS file when unchecked: ' . $e->getMessage(), ['path' => $existingEquipment->msds_file_path]); }
+            }
         }
         return $msdsData;
     }
@@ -734,11 +757,11 @@ class EquipmentController extends Controller
                             ->first();
         $nextNumber = 1;
         if ($lastEquipment) {
-             $parts = explode('-', $lastEquipment->serial_number);
-             if (is_numeric(end($parts))) {
-                 $lastNumber = (int)end($parts);
-                 $nextNumber = $lastNumber + 1;
-             }
+            $parts = explode('-', $lastEquipment->serial_number);
+            if (is_numeric(end($parts))) {
+                $lastNumber = (int)end($parts);
+                $nextNumber = $lastNumber + 1;
+            }
         }
         $newSerial = $prefix . '-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
         return response()->json(['success' => true, 'serial_number' => $newSerial]);
