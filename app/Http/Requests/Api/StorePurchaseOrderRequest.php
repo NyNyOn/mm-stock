@@ -12,15 +12,27 @@ class StorePurchaseOrderRequest extends FormRequest
     }
 
     /**
-     * กฎสำหรับ PO มาตรฐาน
-     * (เรายังไม่มีกฎตอนนี้ ใส่เป็น array ว่างไว้ก่อน)
+     * กฎสำหรับ PO มาตรฐาน (Standard PO) ที่ส่งมาจากระบบกลาง
      */
     public function rules(): array
     {
         return [
-            // 'po_number' => 'required|string|unique:purchase_orders',
-            // 'items.*.equipment_id' => 'required|exists:equipments,id',
-            // 'items.*.quantity' => 'required|integer|min:1',
+            // ข้อมูลระดับ Header ของ PO
+            'po_number' => 'required|string|max:50|unique:purchase_orders,po_number',
+            'ordered_by_user_id' => 'required|integer',
+            'supplier_name' => 'nullable|string|max:255',
+            'order_date' => 'required|date',
+            'status' => 'nullable|string',
+            
+            // ข้อมูลรายการสินค้า (Items)
+            'items' => 'required|array|min:1',
+            'items.*.item_name' => 'required|string|max:255',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.unit_name' => 'nullable|string|max:50',
+            'items.*.unit_price' => 'nullable|numeric|min:0',
+            
+            // ✅✅✅ ต้องเพิ่มบรรทัดนี้ ไม่งั้น ID ที่ส่งมาจะหายหมด! ✅✅✅
+            'items.*.equipment_id' => 'nullable|integer|exists:equipments,id', 
         ];
     }
 }

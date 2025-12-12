@@ -5,7 +5,7 @@ namespace App\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use App\Http\Resources\PurchaseOrderItemResource;
-use Illuminate\Support\Facades\Log; // ✅ 1. เพิ่ม Log
+use Illuminate\Support\Facades\Log;
 
 class PurchaseOrderResource extends JsonResource
 {
@@ -16,33 +16,30 @@ class PurchaseOrderResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        // ✅ 2. START: แก้ไข Logic การแปลค่าทั้งหมด
-        
-        // ใช้ match statement เพื่อเลือกค่า Priority ที่ถูกต้องจาก config โดยตรง
+        // 1. Logic การแปลงค่า Priority (ใช้ Match เพื่อความปลอดภัย)
         $priority = match ($this->type) {
             'scheduled'                => config('services.pu_hub.priorities.scheduled'),
             'urgent'                   => config('services.pu_hub.priorities.urgent'),
             'job_order', 'job_order_glpi' => config('services.pu_hub.priorities.job'),
-            default                    => config('services.pu_hub.priorities.scheduled'),
+            default                    => config('services.pu_hub.priorities.scheduled'), // ค่า Default
         };
 
-        // ✅ 3. เพิ่มระบบป้องกัน: ตรวจสอบว่าค่า config ไม่ใช่ null
-        // นี่คือส่วนที่สำคัญที่สุดในการแก้ปัญหา
+        // 2. ระบบป้องกัน: ถ้า Config หาย ให้แจ้งเตือนแต่ไม่ทำให้ระบบล่ม
         if (is_null($priority)) {
-            $errorMessage = "Priority mapping for type '{$this->type}' is NULL. Please run 'php artisan optimize:clear' to refresh the configuration cache.";
-            // บันทึก Error ลง Log เพื่อให้เราเห็น
-            Log::critical($errorMessage);
-            // โยน Exception เพื่อหยุดการทำงานทันที และป้องกันการส่งข้อมูลที่ผิดพลาด
-            throw new \Exception($errorMessage);
+            Log::warning("PurchaseOrderResource: Priority config is missing for type '{$this->type}'. Using default.");
+            $priority = 'Normal'; // Fallback value ป้องกัน Error 500
         }
 
-        // ✅ END: สิ้นสุดการแก้ไข
-        
         return [
+            'id'                   => $this->id,          // ✅ เพิ่ม: เพื่อให้ PU อ้างอิงกลับมาได้
+            'po_number'            => $this->po_number,   // ✅ เพิ่ม: เลขที่ใบสั่งซื้อ
+            'status'               => $this->status,      // ✅ เพิ่ม: สถานะปัจจุบัน
             'requestor_user_id'    => $this->ordered_by_user_id,
-            'origin_department_id' => $this->whenLoaded('requester', $this->requester->department_id ?? 1),
-            'priority'             => $priority, // ใช้ค่าที่ตรวจสอบแล้ว
+            'origin_department_id' => $this->whenLoaded('requester', fn() => $this->requester->department_id ?? null),
+            'priority'             => $priority,
             'items'                => PurchaseOrderItemResource::collection($this->whenLoaded('items')),
+            'created_at'           => $this->created_at->toIso8601String(),
+            'updated_at'           => $this->updated_at->toIso8601String(),
         ];
     }
 }

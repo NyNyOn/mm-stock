@@ -36,6 +36,7 @@ class PurchaseOrderItem extends Model
         'quantity_ordered',
         'quantity_received',
         'unit_price',
+        'unit_name',
         'status',
         'requester_id', // Refers to user in the CENTRAL 'depart_it_db'
         'specifications',

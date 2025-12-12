@@ -14,26 +14,34 @@ class PurchaseOrderItemResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        // โครงสร้างนี้ตรงตามที่ PU Hub ต้องการสำหรับแต่ละ Item
         return [
-            // จากคู่มือ Postman: "item_name_custom"
-            'item_name_custom' => $this->whenLoaded('equipment', $this->equipment->name, $this->item_description),
+            // 1. แก้ไขชื่อสินค้า: เช็คก่อนว่ามี equipment ไหม
+            // ถ้ามี: ใช้ชื่อจาก Equipment
+            // ถ้าไม่มี (null): ใช้ item_description ที่เราบันทึกตอน create
+            'item_name_custom' => $this->equipment ? $this->equipment->name : $this->item_description,
 
-            // จากคู่มือ Postman: "quantity"
+            // ปริมาณ
             'quantity' => $this->quantity_ordered,
 
-            // จากคู่มือ Postman: "unit_name"
-            'unit_name' => $this->whenLoaded('equipment', function() {
-                return $this->equipment->unit->name ?? 'N/A';
-            }),
+            // 2. แก้ไขหน่วยนับ: เช็คก่อนว่ามี equipment และ unit ไหม
+            // ถ้ามี: ใช้หน่วยของ Equipment
+            // ถ้าไม่มี: ใช้ unit_name ที่เราบันทึกในตาราง (หรือ default N/A)
+            'unit_name' => ($this->equipment && $this->equipment->unit) 
+                            ? $this->equipment->unit->name 
+                            : ($this->unit_name ?? 'N/A'),
             
-            // เพิ่ม job_ticket_id สำหรับ PO ประเภท Job
+            // Job Ticket ID (เหมือนเดิม)
             'job_ticket_id' => $this->when($this->purchaseOrder?->type === 'job_order_glpi' || $this->purchaseOrder?->type === 'job_order', 
-                $this->whenLoaded('purchaseOrder', $this->purchaseOrder->glpi_ticket_id)
+                $this->whenLoaded('purchaseOrder', function() {
+                    return $this->purchaseOrder->glpi_ticket_id;
+                })
             ),
 
-            // จากคู่มือ Postman: "notes"
+            // หมายเหตุ
             'notes' => $this->item_description,
+            
+            // ราคาต่อหน่วย (แถมให้: ถ้าอยากส่งราคากลับไปด้วย)
+            'unit_price' => $this->unit_price,
         ];
     }
 }
