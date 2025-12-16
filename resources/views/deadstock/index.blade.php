@@ -3,10 +3,20 @@
 @section('subtitle', 'รายการอุปกรณ์ที่ไม่มีการเคลื่อนไหว')
 
 @section('content')
-<div class="page animate-slide-up-soft">
+<div class="space-y-6 page animate-slide-up-soft">
     
     {{-- Filter Bar --}}
     <div class="p-6 mb-6 bg-white rounded-2xl gentle-shadow">
+        <div class="flex items-center mb-4">
+            <div class="flex items-center justify-center w-10 h-10 mr-4 bg-orange-100 rounded-full">
+                <i class="text-orange-600 fas fa-spider"></i>
+            </div>
+            <div>
+                <h3 class="text-xl font-bold text-gray-800">ตัวกรอง Deadstock</h3>
+                <p class="text-sm text-gray-500">ค้นหาสินค้าที่นิ่งเกินจำนวนวันที่กำหนด</p>
+            </div>
+        </div>
+
         <form method="GET" action="{{ route('deadstock.index') }}" class="flex flex-col gap-4 md:flex-row md:items-end">
             <div class="w-full md:w-1/3">
                 <label class="block mb-2 text-sm font-bold text-gray-700">📦 เลือกความเก่า (จำนวนวันที่นิ่ง)</label>
@@ -46,15 +56,15 @@
             </div>
         @else
             {{-- Summary Card --}}
-            <div class="p-4 mb-2 border border-l-4 border-gray-400 bg-gray-50 rounded-xl">
+            <div class="p-4 mb-2 border-l-4 border-orange-400 bg-orange-50 rounded-xl">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm font-bold text-gray-600">พบรายการค้างสต๊อก</p>
-                        <p class="text-2xl font-bold text-gray-800">{{ $deadstockItems->total() }} รายการ</p>
+                        <p class="text-sm font-bold text-orange-800">พบรายการค้างสต๊อก</p>
+                        <p class="text-2xl font-bold text-orange-900">{{ $deadstockItems->total() }} รายการ</p>
                     </div>
                     <div class="text-right">
-                        <p class="text-xs text-gray-500">มูลค่ารวมที่จมอยู่</p>
-                        <p class="text-sm font-bold text-gray-400">(รอคำนวณ)</p>
+                        <p class="text-xs text-orange-600">เงื่อนไข</p>
+                        <p class="text-sm font-bold text-orange-800">นิ่งเกิน {{ $daysInactive }} วัน</p>
                     </div>
                 </div>
             </div>
@@ -64,6 +74,8 @@
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-100">
                         <tr>
+                            <th class="px-6 py-4 text-xs font-bold tracking-wider text-left text-gray-500 uppercase">#</th>
+                            <th class="px-6 py-4 text-xs font-bold tracking-wider text-center text-gray-500 uppercase">รูปภาพ</th>
                             <th class="px-6 py-4 text-xs font-bold tracking-wider text-left text-gray-500 uppercase">สินค้า / อุปกรณ์</th>
                             <th class="px-6 py-4 text-xs font-bold tracking-wider text-center text-gray-500 uppercase">คงเหลือ</th>
                             <th class="px-6 py-4 text-xs font-bold tracking-wider text-left text-gray-500 uppercase">เคลื่อนไหวล่าสุด</th>
@@ -73,30 +85,24 @@
                     <tbody class="divide-y divide-gray-100">
                         @foreach($deadstockItems as $item)
                             <tr class="transition-colors hover:bg-gray-50 group">
+                                <td class="px-6 py-4 text-gray-500">{{ $loop->iteration + ($deadstockItems->currentPage() - 1) * $deadstockItems->perPage() }}</td>
+                                <td class="px-6 py-4 flex justify-center">
+                                    {{-- ใช้ image_url จาก Model ได้เลย --}}
+                                    <div class="relative w-12 h-12 rounded-lg overflow-hidden border border-gray-200 cursor-pointer" 
+                                         onclick="showDetailsModal({{ $item->id }})">
+                                        <img src="{{ $item->image_url }}" 
+                                             alt="{{ $item->name }}" 
+                                             class="w-full h-full object-cover"
+                                             onerror="this.onerror=null; this.src='{{ asset('images/placeholder.webp') }}';">
+                                    </div>
+                                </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        {{-- ✅ FIX: แก้ไขการแสดงรูปภาพ --}}
-                                        <div class="flex items-center justify-center flex-shrink-0 w-10 h-10 overflow-hidden bg-gray-200 rounded-full text-gray-500">
-                                            @php
-                                                $primaryImage = $item->images->sortByDesc('is_primary')->first();
-                                                $imageFileName = $primaryImage->file_name ?? null;
-                                                $defaultDeptKey = config('department_stocks.default_key', 'mm');
-                                                $imageUrl = $imageFileName 
-                                                    ? route('nas.image', ['deptKey' => $defaultDeptKey, 'filename' => $imageFileName]) 
-                                                    : null;
-                                            @endphp
-
-                                            @if($imageUrl)
-                                                <img src="{{ $imageUrl }}" class="w-full h-full object-cover" alt="{{ $item->name }}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                                                <i class="fas fa-box" style="display: none;"></i>
-                                            @else
-                                                <i class="fas fa-box"></i>
-                                            @endif
+                                    <div class="flex flex-col">
+                                        <div class="text-sm font-bold text-indigo-700 cursor-pointer hover:underline" onclick="showDetailsModal({{ $item->id }})">
+                                            {{ $item->name }}
                                         </div>
-                                        <div class="ml-4">
-                                            <div class="text-sm font-bold text-gray-900">{{ $item->name }}</div>
-                                            <div class="text-xs text-gray-500">{{ optional($item->category)->name }}</div>
-                                        </div>
+                                        <div class="text-xs text-gray-500">{{ optional($item->category)->name }}</div>
+                                        <div class="text-xs text-gray-400 font-mono">{{ $item->serial_number ?? '-' }}</div>
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 text-center whitespace-nowrap">
@@ -133,4 +139,13 @@
         @endif
     </div>
 </div>
+
+{{-- Include Modal --}}
+@include('partials.modals.equipment-details')
+
 @endsection
+
+@push('scripts')
+{{-- Load Equipment JS for Modal --}}
+<script src="{{ asset('js/equipment.js') }}"></script>
+@endpush

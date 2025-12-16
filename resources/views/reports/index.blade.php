@@ -20,7 +20,7 @@
         <form id="report-form" class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
             @csrf
             
-            {{-- 1. ประเภทรายงาน (จัดกลุ่มใหม่ตามที่คุณต้องการ) --}}
+            {{-- 1. ประเภทรายงาน --}}
             <div class="lg:col-span-1">
                 <label for="report_type" class="block mb-1 text-sm font-bold text-gray-700">📑 ประเภทรายงาน</label>
                 <select id="report_type" name="report_type" required class="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400 focus:border-transparent gentle-shadow">
@@ -28,14 +28,15 @@
                     
                     <optgroup label="📦 คลังสินค้าและอุปกรณ์">
                         <option value="stock_summary" @selected(old('report_type', $initialReportType) == 'stock_summary')>📊 สรุปสต๊อกคงคลัง (Stock Balance)</option>
-                        <option value="low_stock" @selected(old('report_type', $initialReportType) == 'low_stock')>⚠️ สินค้าใกล้หมด/หมด (Low Stock)</option>
+                        <option value="low_stock" @selected(old('report_type', $initialReportType) == 'low_stock')>⚠️ สินค้าใกล้หมด (Low Stock)</option>
+                        <option value="out_of_stock" @selected(old('report_type', $initialReportType) == 'out_of_stock')>⛔ สินค้าหมด (Out of Stock)</option>
                         <option value="dead_stock" @selected(old('report_type', $initialReportType) == 'dead_stock')>🕸️ สินค้าไม่เคลื่อนไหว (Deadstock)</option>
                         <option value="warranty" @selected(old('report_type', $initialReportType) == 'warranty')>🛡️ รายงานประกันใกล้หมด (Warranty)</option>
                     </optgroup>
 
                     <optgroup label="💰 การเงินและต้นทุน">
                         <option value="inventory_valuation" @selected(old('report_type', $initialReportType) == 'inventory_valuation')>💵 มูลค่าสินค้าคงคลังรวม (Valuation)</option>
-                        <option value="department_cost" @selected(old('report_type', $initialReportType) == 'department_cost')>🏢 สรุปยอดเบิกแยกตามแผนก/ผู้ใช้ (Cost Usage)</option>
+                        <option value="department_cost" @selected(old('report_type', $initialReportType) == 'department_cost')>🏢 สรุปยอดเบิกแยกตามแผนก (Cost Usage)</option>
                     </optgroup>
 
                     <optgroup label="📈 สถิติและการใช้งาน">
@@ -88,7 +89,7 @@
                 </select>
             </div>
 
-            {{-- User Filter (Hidden by default) --}}
+            {{-- User Filter --}}
             <div id="user-filter-container" style="display: none;" class="md:col-span-2 lg:col-span-1">
                 <label for="user_id" class="block mb-1 text-sm font-medium text-gray-700">ผู้ใช้งาน (เฉพาะเจาะจง)</label>
                 <select id="user_id" name="user_id" class="w-full px-4 py-3 text-sm text-gray-700 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400">
@@ -119,7 +120,6 @@
             </div>
             
             <div class="mt-2 md:mt-0">
-                {{-- เงื่อนไขจำกัดสิทธิ์ปุ่ม Export PDF --}}
                 @php
                     $user = Auth::user();
                     $superAdminId = (int)config('app.super_admin_id', 9);
@@ -136,12 +136,16 @@
          </div>
          
         <div class="p-5 overflow-x-auto">
-            <table class="w-full text-sm text-left text-gray-500" id="report-table">
+            <table class="w-full text-sm text-left text-gray-500 align-middle" id="report-table">
                 {{-- Content from JS --}}
             </table>
         </div>
     </div>
 </div>
+
+{{-- ✅ Include Equipment Details Modal --}}
+@include('partials.modals.equipment-details')
+
 @endsection
 
 @push('scripts')
@@ -152,12 +156,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js"></script>
 
+    {{-- ✅ Load Equipment JS for Modal Functionality --}}
+    <script src="{{ asset('js/equipment.js') }}"></script>
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const pdfButton = document.getElementById('export-pdf-button');
             const reportResultsContainer = document.getElementById('report-results-container');
             
-            if (typeof pdfMake === 'undefined') { console.error('pdfMake is not loaded!'); return; }
+            if (typeof pdfMake === 'undefined') return;
 
             pdfMake.fonts = {
                 THSarabun: {
@@ -168,7 +175,6 @@
                 }
             };
 
-            // --- Helper Functions for PDF ---
             function parseHtmlTable() {
                 const table = document.getElementById('report-table');
                 if (!table) return { body: [], widths: [] };
@@ -176,7 +182,8 @@
                 const tableBody = [];
                 const colWidths = [];
                 const headerData = [];
-                const numericKeywords = ['จำนวน', 'คงเหลือ', 'ขั้นต่ำ', 'qty', 'quantity', 'min', 'stock', 'id', 'ราคา', 'มูลค่า', 'ยอดเบิก'];
+                // Skip 'รูปภาพ' column for PDF export
+                const skipIndices = []; 
 
                 // Header
                 const headerRows = table.querySelectorAll('thead tr th');
@@ -184,6 +191,10 @@
                 
                 headerRows.forEach((th, index) => {
                     const thText = th.textContent.trim();
+                    if(thText === 'รูปภาพ') {
+                        skipIndices.push(index);
+                        return;
+                    }
                     headerData.push(thText.toLowerCase());
                     headerCells.push({ text: thText, style: 'tableHeader' });
 
@@ -198,18 +209,17 @@
                 // Body
                 const bodyRows = table.querySelectorAll('tbody tr');
                 bodyRows.forEach(tr => {
-                    // Skip empty rows
                     if (tr.cells.length <= 1 && tr.innerText.includes('ไม่พบ')) return;
 
                     const rowCells = [];
                     tr.querySelectorAll('td').forEach((td, index) => {
+                        if(skipIndices.includes(index)) return; // Skip image column
+
                         let styleName = 'tableBody';
-                        const headerText = headerData[index] || '';
+                        const headerText = headerData[rowCells.length] || ''; 
                         
                         if (index === 0 || headerText.includes('#') || headerText.includes('ลำดับ')) {
                             styleName = 'alignCenter';
-                        } else if (numericKeywords.some(keyword => headerText.includes(keyword))) {
-                            styleName = 'alignRight';
                         }
                         
                         rowCells.push({ text: td.innerText.trim(), style: styleName });
@@ -221,7 +231,7 @@
             }
 
             function exportReportToPdf() {
-                try {
+                 try {
                     const tableConfig = parseHtmlTable();
                     if (tableConfig.body.length <= 1) {
                         alert('ไม่พบข้อมูลตารางสำหรับ Export');
@@ -250,7 +260,6 @@
                             subheader: { fontSize: 10, margin: [0, 0, 0, 2], color: '#555' },
                             tableHeader: { bold: true, fontSize: 11, color: 'black', fillColor: '#eeeeee', alignment: 'center' },
                             tableBody: { fontSize: 10, alignment: 'left' },
-                            alignRight: { fontSize: 10, alignment: 'right' },
                             alignCenter: { fontSize: 10, alignment: 'center' }
                         }
                     };
@@ -266,9 +275,7 @@
 
             if (pdfButton) {
                 pdfButton.addEventListener('click', exportReportToPdf);
-                
-                // Observe changes to show button
-                const observer = new MutationObserver((mutations) => {
+                 const observer = new MutationObserver((mutations) => {
                     for (const mutation of mutations) {
                         if (mutation.attributeName === 'style') {
                             if (reportResultsContainer.style.display !== 'none') {
@@ -282,10 +289,9 @@
                 observer.observe(reportResultsContainer, { attributes: true, attributeFilter: ['style'] });
             }
         });
-
-        // ✅ ฟังก์ชันสร้าง Badge (Global) - รองรับทุกสถานะที่เพิ่มมา
-        function getStatusBadge(status) {
-            let colorClass = 'bg-gray-100 text-gray-800';
+        
+        window.getStatusBadge = function(status) {
+             let colorClass = 'bg-gray-100 text-gray-800';
             let icon = '';
             let label = status;
 
@@ -305,8 +311,7 @@
                 case 'locked': colorClass = 'bg-red-100 text-red-600'; icon = '<i class="fas fa-lock mr-1"></i>'; label = 'ถูกระงับ'; break;
             }
             return `<span class="px-2 py-1 text-xs font-semibold rounded-full ${colorClass} whitespace-nowrap border border-opacity-20 border-current">${icon} ${label}</span>`;
-        }
-        window.getStatusBadge = getStatusBadge; 
+        };
     </script>
     
     <script src="{{ asset('js/reports.js') }}"></script>

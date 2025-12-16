@@ -160,4 +160,20 @@ class Equipment extends Model
     {
         return $this->status === 'frozen';
     }
+    
+    // Helper to get image URL properly (เพิ่มเพื่อให้ ReportController ทำงานได้สมบูรณ์กับ JS ที่แก้ไป)
+    public function getImageUrlAttribute()
+    {
+        $image = $this->primaryImage ?? $this->latestImage;
+        
+        if (!$image || !$image->exists) {
+            return asset('images/placeholder.webp');
+        }
+
+        if (filter_var($image->file_path, FILTER_VALIDATE_URL)) {
+            return $image->file_path;
+        }
+
+        return url('images/' . $image->file_path);
+    }
 }

@@ -30,7 +30,7 @@ class ReportController extends Controller
     public function generate(Request $request)
     {
         $validated = $request->validate([
-            'report_type' => 'required|string|in:stock_summary,transaction_history,borrow_report,low_stock,warranty,maintenance_report,po_report,disposal_report,consumable_return_report,user_activity_report,inventory_valuation,department_cost,top_movers,dead_stock,audit_logs',
+            'report_type' => 'required|string',
             'start_date' => 'sometimes|nullable|date',
             'end_date' => 'sometimes|nullable|date|after_or_equal:start_date',
             'category_id' => 'sometimes|nullable|integer|exists:categories,id',
@@ -46,6 +46,7 @@ class ReportController extends Controller
             case 'transaction_history': $data = $this->generateTransactionHistory($validated); break;
             case 'borrow_report': $data = $this->generateBorrowReport($validated); break;
             case 'low_stock': $data = $this->generateLowStockReport($validated); break;
+            case 'out_of_stock': $data = $this->generateOutOfStockReport($validated); break;
             case 'warranty': $data = $this->generateWarrantyReport($validated); break;
             case 'maintenance_report': $data = $this->generateMaintenanceReport($validated); break;
             case 'po_report': $data = $this->generatePoReport($validated); break;
@@ -53,7 +54,6 @@ class ReportController extends Controller
             case 'consumable_return_report': $data = $this->generateConsumableReturnReport($validated); break;
             case 'user_activity_report': $data = $this->generateUserActivityReport($validated); break;
             
-            // New Reports
             case 'inventory_valuation': $data = $this->generateInventoryValuationReport($validated); break;
             case 'department_cost': $data = $this->generateDepartmentCostReport($validated); break;
             case 'top_movers': $data = $this->generateTopMoversReport($validated); break;
@@ -72,11 +72,11 @@ class ReportController extends Controller
         });
     }
 
-    // --- Existing Reports ---
+    // --- Reports ---
 
     private function generateStockSummary(array $filters)
     {
-        $query = Equipment::with(['category', 'location', 'unit'])
+        $query = Equipment::with(['category', 'location', 'unit', 'primaryImage', 'latestImage'])
             ->whereNotIn('status', ['disposed', 'sold']);
             
         if(isset($filters['category_id'])) $query->where('category_id', $filters['category_id']);
@@ -87,7 +87,7 @@ class ReportController extends Controller
 
     private function generateTransactionHistory(array $filters)
     {
-        $query = Transaction::with(['equipment', 'user']);
+        $query = Transaction::with(['equipment.primaryImage', 'equipment.latestImage', 'user']);
         
         if(isset($filters['category_id'])) {
             $query->whereHas('equipment', function($q) use ($filters) {
@@ -102,7 +102,7 @@ class ReportController extends Controller
 
     private function generateBorrowReport(array $filters)
     {
-        $query = Transaction::with(['equipment', 'user'])
+        $query = Transaction::with(['equipment.primaryImage', 'equipment.latestImage', 'user'])
             ->whereIn('type', ['borrow', 'borrow_temporary'])
             ->where('status', '!=', 'completed');
             
@@ -113,8 +113,9 @@ class ReportController extends Controller
 
     private function generateLowStockReport(array $filters)
     {
-        $query = Equipment::with(['category', 'location', 'unit'])
+        $query = Equipment::with(['category', 'location', 'unit', 'primaryImage', 'latestImage'])
             ->whereColumn('quantity', '<=', 'min_stock')
+            ->where('quantity', '>', 0)
             ->where('min_stock', '>', 0);
             
         if(isset($filters['category_id'])) $query->where('category_id', $filters['category_id']);
@@ -123,9 +124,21 @@ class ReportController extends Controller
         return $query->orderBy('quantity', 'asc')->get();
     }
 
+    private function generateOutOfStockReport(array $filters)
+    {
+        $query = Equipment::with(['category', 'location', 'unit', 'primaryImage', 'latestImage'])
+            ->where('quantity', '<=', 0)
+            ->whereNotIn('status', ['disposed', 'sold']);
+            
+        if(isset($filters['category_id'])) $query->where('category_id', $filters['category_id']);
+        if(isset($filters['location_id'])) $query->where('location_id', $filters['location_id']);
+        
+        return $query->orderBy('updated_at', 'desc')->get();
+    }
+
     private function generateWarrantyReport(array $filters)
     {
-        $query = Equipment::with(['category'])->whereNotNull('warranty_date');
+        $query = Equipment::with(['category', 'primaryImage', 'latestImage'])->whereNotNull('warranty_date');
         
         if (empty($filters['start_date'])) {
              $query->whereBetween('warranty_date', [now(), now()->addDays(60)]);
@@ -140,25 +153,25 @@ class ReportController extends Controller
 
     private function generateMaintenanceReport(array $filters)
     {
-        $query = MaintenanceLog::with(['equipment', 'reportedBy']);
+        $query = MaintenanceLog::with(['equipment.primaryImage', 'equipment.latestImage', 'reportedBy']);
         return $this->applyDateFilter($query, $filters)->orderBy('created_at', 'desc')->get();
     }
 
     private function generatePoReport(array $filters)
     {
-        $query = PurchaseOrder::with(['orderedBy', 'items.equipment']);
+        $query = PurchaseOrder::with(['orderedBy', 'items.equipment.primaryImage', 'items.equipment.latestImage']);
         return $this->applyDateFilter($query, $filters, 'ordered_at')->orderBy('ordered_at', 'desc')->get();
     }
 
     private function generateDisposalReport(array $filters)
     {
-        $query = Equipment::with(['category'])->whereIn('status', ['disposed', 'sold']);
+        $query = Equipment::with(['category', 'primaryImage', 'latestImage'])->whereIn('status', ['disposed', 'sold']);
         return $this->applyDateFilter($query, $filters, 'updated_at')->orderBy('updated_at', 'desc')->get();
     }
 
     private function generateConsumableReturnReport(array $filters)
     {
-        $query = ConsumableReturn::with(['requester', 'originalTransaction.equipment', 'approver']);
+        $query = ConsumableReturn::with(['requester', 'originalTransaction.equipment.primaryImage', 'originalTransaction.equipment.latestImage', 'approver']);
         return $this->applyDateFilter($query, $filters)->orderBy('created_at', 'desc')->get();
     }
 
@@ -166,17 +179,15 @@ class ReportController extends Controller
     {
         if (empty($filters['user_id'])) return [];
         
-        $query = Transaction::with(['equipment'])->where('user_id', $filters['user_id']);
+        $query = Transaction::with(['equipment.primaryImage', 'equipment.latestImage'])->where('user_id', $filters['user_id']);
         return $this->applyDateFilter($query, $filters, 'transaction_date')
             ->orderBy('transaction_date', 'desc')
             ->get();
     }
 
-    // --- New Reports ---
-
     private function generateInventoryValuationReport(array $filters)
     {
-        $query = Equipment::with(['category', 'location'])
+        $query = Equipment::with(['category', 'location', 'primaryImage', 'latestImage'])
             ->where('quantity', '>', 0)
             ->whereNotIn('status', ['disposed', 'sold']);
 
@@ -192,7 +203,7 @@ class ReportController extends Controller
 
     private function generateDepartmentCostReport(array $filters)
     {
-        $query = Transaction::with(['equipment', 'user'])
+        $query = Transaction::with(['equipment.primaryImage', 'equipment.latestImage', 'user'])
             ->where('type', 'withdraw');
 
         $this->applyDateFilter($query, $filters, 'transaction_date');
@@ -229,41 +240,59 @@ class ReportController extends Controller
         $results = $query->orderByDesc('total_qty')->limit(20)->get();
 
         return $results->map(function($row) {
-            $eq = Equipment::find($row->equipment_id);
+            $eq = Equipment::with(['primaryImage', 'latestImage'])->find($row->equipment_id);
             return [
+                'equipment_id' => $row->equipment_id,
                 'equipment_name' => $eq ? $eq->name : 'Unknown',
                 'category' => $eq && $eq->category ? $eq->category->name : '-',
                 'tx_count' => $row->tx_count,
-                'total_qty' => $row->total_qty
+                'total_qty' => $row->total_qty,
+                'primary_image' => $eq ? $eq->primaryImage : null,
+                'latest_image' => $eq ? $eq->latestImage : null,
             ];
         });
     }
 
+    // ✅ ปรับปรุง Logic Deadstock: แก้ไขเวลาให้ตรง ไม่ปัดเป็น 00:00:00
     private function generateDeadStockReport(array $filters)
     {
-        $days = 90;
-        $thresholdDate = Carbon::now()->subDays($days);
+        $days = 30; 
+        $now = now(); // เวลาปัจจุบันเต็มรูปแบบ
 
-        $query = Equipment::with(['category', 'location'])
+        $query = Equipment::with(['category', 'location', 'primaryImage', 'latestImage', 'transactions'])
             ->where('quantity', '>', 0)
-            ->whereNotIn('status', ['sold', 'disposed'])
-            ->whereDoesntHave('transactions', function ($q) use ($thresholdDate) {
-                $q->where('transaction_date', '>=', $thresholdDate);
-            });
+            ->whereNotIn('status', ['sold', 'disposed']);
 
         if(isset($filters['category_id'])) $query->where('category_id', $filters['category_id']);
+        if(isset($filters['location_id'])) $query->where('location_id', $filters['location_id']);
 
-        return $query->get()->map(function($item) {
-            $lastTx = $item->transactions()->latest('transaction_date')->first();
-            $item->last_movement = $lastTx ? $lastTx->transaction_date : $item->created_at;
-            $item->days_silent = Carbon::parse($item->last_movement)->diffInDays(now());
+        $items = $query->get()->map(function($item) use ($now) {
+            $lastTx = $item->transactions->sortByDesc('transaction_date')->first();
+            
+            if ($lastTx) {
+                // ✅ ไม่ใช้ startOfDay() ที่นี่ เพื่อให้แสดงเวลาได้ถูกต้อง (เช่น 14:30)
+                $lastMovement = Carbon::parse($lastTx->transaction_date);
+            } else {
+                $lastMovement = $item->updated_at ? Carbon::parse($item->updated_at) : Carbon::parse($item->created_at);
+            }
+
+            // ส่งเวลาจริงไปแสดงที่หน้าเว็บ
+            $item->last_movement = $lastMovement->toDateTimeString();
+            
+            // ✅ ตอนคำนวณวัน ค่อยใช้ startOfDay() เพื่อเปรียบเทียบตามปฏิทิน
+            // เช่น อัปเดตเมื่อวาน 5 โมงเย็น กับ วันนี้ 8 โมงเช้า = ถือว่าผ่านไป 1 วัน
+            $item->days_silent = (int) abs($now->copy()->startOfDay()->diffInDays($lastMovement->copy()->startOfDay()));
+            
             return $item;
-        })->sortByDesc('days_silent')->values();
+        });
+
+        return $items->sortByDesc('days_silent')->values();
     }
 
     private function generateAuditLogsReport(array $filters)
     {
         if (!class_exists(Changelog::class)) return [];
+        
         $query = Changelog::with('user')->orderBy('created_at', 'desc');
         return $this->applyDateFilter($query, $filters)->get();
     }
