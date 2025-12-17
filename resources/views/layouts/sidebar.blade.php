@@ -225,8 +225,8 @@
                 </div>
             </div>
             <div>
-                <h1 class="text-xl font-bold gradient-text-soft">{{ config('app.name', 'WH Stock') }}</h1>
-                <p class="text-sm font-medium text-gray-600">📦 V 1.0 By WH Dept</p>
+                <h1 class="text-xl font-bold gradient-text-soft">{{ config('app.name', 'MM Stock') }}</h1>
+                <p class="text-sm font-medium text-gray-600"> V 1.0 By MM Dept</p>
             </div>
         </div>
 

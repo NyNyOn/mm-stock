@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('header', '🏠 Dashboard')
-@section('subtitle', 'ภาพรวมระบบจัดการสต๊อกอุปกรณ์ IT')
+@section('subtitle', 'ภาพรวมระบบจัดการสต๊อกอุปกรณ์ ')
 
 @section('content')
 <div id="dashboard-page" class="page animate-slide-up-soft">
@@ -30,8 +30,8 @@
                 </div>
             </div>
 
-        {{-- 1.2 IT & Admin --}}
-        @elseif($userGroupSlug && in_array(strtolower($userGroupSlug), ['it', 'admin', 'administrator', 'administartor']))
+        {{-- 1.2 IT & Admin (แก้ไขเพิ่ม 'itsupport' และรูปแบบอื่นๆ) --}}
+        @elseif($userGroupSlug && in_array(strtolower(str_replace(' ', '', $userGroupSlug)), ['it', 'admin', 'administrator', 'administartor', 'itsupport', 'it-support']))
             <div class="flex items-center p-6 mb-6 space-x-6 bg-gradient-to-r from-green-50 to-emerald-50 soft-card rounded-2xl gentle-shadow soft-hover animate-slide-up-soft">
                 <div class="text-5xl text-green-400">
                     <i class="fas fa-user-shield"></i>
@@ -58,8 +58,8 @@
             <div class="p-6 mb-6 soft-card rounded-2xl stat-card gentle-shadow">
                 <div class="flex items-center justify-between">
                     <div>
-                        <h1 class="mb-3 text-2xl font-bold gradient-text-soft">🌸 ยินดีต้อนรับสู่ IT Stock Pro</h1>
-                        <p class="mb-4 text-sm leading-relaxed text-gray-600">ระบบจัดการสต๊อกอุปกรณ์ IT แบบ Smart & Modern</p>
+                        <h1 class="mb-3 text-2xl font-bold gradient-text-soft">🌸 ยินดีต้อนรับสู่ Stock Pro</h1>
+                        <p class="mb-4 text-sm leading-relaxed text-gray-600">ระบบจัดการสต๊อกอุปกรณ์ แบบ Smart & Modern</p>
                         <div class="flex items-center space-x-5">
                             <div class="flex items-center space-x-2"><div class="w-3 h-3 bg-green-400 rounded-full animate-bounce-gentle"></div><span class="text-sm font-bold text-green-600">🟢 ระบบพร้อมใช้งาน</span></div>
                             <div class="flex items-center space-x-2"><i class="text-sm text-gray-400 fas fa-clock"></i><span class="text-sm text-gray-500">อัปเดตล่าสุด: {{ now()->format('d/m/Y H:i') }}</span></div>

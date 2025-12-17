@@ -123,8 +123,9 @@
                 @php
                     $user = Auth::user();
                     $superAdminId = (int)config('app.super_admin_id', 9);
-                    $userGroupSlug = strtolower($user->serviceUserRole?->userGroup?->slug ?? '');
-                    $canExportPdf = ($user->id === $superAdminId) || in_array($userGroupSlug, ['it', 'admin', 'administrator']);
+                    
+                    // ✅ แก้ไข: ใช้ hasPermissionTo แทนการเช็ค Role Slug เพื่อความเสถียรข้าม Database
+                    $canExportPdf = ($user->id === $superAdminId) || $user->hasPermissionTo('report:export');
                 @endphp
 
                 @if($canExportPdf)

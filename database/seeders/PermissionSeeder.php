@@ -54,6 +54,7 @@ class PermissionSeeder extends Seeder
 
             // === Reports (รายงาน และ Deadstock) ===
             ['name' => 'report:view', 'description' => 'สิทธิ์ในการเข้าถึงรายงานและ Deadstock'],
+            ['name' => 'report:export', 'description' => 'สิทธิ์ในการ Export รายงานเป็น PDF'],
 
             // === System Management (การจัดการระบบ) ===
             ['name' => 'user:manage', 'description' => 'สิทธิ์ในการจัดการผู้ใช้และกำหนดกลุ่ม'],
