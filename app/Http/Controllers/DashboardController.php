@@ -114,9 +114,18 @@ class DashboardController extends Controller
 
         $query = Transaction::select(
                 DB::raw('MONTH(transaction_date) as month'),
+                // 1. Received (รับเข้า): ใช้ 'receive' เท่านั้น
                 DB::raw("SUM(CASE WHEN type = 'receive' THEN quantity_change ELSE 0 END) as total_received"),
-                DB::raw("SUM(CASE WHEN type = 'withdraw' THEN ABS(quantity_change) ELSE 0 END) as total_withdrawn"),
-                DB::raw("SUM(CASE WHEN type = 'borrow' THEN ABS(quantity_change) ELSE 0 END) as total_borrowed"),
+                
+                // 2. Withdrawn (เบิกออก): รวม 'withdraw', 'consumable', 'partial_return'
+                // ใช้ ABS() เพราะ quantity_change เป็นค่าติดลบเมื่อเบิกออก
+                DB::raw("SUM(CASE WHEN type IN ('withdraw', 'consumable', 'partial_return') THEN ABS(quantity_change) ELSE 0 END) as total_withdrawn"),
+                
+                // 3. Borrowed (ยืม): รวม 'borrow' และ 'returnable'
+                // ใช้ ABS() เพราะ quantity_change เป็นค่าติดลบเมื่อยืมออก
+                DB::raw("SUM(CASE WHEN type IN ('borrow', 'returnable') THEN ABS(quantity_change) ELSE 0 END) as total_borrowed"),
+                
+                // 4. Returned (คืน): ใช้ 'return' เท่านั้น
                 DB::raw("SUM(CASE WHEN type = 'return' THEN quantity_change ELSE 0 END) as total_returned")
             )
             ->whereYear('transaction_date', $year)
@@ -135,21 +144,25 @@ class DashboardController extends Controller
         $labels = [];
         $data = ['received' => array_fill(1, 12, 0), 'withdrawn' => array_fill(1, 12, 0), 'borrowed' => array_fill(1, 12, 0), 'returned' => array_fill(1, 12, 0)];
         for ($m = 1; $m <= 12; $m++) {
-            $labels[] = Carbon::create()->month($m)->locale('th_TH')->monthName;
+            // ดึงชื่อเดือนภาษาไทย (ขึ้นอยู่กับการตั้งค่า Locale ใน Laravel)
+            $labels[] = Carbon::create()->month($m)->locale('th_TH')->monthName; 
             if ($transactionsByMonth->has($m)) {
                 $monthData = $transactionsByMonth->get($m);
-                $data['received'][$m] = $monthData->total_received;
-                $data['withdrawn'][$m] = $monthData->total_withdrawn;
-                $data['borrowed'][$m] = $monthData->total_borrowed;
-                $data['returned'][$m] = $monthData->total_returned;
+                // บังคับแปลงเป็น Integer เพื่อความเสถียรของ Chart.js
+                $data['received'][$m] = (int)$monthData->total_received;
+                $data['withdrawn'][$m] = (int)$monthData->total_withdrawn;
+                $data['borrowed'][$m] = (int)$monthData->total_borrowed;
+                $data['returned'][$m] = (int)$monthData->total_returned;
             }
         }
+        
         $datasets = [
-            'received' => ['label' => 'รับเข้า', 'data' => array_values($data['received']), 'backgroundColor' => '#4ade80', 'borderRadius' => 4],
-            'withdrawn' => ['label' => 'เบิก', 'data' => array_values($data['withdrawn']), 'backgroundColor' => '#f87171', 'borderRadius' => 4],
-            'borrowed' => ['label' => 'ยืม', 'data' => array_values($data['borrowed']), 'backgroundColor' => '#facc15', 'borderRadius' => 4],
-            'returned' => ['label' => 'คืน', 'data' => array_values($data['returned']), 'backgroundColor' => '#60a5fa', 'borderRadius' => 4],
+            'received' => ['label' => 'รับเข้า', 'data' => array_values($data['received'])],
+            'withdrawn' => ['label' => 'เบิก', 'data' => array_values($data['withdrawn'])],
+            'borrowed' => ['label' => 'ยืม', 'data' => array_values($data['borrowed'])],
+            'returned' => ['label' => 'คืน', 'data' => array_values($data['returned'])],
         ];
+
         return response()->json(['labels' => $labels, 'datasets' => $datasets]);
     }
     

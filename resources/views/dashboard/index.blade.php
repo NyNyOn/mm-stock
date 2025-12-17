@@ -125,37 +125,73 @@
     </div>
 
     {{-- ========================================================= --}}
-    {{-- 3. Chart Area --}}
+    {{-- 3. Chart Area (Modern Redesign - Fixed Grouping) --}}
     {{-- ========================================================= --}}
-    <div class="p-5 mb-6 soft-card rounded-2xl stat-card gentle-shadow">
-        <div class="flex flex-col items-start justify-between gap-4 mb-4 md:flex-row">
-            <h3 class="text-lg font-bold text-gray-800">📊 ภาพรวมการเคลื่อนไหวสต๊อกรายเดือน</h3>
-            <div class="flex flex-col items-center w-full gap-2 md:w-auto md:flex-row">
-                <div id="chartSeriesToggle" class="flex flex-wrap justify-start gap-x-4 gap-y-2">
-                    <label class="flex items-center space-x-2 text-sm cursor-pointer"><input type="checkbox" value="received" class="chart-series-checkbox" checked> <span class="px-2 py-1 text-xs text-white bg-green-500 rounded">รับเข้า</span></label>
-                    <label class="flex items-center space-x-2 text-sm cursor-pointer"><input type="checkbox" value="withdrawn" class="chart-series-checkbox" checked> <span class="px-2 py-1 text-xs text-white bg-red-500 rounded">เบิก</span></label>
-                    <label class="flex items-center space-x-2 text-sm cursor-pointer"><input type="checkbox" value="borrowed" class="chart-series-checkbox" checked> <span class="px-2 py-1 text-xs text-white bg-yellow-500 rounded">ยืม</span></label>
-                    <label class="flex items-center space-x-2 text-sm cursor-pointer"><input type="checkbox" value="returned" class="chart-series-checkbox"> <span class="px-2 py-1 text-xs text-white bg-blue-500 rounded">คืน</span></label>
-                </div>
+    <div class="p-6 mb-6 bg-white soft-card rounded-2xl gentle-shadow">
+        {{-- Header & Controls --}}
+        <div class="flex flex-col justify-between mb-6 md:flex-row md:items-center gap-y-4">
+            <div>
+                <h3 class="text-xl font-bold text-gray-800">📊 สถิติการเบิก-จ่ายพัสดุ</h3>
+                <p class="text-sm text-gray-500">แยกตามประเภทการทำรายการรายเดือน</p>
+            </div>
+            
+            {{-- Custom Legend / Series Toggles --}}
+            <div id="chartSeriesToggle" class="flex flex-wrap items-center gap-2">
+                <label class="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 transition-all select-none">
+                    <input type="checkbox" value="received" class="hidden chart-series-checkbox" checked> 
+                    <span class="flex items-center"><span class="w-2 h-2 mr-2 bg-green-500 rounded-full"></span>รับเข้า</span>
+                </label>
+                <label class="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg cursor-pointer hover:bg-red-100 transition-all select-none">
+                    <input type="checkbox" value="withdrawn" class="hidden chart-series-checkbox" checked> 
+                    <span class="flex items-center"><span class="w-2 h-2 mr-2 bg-red-500 rounded-full"></span>เบิกออก</span>
+                </label>
+                <label class="px-3 py-1.5 text-xs font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg cursor-pointer hover:bg-yellow-100 transition-all select-none">
+                    <input type="checkbox" value="borrowed" class="hidden chart-series-checkbox" checked> 
+                    <span class="flex items-center"><span class="w-2 h-2 mr-2 bg-yellow-500 rounded-full"></span>ยืม</span>
+                </label>
+                <label class="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100 transition-all select-none">
+                    <input type="checkbox" value="returned" class="hidden chart-series-checkbox"> 
+                    <span class="flex items-center"><span class="w-2 h-2 mr-2 bg-blue-500 rounded-full"></span>คืน</span>
+                </label>
+
+                {{-- 🔥 ปุ่มสำหรับเรียก Modal ตั้งค่าสี --}}
+                <button 
+                    onclick="openColorSettingsModal()" 
+                    class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-200 transition-all select-none whitespace-nowrap"
+                    title="กำหนดค่าสีของกราฟด้วยตัวเอง">
+                    <i class="fas fa-palette mr-1"></i> ตั้งค่าสี
+                </button>
             </div>
         </div>
-        <div class="grid grid-cols-1 gap-4 mb-4 sm:grid-cols-3">
-            <select id="chartYearSelect" class="w-full px-2 py-1 border rounded-md border-gray-200 focus:ring-blue-500 focus:border-blue-500">
-                @forelse($available_years as $year)
-                    <option value="{{ $year }}" @if($year == now()->year) selected @endif>ปี {{ $year + 543 }}</option>
-                @empty
-                    <option value="{{ now()->year }}">ปี {{ now()->year + 543 }}</option>
-                @endforelse
-            </select>
-            <select id="chartCategorySelect" class="w-full px-2 py-1 border rounded-md border-gray-200 focus:ring-blue-500 focus:border-blue-500">
-                <option value="">ทุกหมวดหมู่</option>
-                @foreach($categories as $category)
-                    <option value="{{ $category->id }}">{{ $category->name }}</option>
-                @endforeach
-            </select>
-            <select id="chartEquipmentSelect" class="w-full"></select>
+
+        {{-- Filters --}}
+        <div class="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-12">
+            <div class="sm:col-span-2">
+                <select id="chartYearSelect" class="w-full text-sm border-gray-200 rounded-xl bg-gray-50">
+                    @forelse($available_years as $year)
+                        <option value="{{ $year }}" @if($year == now()->year) selected @endif>ปี {{ $year + 543 }}</option>
+                    @empty
+                        <option value="{{ now()->year }}">ปี {{ now()->year + 543 }}</option>
+                    @endforelse
+                </select>
+            </div>
+            <div class="sm:col-span-4">
+                <select id="chartCategorySelect" class="w-full text-sm border-gray-200 rounded-xl bg-gray-50">
+                    <option value="">📂 ทุกหมวดหมู่</option>
+                    @foreach($categories as $category)
+                        <option value="{{ $category->id }}">{{ $category->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="sm:col-span-6">
+                <select id="chartEquipmentSelect" class="w-full"></select>
+            </div>
         </div>
-        <div class="relative h-80"><canvas id="mainDashboardChart"></canvas></div>
+
+        {{-- Chart Canvas --}}
+        <div class="relative w-full h-80">
+            <canvas id="mainDashboardChart"></canvas>
+        </div>
     </div>
 
     {{-- Lists: Activities & Alerts --}}
@@ -210,92 +246,109 @@
         {{-- ========================================================= --}}
         <div class="space-y-6">
 
-            {{-- 5.1 รอบการนับสต๊อก --}}
-            <div class="p-5 soft-card rounded-2xl stat-card gentle-shadow">
-                <h3 class="mb-4 text-lg font-bold text-gray-800 gradient-text-soft">📋 รอบการนับสต๊อก (105 วัน)</h3>
-                <div class="space-y-3 overflow-y-auto max-h-72 scrollbar-soft">
+            {{-- 5.1 รอบการนับสต๊อก (REDESIGNED: Clean White + Red Gradient + 3D) --}}
+            <div class="p-5 bg-white soft-card rounded-2xl gentle-shadow border border-gray-100 relative overflow-hidden">
+                {{-- Decorative Header Accent --}}
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-200 via-red-300 to-red-500"></div>
+                
+                <h3 class="mb-4 text-lg font-bold text-gray-800 flex items-center">
+                    <i class="fas fa-clipboard-list mr-2 text-indigo-500"></i> รอบการนับสต๊อก (105 วัน)
+                </h3>
+                
+                <div class="space-y-4 overflow-y-auto max-h-72 scrollbar-soft pr-2">
                     @forelse($stockCycles as $cycle)
                         @php
-                            $theme = match($cycle->status) {
+                            $totalCycleDays = 105;
+                            $daysElapsed = $totalCycleDays - $cycle->days_left;
+                            $progressPercent = min(100, max(0, ($daysElapsed / $totalCycleDays) * 100));
+                            $daysLeftInt = (int)$cycle->days_left;
+                            
+                            // 🔥 DESIGN LOGIC: Remove Green -> White -> Red Gradient
+                            $statusConfig = match($cycle->status) {
                                 'locked' => [
-                                    'border' => 'border-red-300', 'bg' => 'bg-gradient-to-r from-red-50 to-rose-100',
-                                    'text_head' => 'text-red-700', 'text_sub' => 'text-red-500', 'icon' => 'text-red-500',
-                                    'msg' => '⚠️ ระงับการใช้งาน (เลยกำหนด)'
+                                    'icon' => 'fas fa-lock',
+                                    'icon_bg' => 'bg-red-100',
+                                    'icon_text' => 'text-red-600',
+                                    'border_left' => 'border-l-4 border-red-500',
+                                    'progress_gradient' => 'bg-gradient-to-r from-red-500 to-red-700', // แดงเข้มสุด
+                                    'status_text' => 'ระงับการเบิก',
+                                    'badge_class' => 'bg-red-100 text-red-700'
                                 ],
                                 'warning' => [
-                                    'border' => 'border-orange-300', 'bg' => 'bg-gradient-to-r from-amber-50 to-orange-100',
-                                    'text_head' => 'text-orange-700', 'text_sub' => 'text-orange-500', 'icon' => 'text-orange-500',
-                                    'msg' => '⚠️ ใกล้ถึงกำหนดนับสต๊อก'
+                                    'icon' => 'fas fa-exclamation-triangle',
+                                    'icon_bg' => 'bg-orange-100',
+                                    'icon_text' => 'text-orange-600',
+                                    'border_left' => 'border-l-4 border-orange-400',
+                                    'progress_gradient' => 'bg-gradient-to-r from-orange-400 via-red-400 to-red-500', // ส้มไปแดง
+                                    'status_text' => 'ใกล้ครบกำหนด',
+                                    'badge_class' => 'bg-orange-100 text-orange-700'
                                 ],
-                                default => [ 
-                                    'border' => 'border-emerald-200', 'bg' => 'bg-gradient-to-r from-emerald-50 to-teal-50',
-                                    'text_head' => 'text-emerald-700', 'text_sub' => 'text-emerald-600', 'icon' => 'text-emerald-500',
-                                    'msg' => '✅ สถานะปกติ'
+                                default => [ // Safe (Formerly Green -> Now Clean White/Blue)
+                                    'icon' => 'fas fa-shield-alt',
+                                    'icon_bg' => 'bg-gray-100', // พื้นหลังไอคอนสีขาว/เทา
+                                    'icon_text' => 'text-blue-500', // ไอคอนสีฟ้า (สบายตา)
+                                    'border_left' => 'border-l-4 border-blue-400',
+                                    'progress_gradient' => 'bg-gradient-to-r from-blue-300 to-indigo-400', // ฟ้าไปม่วงอ่อน (ไม่ใช้เขียว)
+                                    'status_text' => 'ปกติ',
+                                    'badge_class' => 'bg-gray-100 text-gray-600'
                                 ]
                             };
 
-                            // Logic คำนวณวันที่
-                            $targetDate = $cycle->next_check_date ? \Carbon\Carbon::parse($cycle->next_check_date) : null;
-                            $finalTimestamp = 0;
-                            $isOverdue = false; // Flag สำหรับเช็คว่าเลยกำหนดหรือยัง
-
-                            if ($targetDate) {
-                                // Safe Check: ใช้ $loop->index แทน id เพื่อความปลอดภัย
-                                $seed = isset($cycle->id) ? $cycle->id : $loop->index;
-                                
-                                // ป้องกัน Error Undefined property created_at
-                                if (isset($cycle->created_at) && $cycle->created_at) {
-                                    $created = \Carbon\Carbon::parse($cycle->created_at);
-                                    $targetDate->setTime($created->hour, $created->minute, $created->second);
-                                } else {
-                                    $targetDate->addSeconds($seed % 60);
-                                }
-                                
-                                $finalTimestamp = $targetDate->timestamp * 1000;
-                                
-                                // เช็คว่าเลยกำหนดหรือยัง (หรือสถานะ locked)
-                                $isOverdue = $cycle->status === 'locked' || $targetDate->isPast();
-                            }
+                            $progressText = $daysLeftInt > 0 ? "เหลืออีก {$daysLeftInt} วัน" : ($daysLeftInt == 0 ? "ครบกำหนดวันนี้" : "เลยมา " . abs($daysLeftInt) . " วัน");
                         @endphp
 
-                        <div class="p-3 border {{ $theme['border'] }} {{ $theme['bg'] }} rounded-2xl relative overflow-hidden shadow-sm transition-all hover:shadow-md">
-                            <div class="flex justify-between items-start mb-1">
-                                <h4 class="text-sm font-bold {{ $theme['text_head'] }} truncate pr-2">
-                                    @if($cycle->status === 'locked') <i class="fas fa-lock mr-1"></i> @endif
-                                    {{ $cycle->name }}
-                                </h4>
-                                <a href="{{ route('stock-checks.create') }}" class="text-xs {{ $theme['text_sub'] }} hover:underline transition-colors">
-                                    <i class="fas fa-edit"></i> สร้างนัดหมาย
+                        {{-- Card Item --}}
+                        <div class="bg-white rounded-xl shadow-[0_3px_10px_rgba(0,0,0,0.08)] border border-gray-100 p-4 transition-all hover:-translate-y-1 hover:shadow-lg relative overflow-hidden group {{ $statusConfig['border_left'] }}">
+                            
+                            {{-- Header: Icon + Name --}}
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="flex items-center">
+                                    <div class="w-10 h-10 rounded-lg {{ $statusConfig['icon_bg'] }} flex items-center justify-center mr-3 shadow-inner">
+                                        <i class="{{ $statusConfig['icon'] }} {{ $statusConfig['icon_text'] }} text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-gray-800 line-clamp-1 group-hover:text-indigo-600 transition-colors" title="{{ $cycle->name }}">
+                                            {{ $cycle->name }}
+                                        </h4>
+                                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ $statusConfig['badge_class'] }}">
+                                            {{ $statusConfig['status_text'] }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <a href="{{ route('stock-checks.create') }}" class="text-gray-400 hover:text-indigo-600 transition-colors">
+                                    <i class="fas fa-edit"></i>
                                 </a>
                             </div>
-                            
-                            <div class="text-xs text-gray-600 mb-1">
-                                <span class="font-semibold"><i class="fas fa-cubes mr-1 {{ $theme['icon'] }}"></i>จำนวน:</span> {{ $cycle->item_count }} รายการ
-                            </div>
-                            <div class="text-xs font-bold {{ $theme['text_sub'] }} mb-2">
-                                {{ $theme['msg'] }}
+
+                            {{-- Progress Bar Container --}}
+                            <div class="space-y-1 mb-3">
+                                <div class="flex justify-between text-xs font-medium text-gray-500">
+                                    <span>ความคืบหน้า</span>
+                                    <span class="{{ $statusConfig['icon_text'] }}">{{ number_format($progressPercent, 0) }}%</span>
+                                </div>
+                                <div class="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                                    <div class="h-full rounded-full {{ $statusConfig['progress_gradient'] }} shadow-sm transition-all duration-1000 ease-out" 
+                                         style="width: {{ $progressPercent }}%"></div>
+                                </div>
                             </div>
 
-                            <p class="text-xs {{ $theme['text_sub'] }} mb-2 border-t border-black/5 pt-1 mt-1">
-                                <i class="fas fa-clock mr-1"></i>เป้าหมาย: {{ $targetDate ? $targetDate->format('d/m/Y H:i') : '-' }}
-                            </p>
-                            
-                            {{-- 🔥 ถ้าเลยกำหนดแล้ว แสดงป้ายนิ่งๆ --}}
-                            @if($isOverdue)
-                                <div class="flex items-center justify-center p-2 mt-2 text-xs font-bold text-red-600 bg-white/60 border border-red-200 rounded-lg">
-                                    <i class="mr-2 fas fa-exclamation-circle animate-pulse"></i> เลยกำหนด (กรุณาตรวจนับ)
+                            {{-- Footer Info --}}
+                            <div class="flex justify-between items-center text-xs text-gray-500 border-t border-gray-50 pt-2 mt-2">
+                                <div class="flex items-center">
+                                    <i class="fas fa-cubes mr-1.5 opacity-50"></i> {{ $cycle->item_count }} รายการ
                                 </div>
-                            {{-- 🔥 ถ้ายังไม่ถึง แสดงตัวนับถอยหลัง --}}
-                            @else
-                                <div class="flex space-x-2 text-xs font-mono {{ $theme['text_head'] }} bg-white/60 p-2 rounded-lg justify-center stock-countdown-display border border-black/5" 
-                                     title="Target: {{ $targetDate ? $targetDate->toDateTimeString() : '' }}"
-                                     data-target="{{ $finalTimestamp }}">
-                                     <span><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</span>
+                                {{-- Countdown (Using JS Logic) --}}
+                                <div class="stock-countdown-display font-mono font-semibold {{ $statusConfig['icon_text'] }}" 
+                                     data-target="{{ isset($cycle->next_check_date) ? \Carbon\Carbon::parse($cycle->next_check_date)->timestamp * 1000 : 0 }}">
+                                     <i class="fas fa-clock mr-1"></i> {{ $progressText }}
                                 </div>
-                            @endif
+                            </div>
                         </div>
                     @empty
-                        <div class="p-4 text-sm text-center text-gray-500"><i class="mr-2 text-green-500 fas fa-check-circle"></i>ข้อมูลครบถ้วน</div>
+                        <div class="flex flex-col items-center justify-center py-8 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                            <i class="fas fa-clipboard-check text-3xl mb-2 opacity-50"></i>
+                            <span class="text-sm">ข้อมูลครบถ้วน ไม่มีรอบตรวจนับคงค้าง</span>
+                        </div>
                     @endforelse
                 </div>
             </div>
@@ -336,6 +389,68 @@
         </div>
     </div>
 </div>
+
+{{-- ========================================================= --}}
+{{-- 🔥 MODAL สำหรับตั้งค่าสีกราฟ --}}
+{{-- ========================================================= --}}
+<div id="color-settings-modal" class="fixed inset-0 z-50 items-center justify-center hidden bg-black bg-opacity-50">
+    <div class="w-full max-w-lg p-6 bg-white rounded-xl shadow-2xl relative animate-slide-up-soft">
+        <h3 class="text-xl font-bold text-gray-800 mb-4 flex justify-between items-center">
+            ตั้งค่าสีของกราฟ
+            <button onclick="closeColorSettingsModal()" class="text-gray-400 hover:text-gray-700 transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+        </h3>
+        <p class="text-sm text-gray-600 mb-4">
+            กำหนดโค้ดสี HEX (เช่น #FF0000) สำหรับแต่ละประเภทการทำรายการ
+        </p>
+
+        <form id="colorSettingsForm" onsubmit="saveCustomColors(event)">
+            @php
+                // กำหนดโครงสร้างข้อมูลสีสำหรับ Modal
+                $colorFields = [
+                    'received' => ['label' => 'รับเข้า', 'badge_color' => 'bg-green-500'],
+                    'withdrawn' => ['label' => 'เบิกออก', 'badge_color' => 'bg-red-500'],
+                    'borrowed' => ['label' => 'ยืม', 'badge_color' => 'bg-yellow-500'],
+                    'returned' => ['label' => 'คืน', 'badge_color' => 'bg-blue-500'],
+                ];
+            @endphp
+            
+            @foreach($colorFields as $key => $field)
+                <div class="mb-4 p-3 border border-gray-100 rounded-lg bg-gray-50">
+                    <div class="flex items-center mb-2">
+                        <span class="w-2 h-2 mr-2 rounded-full {{ $field['badge_color'] }}"></span>
+                        <label class="text-sm font-bold text-gray-700">{{ $field['label'] }}</label>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label for="{{ $key }}-start" class="block text-xs font-medium text-gray-500">สีอ่อน (Start)</label>
+                            <input type="color" id="{{ $key }}-start" name="{{ $key }}-start" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer transition-shadow hover:shadow-md" value="">
+                        </div>
+                        <div>
+                            <label for="{{ $key }}-end" class="block text-xs font-medium text-gray-500">สีเข้ม (End)</label>
+                            <input type="color" id="{{ $key }}-end" name="{{ $key }}-end" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer transition-shadow hover:shadow-md" value="">
+                        </div>
+                         <div>
+                            <label for="{{ $key }}-border" class="block text-xs font-medium text-gray-500">สีขอบ/ตัวเลข (Border)</label>
+                            <input type="color" id="{{ $key }}-border" name="{{ $key }}-border" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer transition-shadow hover:shadow-md" value="">
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+
+            <div class="flex justify-end space-x-3 pt-3 border-t border-gray-100 mt-4">
+                <button type="button" onclick="resetCustomColors()" class="text-sm text-red-600 hover:underline">รีเซ็ตเป็นค่าเริ่มต้น</button>
+                <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-md">
+                    บันทึกและอัปเดตกราฟ
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
 @endsection
 
 @push('scripts')
@@ -345,9 +460,101 @@
     <script>
         window.lockedStockCount = {{ $stockCycles->where('status', 'locked')->count() }};
         window.warningStockCount = {{ $stockCycles->where('status', 'warning')->count() }};
+
+        // ========================================================
+        // 🎨 CHART COLORS CONFIGURATION (ค่าเริ่มต้นที่ใช้ถ้าไม่มีใน localStorage)
+        // แก้ไขโค้ดสี HEX 6 หลัก (เช่น #RRGGBB) หรือชื่อสี CSS 
+        // start: สีอ่อนด้านบน, end: สีเข้มด้านล่าง, border: สีเส้นขอบ (และสีตัวเลข)
+        // ========================================================
+        const DEFAULT_CHART_COLORS = {
+            // รับเข้า (Received)
+            received:  { start: '#4ade80', end: '#14532d', border: '#15803d' }, 
+            
+            // เบิก (Withdrawn)
+            withdrawn: { 
+                start: '#fca5a5',   // สีแดงอ่อน (ด้านบน)
+                end: '#991b1b',     // สีแดงเข้ม (ด้านล่าง)
+                border: '#ef4444'   // สีขอบและตัวเลข (ทำให้สีแดงเห็นชัดเจน)
+            },
+            
+            // ยืม (Borrowed)
+            borrowed:  { start: '#fde047', end: '#713f12', border: '#a16207' },
+            
+            // คืน (Returned)
+            returned:  { start: '#93c5fd', end: '#1e3a8a', border: '#3b82f6' }  
+        };
+        
+        // ฟังก์ชันสำหรับเปิด Modal
+        function openColorSettingsModal() {
+            const modal = document.getElementById('color-settings-modal');
+            const form = document.getElementById('colorSettingsForm');
+            
+            // 1. โหลดสีปัจจุบันจาก localStorage หรือใช้ค่าเริ่มต้น
+            const currentColors = JSON.parse(localStorage.getItem('customChartColors')) || DEFAULT_CHART_COLORS;
+            
+            // 2. กำหนดค่าใน input fields
+            for (const type in currentColors) {
+                if (currentColors.hasOwnProperty(type)) {
+                    document.getElementById(`${type}-start`).value = currentColors[type].start;
+                    document.getElementById(`${type}-end`).value = currentColors[type].end;
+                    document.getElementById(`${type}-border`).value = currentColors[type].border;
+                }
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // ฟังก์ชันสำหรับปิด Modal
+        function closeColorSettingsModal() {
+            document.getElementById('color-settings-modal').classList.add('hidden');
+            document.getElementById('color-settings-modal').classList.remove('flex');
+        }
+
+        // ฟังก์ชันสำหรับบันทึกสีที่กำหนดเอง
+        function saveCustomColors(event) {
+            event.preventDefault();
+            const form = event.target;
+            const newColors = {};
+            const types = ['received', 'withdrawn', 'borrowed', 'returned'];
+
+            types.forEach(type => {
+                newColors[type] = {
+                    start: form.elements[`${type}-start`].value,
+                    end: form.elements[`${type}-end`].value,
+                    border: form.elements[`${type}-border`].value
+                };
+            });
+
+            localStorage.setItem('customChartColors', JSON.stringify(newColors));
+            closeColorSettingsModal();
+            
+            // 🔥 อัปเดตกราฟทันที
+            // ต้องเรียกใช้ fetchAndRenderChart() ซึ่งอยู่ใน dashboard.js
+            if (typeof fetchAndRenderChart === 'function') {
+                fetchAndRenderChart();
+            } else {
+                 console.warn("fetchAndRenderChart function is not available yet. Please reload the page.");
+                 window.location.reload();
+            }
+        }
+
+        // ฟังก์ชันสำหรับรีเซ็ตสีเป็นค่าเริ่มต้น
+        function resetCustomColors() {
+            localStorage.removeItem('customChartColors');
+            closeColorSettingsModal();
+            
+            // 🔥 อัปเดตกราฟทันที
+            if (typeof fetchAndRenderChart === 'function') {
+                fetchAndRenderChart();
+            } else {
+                 window.location.reload();
+            }
+        }
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    {{-- 🔥 โหลด dashboard.js ทีหลัง เพื่อให้ฟังก์ชันข้างบนเรียกใช้ได้ --}}
     <script src="{{ asset('js/dashboard.js') }}"></script>
 @endpush

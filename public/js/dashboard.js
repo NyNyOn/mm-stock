@@ -6,10 +6,18 @@ document.addEventListener('DOMContentLoaded', function () {
     const seriesToggles = document.querySelectorAll('.chart-series-checkbox');
     const chartCanvas = document.getElementById('mainDashboardChart');
     
-    // --- ตัวแปรสำหรับ Countdown ---
+    // --- ตัวแปรสำหรับ Countdown & Settings ---
     const countdownDisplays = document.querySelectorAll('.stock-countdown-display');
     const SETTINGS_KEY = 'dashboardChartSettings'; 
     let dashboardChart = null;
+    
+    // 🔥🔥 ตัวแปร Global สำหรับค่าเริ่มต้นสี (ต้องตรงกับ DEFAULT_CHART_COLORS ใน blade)
+    const DEFAULT_CHART_COLORS = {
+        received:  { start: '#4ade80', end: '#14532d', border: '#15803d' }, 
+        withdrawn: { start: '#fca5a5', end: '#991b1b', border: '#ef4444' },
+        borrowed:  { start: '#fde047', end: '#713f12', border: '#a16207' },
+        returned:  { start: '#93c5fd', end: '#1e3a8a', border: '#3b82f6' }  
+    };
 
     // ============================================================
     // 1. POPUP ALERT (แจ้งเตือนเมื่อเข้าหน้าเว็บ)
@@ -38,7 +46,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ============================================================
-    // 2. COUNTDOWN TIMER LOGIC (Logic ที่ถูกต้อง 100%)
+    // 2. COUNTDOWN TIMER LOGIC
     // ============================================================
     if (countdownDisplays.length > 0) {
         
@@ -46,24 +54,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const now = new Date().getTime(); // เวลาปัจจุบันของ Browser (ms)
 
             countdownDisplays.forEach(display => {
-                // รับค่า Timestamp ที่ส่งมาจาก PHP (ค่านี้ต้องเป็น Static ห้ามเป็น now() จาก PHP)
                 const targetTimestamp = parseInt(display.getAttribute('data-target'));
                 
-                // ตรวจสอบความถูกต้องของข้อมูล
                 if (!targetTimestamp || isNaN(targetTimestamp) || targetTimestamp === 0) {
                     display.innerHTML = '<span class="text-gray-400 text-xs">- ไม่ระบุวัน -</span>';
                     return;
                 }
 
-                // คำนวณความต่างของเวลา (Target - Now)
-                // - ถ้าเป็นบวก (+) แปลว่ายังไม่ถึงกำหนด (Remaining)
-                // - ถ้าเป็นลบ (-) แปลว่าเลยกำหนดแล้ว (Overdue/Elapsed)
                 const distance = targetTimestamp - now;
-                
-                // ใช้ค่าสัมบูรณ์ (Absolute) ในการคำนวณวัน/เวลา เพื่อให้ได้ระยะห่างที่เป็นบวกเสมอ
-                // Logic นี้จะทำให้:
-                // 1. ถ้านับถอยหลัง: distance ลดลง -> absDist ลดลง -> ตัวเลขลดลง
-                // 2. ถ้าเลยกำหนด: distance ติดลบมากขึ้น -> absDist เพิ่มขึ้น -> ตัวเลขเพิ่มขึ้น (นับเดินหน้า)
                 const absDist = Math.abs(distance);
 
                 const days = Math.floor(absDist / (1000 * 60 * 60 * 24));
@@ -73,23 +71,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 let mainColor, subColor, prefixText, icon;
 
-                // --- แยกเงื่อนไขการแสดงผล ---
                 if (distance < 0) {
-                    // 🔴 กรณีเลยกำหนด (Overdue) -> แสดงผลแบบนับเดินหน้า
-                    mainColor = '#dc2626'; // สีแดงเข้ม
-                    subColor = '#fca5a5';  // สีแดงอ่อน
+                    // 🔴 กรณีเลยกำหนด (Overdue)
+                    mainColor = '#dc2626'; 
+                    subColor = '#fca5a5';  
                     prefixText = 'เลยมาแล้ว';
                     icon = '<i class="fas fa-exclamation-circle animate-pulse"></i>';
                 } else if (days <= 15) {
-                    // 🟠 กรณีใกล้ถึง (Warning) -> แสดงผลแบบนับถอยหลัง
-                    mainColor = '#d97706'; // สีส้มเข้ม
-                    subColor = '#fcd34d';  // สีส้มอ่อน
+                    // 🟠 กรณีใกล้ถึง (Warning)
+                    mainColor = '#d97706'; 
+                    subColor = '#fcd34d';  
                     prefixText = 'เหลืออีก';
                     icon = '⚠️';
                 } else {
-                    // 🟢 กรณีปกติ (Safe) -> แสดงผลแบบนับถอยหลัง
-                    mainColor = '#059669'; // สีเขียวเข้ม
-                    subColor = '#6ee7b7';  // สีเขียวอ่อน
+                    // 🟢 กรณีปกติ (Safe)
+                    mainColor = '#059669'; 
+                    subColor = '#6ee7b7';  
                     prefixText = 'เหลืออีก';
                     icon = '⏳';
                 }
@@ -130,31 +127,27 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ============================================================
-    // 3. CHART & FILTER LOGIC (ส่วนนี้ทำงานปกติ)
+    // 3. CHART & FILTER LOGIC (Modern Gradient Design)
     // ============================================================
     if (chartCanvas) {
         Chart.register(ChartDataLabels);
 
-        // Initialize Select2
-        if (equipmentSelect.length) {
-            equipmentSelect.select2({
-                placeholder: 'ค้นหาอุปกรณ์ทั้งหมด...',
-                theme: "classic",
-                width: '100%',
-                allowClear: true,
-                ajax: {
-                    url: "/ajax/search-equipment",
-                    dataType: 'json',
-                    delay: 250,
-                    processResults: function (data) {
-                        return { results: data.results };
-                    },
-                    cache: true
-                }
-            });
+        // Helper: Create Gradient
+        function createGradient(ctx, colorStart, colorEnd) {
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400); // 400px height for canvas
+            gradient.addColorStop(0, colorStart);
+            gradient.addColorStop(1, colorEnd);
+            return gradient;
         }
 
-        // Functions for Chart Settings (Save/Load/Fetch)
+        // 🔥 ดึงค่าสีจาก localStorage หรือใช้ค่าเริ่มต้น
+        const getChartColors = () => {
+            const savedColors = localStorage.getItem('customChartColors');
+            return savedColors ? JSON.parse(savedColors) : DEFAULT_CHART_COLORS;
+        };
+        
+
+        // Functions for Chart Settings (Save/Load)
         function saveSettings() {
             const settings = {
                 year: yearSelect.value,
@@ -183,60 +176,161 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        function fetchAndRenderChart() {
+        // 🔥 ทำให้ fetchAndRenderChart เป็น Global Function เพื่อให้ Blade View เรียกใช้ได้
+        window.fetchAndRenderChart = function() {
             const year = yearSelect.value;
             const categoryId = categorySelect.value;
             const equipmentId = equipmentSelect.val();
-            const selectedSeries = Array.from(seriesToggles).filter(checkbox => checkbox.checked).map(checkbox => checkbox.value);
-            
-            const fetchUrl = `/ajax/dashboard-charts?year=${year}&category_id=${categoryId || ''}&equipment_id=${equipmentId || ''}`;
+            const chartColors = getChartColors(); // 🔥 ดึงสีล่าสุด
 
-            fetch(fetchUrl)
-                .then(response => response.json())
+            // จัดการ UI ของปุ่ม Toggle (ทำให้ปุ่มจางเมื่อไม่เลือก)
+            seriesToggles.forEach(chk => {
+               const label = chk.closest('label');
+               if(chk.checked) {
+                   label.classList.remove('opacity-40', 'grayscale');
+                   label.classList.add('shadow-inner', 'bg-opacity-100'); 
+               } else {
+                   label.classList.add('opacity-40', 'grayscale');
+                   label.classList.remove('shadow-inner', 'bg-opacity-100'); 
+               }
+            });
+
+            const selectedKeys = Array.from(seriesToggles).filter(c => c.checked).map(c => c.value);
+            const url = `/ajax/dashboard-charts?year=${year}&category_id=${categoryId || ''}&equipment_id=${equipmentId || ''}`;
+
+            fetch(url)
+                .then(res => res.json())
                 .then(data => {
-                    const datasetsToRender = [];
-                    selectedSeries.forEach(seriesKey => {
-                        if (data.datasets[seriesKey]) { datasetsToRender.push(data.datasets[seriesKey]); }
+                    const ctx = chartCanvas.getContext('2d');
+                    const datasets = [];
+                    let maxDataValue = 0; // Initialize max value tracker
+
+                    // สร้าง Dataset แยก Object กันเพื่อให้แสดงหลายแท่ง (Grouped Bar Chart)
+                    selectedKeys.forEach(key => {
+                        if (data.datasets[key]) {
+                            const theme = chartColors[key];
+                            
+                            // 🔥 คำนวณค่าสูงสุดจากทุก Dataset
+                            const currentData = data.datasets[key].data.map(Number);
+                            const currentMax = Math.max(...currentData);
+                            if (currentMax > maxDataValue) {
+                                maxDataValue = currentMax;
+                            }
+
+                            datasets.push({
+                                label: data.datasets[key].label,
+                                data: data.datasets[key].data,
+                                backgroundColor: createGradient(ctx, theme.start, theme.end),
+                                borderColor: theme.border,
+                                borderWidth: 1,
+                                borderRadius: 5,
+                                barPercentage: 0.7,      // ความกว้างของแท่ง (0-1)
+                                categoryPercentage: 0.8, // ระยะห่างระหว่างกลุ่ม (0-1)
+                                type: 'bar' 
+                            });
+                        }
                     });
 
-                    if (dashboardChart) { dashboardChart.destroy(); }
+                    // 🔥 Logic: ขยายแกน Y ให้สูงกว่าค่าสูงสุด 1 ช่องเสมอ (Max Data + Buffer)
+                    let yAxisMax = undefined; 
+                    if (maxDataValue > 0) {
+                        if (maxDataValue >= 10) {
+                             // ถ้าค่ามาก ให้เพิ่ม 15% (เพื่อให้ดูไม่เต็ม) และปัดขึ้นเป็นจำนวนเต็ม
+                             yAxisMax = Math.ceil(maxDataValue * 1.15); 
+                        } else { 
+                             // ถ้าค่าน้อย ให้เพิ่ม 2 หน่วย
+                             yAxisMax = maxDataValue + 2; 
+                        }
+                    } else {
+                        // ถ้าไม่มีข้อมูล ให้กำหนด Max เป็น 10
+                        yAxisMax = 10;
+                    }
+
+
+                    if (dashboardChart) dashboardChart.destroy();
 
                     dashboardChart = new Chart(chartCanvas, {
-                        type: 'bar',
-                        data: { labels: data.labels, datasets: datasetsToRender },
+                        type: 'bar', // กำหนดเป็น bar chart
+                        data: { labels: data.labels, datasets: datasets },
                         options: {
-                            responsive: true, 
+                            responsive: true,
                             maintainAspectRatio: false,
-                            scales: { 
-                                x: { stacked: false }, 
-                                y: { stacked: false, beginAtZero: true, ticks: { precision: 0 }, grace: 1 } 
+                            interaction: { 
+                                mode: 'index', // โหมดที่ทำให้แสดงข้อมูลทุกแท่งในเดือนที่ชี้
+                                intersect: false 
                             },
-                            plugins: { 
+                            scales: {
+                                x: { 
+                                    stacked: false, // ต้องเป็น FALSE เพื่อให้แท่งแยกกัน
+                                    grid: { display: false }
+                                },
+                                y: { 
+                                    stacked: false, // ต้องเป็น FALSE
+                                    beginAtZero: true,
+                                    max: yAxisMax, // 🔥 ใช้ค่าที่คำนวณไว้
+                                    ticks: { precision: 0 },
+                                    grid: { color: '#f3f4f6' }
+                                }
+                            },
+                            plugins: {
                                 legend: { display: false }, 
-                                datalabels: { 
+                                datalabels: {
+                                    // 🔥 การตั้งค่า Data Labels
                                     anchor: 'end', 
                                     align: 'top', 
-                                    formatter: (value) => (value > 0 ? value : ''), 
-                                    font: { weight: 'bold' }, 
-                                    color: '#4b5563' 
-                                } 
+                                    offset: 8,     // เลื่อนตัวเลขขึ้นมาเพื่อไม่ให้ติดขอบ
+                                    clip: false,   // ไม่อนุญาตให้ตัวเลขถูกตัดเมื่ออยู่ติดขอบ
+                                    // 🔥 กำหนดสีตัวเลขให้เป็นสีเดียวกับขอบแท่ง (borderColor)
+                                    color: (ctx) => {
+                                        return ctx.dataset.borderColor;
+                                    },
+                                    font: { weight: 'bold', size: 10 },
+                                    formatter: (val) => val > 0 ? val : '' // แสดงเฉพาะค่าที่มากกว่า 0
+                                },
+                                tooltip: {
+                                    padding: 12,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                    titleColor: '#111827',
+                                    bodyColor: '#4b5563',
+                                    borderColor: '#e5e7eb',
+                                    borderWidth: 1,
+                                    usePointStyle: true
+                                }
                             }
-                        }
+                        },
+                        plugins: [ChartDataLabels]
                     });
                 })
                 .catch(error => console.error('Error fetching chart data:', error));
             
             saveSettings();
         }
-
+        
+        // Initialize Select2 (สำหรับค้นหาอุปกรณ์)
+        if (equipmentSelect.length) {
+            equipmentSelect.select2({
+                placeholder: '🔍 ค้นหาอุปกรณ์เฉพาะเจาะจง...',
+                theme: "classic",
+                width: '100%',
+                allowClear: true,
+                ajax: {
+                    url: "/ajax/search-equipment",
+                    dataType: 'json',
+                    delay: 250,
+                    processResults: function (data) { return { results: data.results }; },
+                    cache: true
+                }
+            });
+        }
+        
         // Event Listeners
-        yearSelect.addEventListener('change', fetchAndRenderChart);
-        categorySelect.addEventListener('change', fetchAndRenderChart);
-        equipmentSelect.on('change', fetchAndRenderChart);
-        seriesToggles.forEach(toggle => { toggle.addEventListener('change', fetchAndRenderChart); });
+        yearSelect.addEventListener('change', window.fetchAndRenderChart);
+        categorySelect.addEventListener('change', window.fetchAndRenderChart);
+        equipmentSelect.on('change', window.fetchAndRenderChart);
+        seriesToggles.forEach(toggle => { toggle.addEventListener('change', window.fetchAndRenderChart); });
 
         // Init
         loadSettings();
-        fetchAndRenderChart();
+        window.fetchAndRenderChart();
     }
 });
