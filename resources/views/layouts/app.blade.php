@@ -146,7 +146,7 @@
                     $slugLower = $userGroupSlug ? strtolower($userGroupSlug) : null;
                     
                     // ตรวจสอบว่าเป็น Admin/IT (โดยอิงจาก slug ที่เราดีบักได้)
-                    $isAdminOrIT = $userGroupSlug && in_array($slugLower, ['it', 'admin', 'administartor']);
+                    $isAdminOrIT = $userGroupSlug && in_array($slugLower, ['it', 'admin', 'administrator', 'administartor', 'itsupport', 'it-support']);
                 @endphp
 
                 {{-- 1. Pop-up สำหรับ Super Admin (ID 9) --}}
