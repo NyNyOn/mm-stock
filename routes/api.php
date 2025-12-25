@@ -67,6 +67,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Delivery Notification
      Route::post('/po-delivery-notification/{purchaseOrder}', [PurchaseOrderController::class, 'notifyDelivery'])
           ->name('api.v1.po-delivery-notification');
+    // เพิ่ม Route นี้เพื่อให้รองรับ POST Request จาก PU Hub
+    Route::post('/notify-hub-arrival', [PurchaseOrderController::class, 'receiveHubNotification']);
 
 });
 

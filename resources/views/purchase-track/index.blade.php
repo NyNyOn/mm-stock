@@ -4,7 +4,6 @@
 @section('subtitle', 'ตรวจสอบสถานะรายการสั่งซื้อจาก PU')
 
 @section('content')
-    <!-- Main Container: ปรับให้เต็มจอมากขึ้น (w-full) และเว้นขอบนิดหน่อย -->
     <div class="py-6 w-full px-2 sm:px-6 bg-gray-100 min-h-screen">
 
         @if($purchaseOrders->isEmpty())
@@ -33,20 +32,85 @@
                                     <span class="text-sm font-bold text-indigo-600 block text-center leading-none mt-0.5">#{{ $po->id }}</span>
                                 </div>
                                 <div>
-                                    <h3 class="text-xl font-bold text-gray-800 tracking-tight">{{ $po->po_number }}</h3>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-xl font-bold text-gray-800 tracking-tight">{{ $po->po_number ?? 'รอเลข PO' }}</h3>
+                                        <span class="px-2 py-0.5 rounded text-xs font-medium 
+                                            {{ $po->type == 'urgent' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800' }}">
+                                            {{ ucfirst($po->type) }}
+                                        </span>
+                                    </div>
                                     <div class="text-sm text-gray-500 mt-0.5 flex items-center gap-2">
                                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                                        {{ $po->created_at->format('d/m/Y H:i') }}
+                                        {{ $po->ordered_at ? \Carbon\Carbon::parse($po->ordered_at)->format('d/m/Y H:i') : 'เพิ่งสั่งซื้อ' }}
                                         <span class="text-gray-300">|</span>
                                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                                        {{ $po->orderedBy->name ?? 'N/A' }}
+                                        
+                                        {{-- ✅ Logic การแสดงชื่อ (Clean Version) --}}
+                                        @php
+                                            $displayName = 'N/A';
+                                            $targetUser = null;
+
+                                            // 1. ระบุ User เป้าหมายตามประเภท PO
+                                            if ($po->type === 'urgent') {
+                                                // Urgent: หาจาก Record จริง
+                                                if ($po->requester) $targetUser = $po->requester;
+                                                elseif ($po->orderedBy) $targetUser = $po->orderedBy;
+                                                elseif ($po->ordered_by_user_id || $po->requester_id) {
+                                                    $uid = $po->ordered_by_user_id ?? $po->requester_id;
+                                                    $targetUser = \App\Models\User::find($uid);
+                                                }
+                                            } else {
+                                                // Scheduled / Job: หาจาก Settings
+                                                $settingKey = null;
+                                                if ($po->type == 'scheduled') {
+                                                    $settingKey = 'automation_requester_id';
+                                                } elseif (in_array($po->type, ['job_order', 'job_order_glpi'])) {
+                                                    $settingKey = 'automation_job_requester_id';
+                                                }
+
+                                                if ($settingKey) {
+                                                    $settingUserId = \App\Models\Setting::where('key', $settingKey)->value('value');
+                                                    if ($settingUserId) {
+                                                        $targetUser = \App\Models\User::find($settingUserId);
+                                                    }
+                                                }
+                                            }
+
+                                            // 2. ถ้าได้ User มาแล้ว ให้หาชื่อเต็ม
+                                            if ($targetUser) {
+                                                $username = $targetUser->name; // เช่น T_wanida
+                                                if (empty($username)) $username = $targetUser->username ?? '';
+                                                
+                                                // ค่าเริ่มต้น (ใช้ Username ไปก่อน)
+                                                $displayName = $username ?: "User #{$targetUser->id}";
+
+                                                // 3. Manual Query ไปที่ depart_it_db.sync_ldap เพื่อเอา Fullname
+                                                try {
+                                                    if (!empty($username)) {
+                                                        $ldapUser = \Illuminate\Support\Facades\DB::table('depart_it_db.sync_ldap')
+                                                            ->where('username', $username)
+                                                            ->first();
+
+                                                        if ($ldapUser && !empty($ldapUser->fullname)) {
+                                                            $displayName = $ldapUser->fullname; // ✅ ได้ชื่อเต็มแล้ว!
+                                                        }
+                                                    }
+                                                } catch (\Exception $e) {
+                                                    // ถ้าต่อ DB ไม่ได้ ให้ใช้ค่าเริ่มต้น (Username) ต่อไปเงียบๆ
+                                                }
+                                            }
+                                        @endphp
+                                        
+                                        <span class="font-medium text-gray-700">
+                                            {{ $displayName }}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
                             
                             <!-- ปุ่ม Action -->
                             <div>
-                                @if($po->status == 'shipped_from_supplier' || $po->status == 'partial_receive')
+                                @if(in_array($po->status, ['shipped_from_supplier', 'partial_receive', 'ordered']))
                                     <a href="{{ route('receive.index') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                         ไปตรวจรับของ
@@ -67,24 +131,25 @@
 
                                     $currentStatus = $po->status;
                                     if ($currentStatus == 'partial_receive') $currentStatus = 'shipped_from_supplier'; 
-                                    if ($currentStatus == 'pending' || $currentStatus == 'approved') $currentStatus = 'ordered';
+                                    if ($currentStatus == 'approved') $currentStatus = 'ordered';
+                                    if ($currentStatus == 'pending') $currentStatus = 'ordered';
 
                                     $statusKeys = array_keys($steps);
                                     $currentIndex = array_search($currentStatus, $statusKeys);
-                                    if ($currentIndex === false) $currentIndex = 0;
+                                    
+                                    if ($currentIndex === false && $po->status == 'ordered') $currentIndex = 0;
                                     if ($po->status == 'completed') $currentIndex = 2;
                                 @endphp
 
                                 <div class="relative">
                                     <div class="absolute top-5 left-0 w-full h-1 bg-gray-200 -translate-y-1/2 rounded-full z-0"></div>
-                                    <div class="absolute top-5 left-0 h-1 bg-green-500 -translate-y-1/2 rounded-full z-0 transition-all duration-1000 ease-out" style="width: {{ ($currentIndex / (count($steps)-1)) * 100 }}%;"></div>
+                                    <div class="absolute top-5 left-0 h-1 bg-green-500 -translate-y-1/2 rounded-full z-0 transition-all duration-1000 ease-out" style="width: {{ ($currentIndex / max(1, count($steps)-1)) * 100 }}%;"></div>
 
                                     <div class="relative z-10 flex justify-between w-full">
                                         @foreach($steps as $key => $step)
                                             @php 
                                                 $stepIndex = array_search($key, $statusKeys);
                                                 $isActive = $stepIndex <= $currentIndex;
-                                                $isCurrent = $stepIndex === $currentIndex;
                                             @endphp
                                             <div class="flex flex-col items-center group w-1/3">
                                                 <div class="w-10 h-10 rounded-full flex items-center justify-center border-4 transition-all duration-300 z-10 bg-white
@@ -111,7 +176,7 @@
                                     @foreach($po->items as $item)
                                         @php
                                             $equip = $item->equipment;
-                                            $img = ($equip && $equip->latestImage) ? $equip->latestImage->image_url : asset('images/placeholder.webp');
+                                            $img = ($equip && $equip->images->isNotEmpty()) ? $equip->images->first()->image_url : asset('images/placeholder.webp');
                                             $itemName = $item->item_description ?? ($equip ? $equip->name : 'สินค้าไม่ระบุชื่อ');
                                         @endphp
                                         <div class="flex items-start gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow h-full">

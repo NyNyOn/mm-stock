@@ -35,8 +35,7 @@ class PurchaseOrderController extends Controller
             $scheduledOrder = PurchaseOrder::with([
                 'items.equipment.category',
                 'items.equipment.unit',
-                // 'items.equipment.latestImage', // <-- ลบ/คอมเมนต์ บรรทัดนี้
-                'items.equipment.images',      // <-- เพิ่มบรรทัดนี้
+                'items.equipment.images',
                 'requester'
             ])
                 ->where('type', 'scheduled')->where('status', 'pending')->first();
@@ -44,8 +43,7 @@ class PurchaseOrderController extends Controller
             $urgentOrders = PurchaseOrder::with([
                 'items.equipment.category',
                 'items.equipment.unit',
-                // 'items.equipment.latestImage', // <-- ลบ/คอมเมนต์ บรรทัดนี้
-                'items.equipment.images',      // <-- เพิ่มบรรทัดนี้
+                'items.equipment.images',
                 'requester'
             ])
                 ->where('type', 'urgent')->where('status', 'pending')->orderBy('created_at', 'desc')->get();
@@ -53,16 +51,14 @@ class PurchaseOrderController extends Controller
             $glpiOrders = PurchaseOrder::with([
                 'items.equipment.category',
                 'items.equipment.unit',
-                // 'items.equipment.latestImage', // <-- ลบ/คอมเมนต์ บรรทัดนี้
-                'items.equipment.images',      // <-- เพิ่มบรรทัดนี้
+                'items.equipment.images',
                 'requester'
             ])
                 ->where('type', 'job_order_glpi')->where('status', 'pending')->orderBy('created_at', 'desc')->get();
 
             $jobOrders = PurchaseOrder::with([
                 'items.equipment.unit',
-                // 'items.equipment.latestImage', // <-- ลบ/คอมเมนต์ บรรทัดนี้
-                'items.equipment.images',      // <-- เพิ่มบรรทัดนี้
+                'items.equipment.images',
                 'requester'
             ])
                 ->where('type', 'job_order')
@@ -71,7 +67,7 @@ class PurchaseOrderController extends Controller
                 ->get();
             // --- ✅ END: แก้ไข Query ---
 
-            $defaultDeptKey = config('department_stocks.default_key', 'it');
+            $defaultDeptKey = config('department_stocks.default_key', 'mm');
 
             return view('purchase-orders.index', compact(
                 'scheduledOrder',
@@ -140,6 +136,22 @@ class PurchaseOrderController extends Controller
     // --- Helper Function to Send PO Data ---
     private function sendPurchaseOrderToApi(PurchaseOrder $order, Request $request)
     {
+        // 1. ตรวจสอบว่าเปิดใช้งาน API หรือไม่ (Bypass Check)
+        $apiEnabled = config('services.pu_hub.enabled', true);
+        
+        // แปลงค่า string '0' จาก DB ให้เป็น boolean false
+        if ($apiEnabled === '0' || $apiEnabled === 0 || $apiEnabled === false || $apiEnabled === 'false') {
+            Log::warning("PU Hub API is DISABLED. Bypassing API call for PO #{$order->id}. Order will be marked as ordered locally.");
+            
+            // Bypass: ทำเหมือนส่งสำเร็จ แต่ไม่ได้ส่งจริง
+            $order->status = 'ordered';
+            $order->ordered_at = now();
+            $order->save();
+
+            return ['message' => 'API is disabled. Order marked as ordered locally (Bypassed).'];
+        }
+
+        // --- ถ้าเปิดใช้งาน API ก็ทำตาม Logic เดิม ---
         $puApiBaseUrl = config('services.pu_hub.base_url');
         $puApiToken = config('services.pu_hub.token');
         $puApiIntakePath = config('services.pu_hub.intake_path');
@@ -149,20 +161,100 @@ class PurchaseOrderController extends Controller
             throw new \Exception('ตั้งค่า API สำหรับ PU Hub ไม่ถูกต้อง (กรุณาตรวจสอบ .env และ config/services.php)');
         }
 
+        // Logic การหา Department ID (เหมือนเดิม)
+        $originDeptId = null;
+
+        // 1. Setting "ผู้สั่งอัตโนมัติ"
+        $autoRequesterId = Setting::where('key', 'automation_requester_id')->value('value');
+        if ($autoRequesterId) {
+            $autoUser = \App\Models\User::find($autoRequesterId);
+            if ($autoUser && !empty($autoUser->department_id)) {
+                $originDeptId = $autoUser->department_id;
+            }
+        }
+
+        // 2. Setting "ผู้สั่งตาม Job"
+        if (empty($originDeptId)) {
+            $jobRequesterId = Setting::where('key', 'automation_job_requester_id')->value('value');
+            if ($jobRequesterId) {
+                $jobUser = \App\Models\User::find($jobRequesterId);
+                if ($jobUser && !empty($jobUser->department_id)) {
+                    $originDeptId = $jobUser->department_id;
+                }
+            }
+        }
+
+        // 3. User ที่ทำรายการ
+        if (empty($originDeptId)) {
+            $order->loadMissing('requester');
+            if ($order->requester && !empty($order->requester->department_id)) {
+                $originDeptId = $order->requester->department_id;
+            }
+        }
+
+        // 4. User Login
+        if (empty($originDeptId) && Auth::check()) {
+            if (!empty(Auth::user()->department_id)) {
+                $originDeptId = Auth::user()->department_id;
+            }
+        }
+
+        // 5. Fallback จาก Config
+        if (empty($originDeptId)) {
+            $originDeptId = config('services.pu_hub.origin_department_id');
+        }
+
+        // ถ้าหาไม่เจอจริงๆ
+        if (empty($originDeptId)) {
+            $relatedUserId = $order->ordered_by_user_id ?? 'Unknown';
+            throw new \Exception("ไม่สามารถระบุรหัสแผนกต้นทาง (Origin Department ID) ได้เลย! \n(User ID ที่เกี่ยวข้อง: {$relatedUserId}) \nสาเหตุ: ผู้ใช้รายนี้ไม่มีข้อมูลแผนก และยังไม่ได้กำหนดค่า 'Default Origin Department ID' ในหน้าตั้งค่า API (Management > Tokens)");
+        }
+
         $fullApiUrl = rtrim($puApiBaseUrl, '/') . '/' . ltrim($puApiIntakePath, '/');
 
         // อัปเดต: โหลด 'items.equipment.unit' และ 'items.purchaseOrder' เพิ่มเติม
         $poData = new PurchaseOrderResource($order->loadMissing('items.equipment.unit', 'requester', 'items.purchaseOrder'));
 
+        // แปลงข้อมูลเป็น Array
+        $payload = $poData->toArray($request);
+        $payload['origin_department_id'] = $originDeptId;
+
+        // ✅✅✅ Priority Mapping: แปลงค่า Priority ให้ตรงกับที่ API ต้องการ ✅✅✅
+        // ดึงค่า Mapping จาก Config (ซึ่งโหลดมาจาก DB หรือ .env)
+        // ** เปลี่ยน Default เป็น 'Normal' เผื่อ API ไม่รับ 'Scheduled' **
+        $priorityConfig = [
+            'scheduled'      => config('services.pu_hub.priorities.scheduled', 'Normal'),    // Default: Normal (ลองเปลี่ยนเป็นค่านี้ดู)
+            'urgent'         => config('services.pu_hub.priorities.urgent', 'Urgent'),       // Default: Urgent
+            'job_order'      => config('services.pu_hub.priorities.job', 'Job'),             // Default: Job
+            'job_order_glpi' => config('services.pu_hub.priorities.job', 'Job'),             // Default: Job
+        ];
+
+        // ตรวจสอบว่า order type ปัจจุบันตรงกับ Key ไหนใน Mapping หรือไม่
+        if (array_key_exists($order->type, $priorityConfig)) {
+            // ทับค่า priority ใน payload ด้วยค่าที่ถูกต้อง
+            $payload['priority'] = $priorityConfig[$order->type];
+        } else {
+            // กรณีไม่เจอใน Map ให้ใช้ค่าเดิมแต่ปรับตัวแรกเป็นพิมพ์ใหญ่ (Fallback)
+            $payload['priority'] = ucfirst($order->type);
+        }
+
+        // ✅ Log Payload เพื่อการ Debug (จะแสดงใน storage/logs/laravel.log)
+        Log::info("Sending PO #{$order->id} to PU API.", [
+            'payload_priority_sent' => $payload['priority'],
+            'payload_origin_dept' => $payload['origin_department_id'],
+            'mapped_config' => $priorityConfig
+        ]);
+
         $response = Http::withToken($puApiToken)
             ->acceptJson()
             ->timeout(15)
-            ->post($fullApiUrl, $poData->toArray($request));
+            ->post($fullApiUrl, $payload); // ส่ง Payload ที่แก้ไขแล้ว
 
         if (!$response->successful()) {
             $status = $response->status();
             $errorBody = $response->json() ? json_encode($response->json()) : $response->body();
-            $errorMessage = "ID {$order->id} ({$order->type}) ล้มเหลว (Status: {$status}) - URL: {$fullApiUrl} - Response: " . $errorBody;
+            // เพิ่มข้อมูล Payload ใน Error Message เพื่อให้ User เห็นว่าส่งอะไรไป
+            $errorMessage = "ID {$order->id} ({$order->type}) ล้มเหลว (Status: {$status}) - ส่งค่า Priority: '{$payload['priority']}' - Response: " . $errorBody;
             Log::error("Failed to send PO to PU API. " . $errorMessage);
             throw new \Exception($errorMessage);
         }
@@ -423,7 +515,7 @@ class PurchaseOrderController extends Controller
         }]);
         // --- ✅ END: แก้ไขการ Load ---
 
-        $defaultDeptKey = config('department_stocks.default_key', 'it');
+        $defaultDeptKey = config('department_stocks.default_key', 'mm');
         return view('purchase-orders.partials._po_items_table_glpi', compact('order', 'defaultDeptKey'));
     }
 
@@ -445,5 +537,33 @@ class PurchaseOrderController extends Controller
             return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
         }
     }
-}
 
+    /**
+     * (Inbound) รับแจ้งเตือนจาก PU Hub ว่าสินค้ามาถึงแล้ว (Step 3)
+     */
+    public function receiveHubNotification(Request $request)
+    {
+        // 1. Validate ข้อมูลที่ส่งมา
+        $request->validate([
+            'pr_item_id' => 'required',
+            'po_code'    => 'required',
+            'status'     => 'required|in:arrived_at_hub',
+        ]);
+
+        Log::info("API: Received Hub Notification for PO #{$request->po_code}", $request->all());
+
+        // 2. Logic อัปเดตสถานะในฝั่ง MM
+        // ค้นหา PO จาก po_number (ใช้ po_code ที่ส่งมา)
+        $po = PurchaseOrder::where('po_number', $request->po_code)->first();
+
+        if ($po) {
+            // อัปเดตสถานะเป็น 'shipped_from_supplier' (แปลว่า PU แจ้งส่งของแล้ว)
+            $po->status = 'shipped_from_supplier';
+            $po->save();
+
+            return response()->json(['success' => true, 'message' => 'PO status updated to shipped_from_supplier']);
+        }
+
+        return response()->json(['success' => false, 'message' => 'PO Not Found'], 404);
+    }
+}

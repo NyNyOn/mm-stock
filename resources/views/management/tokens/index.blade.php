@@ -1,262 +1,230 @@
-@extends('layouts.app') 
+@extends('layouts.app')
+
+@section('header', 'API Management')
+@section('subtitle', 'จัดการการเชื่อมต่อและ API Token')
 
 @section('content')
-    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="container p-4 mx-auto space-y-6">
 
-        <h1 class="text-2xl font-semibold text-gray-900 mb-6">
-            จัดการ API Token
-        </h1>
+    @if (session('success'))
+        <div class="p-4 mb-4 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800" role="alert">
+            <span class="font-medium">สำเร็จ!</span> {{ session('success') }}
+        </div>
+    @endif
 
-        <div class="bg-white shadow sm:rounded-lg mb-6">
-            <div class="px-4 py-5 sm:p-6">
-                <h3 class="text-lg leading-6 font-medium text-gray-900">
-                    สร้าง Token ใหม่
+    @if (session('error'))
+        <div class="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
+            <span class="font-medium">ผิดพลาด!</span> {{ session('error') }}
+        </div>
+    @endif
+
+    {{-- ✅✅✅ ส่วนที่ 1: ตั้งค่า PU Hub API Connection ✅✅✅ --}}
+    <div class="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="flex items-center justify-between mb-4 border-b pb-2">
+            <div>
+                <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                    <i class="fas fa-network-wired mr-2 text-blue-600"></i> ตั้งค่าการเชื่อมต่อ PU Hub System
                 </h3>
-                <div class="mt-2 max-w-xl text-sm text-gray-500">
-                    <p>
-                        สร้าง API Token สำหรับให้ระบบภายนอก (เช่น ระบบ PU) เข้าถึง API ของเรา
-                        <span class="font-bold text-red-600">Token จะแสดงให้เห็นเพียงครั้งเดียวเท่านั้น</span>
-                    </p>
-                </div>
-                
-                <form id="create-token-form" class="mt-5 sm:flex sm:items-center">
-                    @csrf
-                    <div class="w-full sm:max-w-xs">
-                        <label for="token_name" class="sr-only">ชื่อ Token</label>
-                        <input type="text" name="token_name" id="token_name" required
-                               class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                               placeholder="เช่น 'PU System Token'">
-                    </div>
-                    <button type="submit"
-                            class="mt-3 w-full inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                        สร้าง Token
-                    </button>
-                </form>
+                <p class="text-sm text-gray-500 mt-1">กำหนดค่า Endpoint และ Token สำหรับส่งข้อมูลใบขอซื้อและผลการตรวจสอบ</p>
             </div>
+            <span class="px-2 py-1 text-xs font-semibold text-blue-800 bg-blue-100 rounded-full">System Config</span>
         </div>
 
-        <div class="bg-white shadow sm:rounded-lg">
-            <div class="px-4 py-5 sm:p-6">
-                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
-                    API Tokens ที่มีอยู่
-                </h3>
+        <form action="{{ route('management.tokens.updatePuSettings') }}" method="POST" class="space-y-6">
+            @csrf
+            
+            {{-- Group: Connection Info --}}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {{-- Base URL --}}
+                <div class="col-span-1 md:col-span-2">
+                    <label for="pu_api_base_url" class="block mb-2 text-sm font-medium text-gray-900">API Base URL</label>
+                    <div class="flex">
+                        <span class="inline-flex items-center px-3 text-sm text-gray-900 bg-gray-200 border border-r-0 border-gray-300 rounded-l-md">
+                            <i class="fas fa-globe"></i>
+                        </span>
+                        <input type="url" id="pu_api_base_url" name="pu_api_base_url" 
+                               value="{{ old('pu_api_base_url', $puSettings['base_url']) }}"
+                               class="rounded-none rounded-r-lg bg-gray-50 border border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500 block w-full min-w-0 text-sm p-2.5" 
+                               placeholder="http://192.168.x.x/api/v1" required>
+                    </div>
+                </div>
 
-                <div class="flex flex-col">
-                    <div class="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-                        <div class="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
-                            <div class="shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
-                                <table class="min-w-full divide-y divide-gray-200">
-                                    <thead class="bg-gray-50">
-                                    <tr>
-                                        <th scope="col"
-                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            ชื่อ (Name)
-                                        </th>
-                                        <th scope="col"
-                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            สร้างเมื่อ (Created At)
-                                        </th>
-                                        <th scope="col" class="relative px-6 py-3">
-                                            <span class="sr-only">จัดการ</span>
-                                        </th>
-                                    </tr>
-                                    </thead>
-                                    <tbody class="bg-white divide-y divide-gray-200">
-                                    @forelse ($tokens as $token) 
-                                        <tr>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                {{-- เปลี่ยนจากข้อความธรรมดาเป็นปุ่ม --}}
-                                                <button type="button" class="text-indigo-600 hover:text-indigo-900 hover:underline view-token-details-btn"
-                                                        data-token-id="{{ $token->id }}">
-                                                    {{ $token->name }}
-                                                </button>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {{ $token->created_at->format('d/m/Y H:i') }}
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                {{-- ปุ่มลบ (เหมือนเดิม) --}}
-                                                <button type="button" class="text-red-600 hover:text-red-900 delete-token-btn"
-                                                        data-token-id="{{ $token->id }}"
-                                                        data-token-name="{{ $token->name }}">
-                                                    Revoke
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="3" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
-                                                ยังไม่มีการสร้าง API Token
-                                            </td>
-                                        </tr>
-                                    @endforelse  {{-- แก้ไข Typo ตรงนี้ --}}
-                                    </tbody>
-                                </table>
-                            </div>
+                {{-- API Token --}}
+                <div class="col-span-1 md:col-span-2">
+                    <label for="pu_api_token" class="block mb-2 text-sm font-medium text-gray-900">API Token (Bearer Token)</label>
+                    <div class="flex">
+                        <span class="inline-flex items-center px-3 text-sm text-gray-900 bg-gray-200 border border-r-0 border-gray-300 rounded-l-md">
+                            <i class="fas fa-key"></i>
+                        </span>
+                        <input type="password" id="pu_api_token" name="pu_api_token" 
+                               value="{{ old('pu_api_token', $puSettings['token']) }}"
+                               class="rounded-none rounded-r-lg bg-gray-50 border border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500 block w-full min-w-0 text-sm p-2.5 font-mono" 
+                               placeholder="วาง Token ที่ได้จากระบบ PU ที่นี่" required>
+                    </div>
+                </div>
+
+                {{-- PR Intake Path --}}
+                <div>
+                    <label for="pu_api_intake_path" class="block mb-2 text-sm font-medium text-gray-900">PR Intake Path</label>
+                    <input type="text" id="pu_api_intake_path" name="pu_api_intake_path" 
+                           value="{{ old('pu_api_intake_path', $puSettings['intake_path']) }}"
+                           class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" 
+                           placeholder="/intake/pr" required>
+                </div>
+
+                {{-- Inspection Path --}}
+                <div>
+                    <label for="pu_api_inspection_path" class="block mb-2 text-sm font-medium text-gray-900">Inspection Path</label>
+                    <input type="text" id="pu_api_inspection_path" name="pu_api_inspection_path" 
+                           value="{{ old('pu_api_inspection_path', $puSettings['inspection_path']) }}"
+                           class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" 
+                           placeholder="/inspections" required>
+                </div>
+
+                {{-- Origin Department ID --}}
+                <div class="col-span-1 md:col-span-2">
+                    <label for="pu_api_origin_department_id" class="block mb-2 text-sm font-medium text-gray-900">
+                        Default Origin Department ID (Fallback)
+                    </label>
+                    <div class="flex items-center">
+                        <input type="number" id="pu_api_origin_department_id" name="pu_api_origin_department_id" 
+                               value="{{ old('pu_api_origin_department_id', $puSettings['origin_department_id']) }}"
+                               class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" 
+                               placeholder="เช่น 99">
+                        <div class="ml-2 text-sm text-gray-500">
+                            <i class="fas fa-info-circle text-blue-500"></i> ใช้เมื่อระบบหา ID จาก User ไม่เจอ
                         </div>
                     </div>
                 </div>
-
             </div>
-        </div>
 
+            <hr class="border-gray-200">
+
+            {{-- Group: Priority Mapping --}}
+            <div>
+                <h4 class="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <i class="fas fa-tasks mr-2 text-orange-500"></i> Priority Mapping (การจับคู่ระดับความสำคัญ)
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {{-- Scheduled --}}
+                    <div>
+                        <label for="pu_api_priority_scheduled" class="block mb-2 text-sm font-medium text-gray-700">Scheduled (ตามรอบ)</label>
+                        <input type="text" id="pu_api_priority_scheduled" name="pu_api_priority_scheduled" 
+                               value="{{ old('pu_api_priority_scheduled', $puSettings['priority_scheduled']) }}"
+                               class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-orange-500 focus:border-orange-500 block w-full p-2.5" 
+                               placeholder="ค่า Default: Scheduled" required>
+                    </div>
+
+                    {{-- Urgent --}}
+                    <div>
+                        <label for="pu_api_priority_urgent" class="block mb-2 text-sm font-medium text-gray-700">Urgent (ด่วน)</label>
+                        <input type="text" id="pu_api_priority_urgent" name="pu_api_priority_urgent" 
+                               value="{{ old('pu_api_priority_urgent', $puSettings['priority_urgent']) }}"
+                               class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-full p-2.5" 
+                               placeholder="ค่า Default: Urgent" required>
+                    </div>
+
+                    {{-- Job --}}
+                    <div>
+                        <label for="pu_api_priority_job" class="block mb-2 text-sm font-medium text-gray-700">Job Order (ตามงาน)</label>
+                        <input type="text" id="pu_api_priority_job" name="pu_api_priority_job" 
+                               value="{{ old('pu_api_priority_job', $puSettings['priority_job']) }}"
+                               class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block w-full p-2.5" 
+                               placeholder="ค่า Default: Job" required>
+                    </div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">กำหนดชื่อ Priority ให้ตรงกับที่ระบบ PU ต้องการ (Case Sensitive)</p>
+            </div>
+
+            <div class="flex justify-end mt-4 pt-4 border-t">
+                <button type="submit" class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center inline-flex items-center">
+                    <i class="fas fa-save mr-2"></i> บันทึกการตั้งค่า
+                </button>
+            </div>
+        </form>
     </div>
+
+    {{-- ✅✅✅ ส่วนที่ 2: สร้าง API Token (Generate Tokens) ✅✅✅ --}}
+    <div class="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+        <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+            <i class="fas fa-key mr-2 text-green-600"></i> สร้าง API Token ใหม่ (สำหรับให้ระบบอื่นเรียกหาเรา)
+        </h3>
+        
+        <form action="{{ route('management.tokens.store') }}" method="POST" class="flex gap-4 items-end">
+            @csrf
+            <div class="flex-grow">
+                <label for="token_name" class="block mb-2 text-sm font-medium text-gray-900">ชื่อ Token (ระบุชื่อระบบที่นำไปใช้)</label>
+                <input type="text" id="token_name" name="token_name" 
+                       class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" 
+                       placeholder="เช่น iPad-Scan-Station-1" required>
+            </div>
+            <button type="submit" class="text-white bg-green-600 hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center inline-flex items-center">
+                <i class="fas fa-plus mr-2"></i> สร้าง Token
+            </button>
+        </form>
+
+        @if (session('newToken'))
+            <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h4 class="text-yellow-800 font-bold flex items-center">
+                    <i class="fas fa-exclamation-triangle mr-2"></i> โปรดคัดลอก Token นี้เก็บไว้ทันที!
+                </h4>
+                <p class="text-sm text-yellow-700 mb-2">Token นี้จะแสดงเพียงครั้งเดียวเท่านั้น คุณจะไม่สามารถดูได้อีก</p>
+                <div class="relative">
+                    <input type="text" value="{{ session('newToken') }}" readonly 
+                           class="w-full bg-white border border-gray-300 text-gray-900 text-sm rounded-lg p-2.5 font-mono"
+                           onclick="this.select()">
+                </div>
+            </div>
+        @endif
+    </div>
+
+    {{-- ✅✅✅ ส่วนที่ 3: รายการ Token ที่ใช้งานอยู่ ✅✅✅ --}}
+    <div class="p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+        <h3 class="text-lg font-bold text-gray-800 mb-4">รายการ Active Tokens</h3>
+        <div class="relative overflow-x-auto">
+            <table class="w-full text-sm text-left text-gray-500">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3">ชื่อ Token</th>
+                        <th scope="col" class="px-6 py-3">สร้างเมื่อ</th>
+                        <th scope="col" class="px-6 py-3">ใช้งานล่าสุด</th>
+                        <th scope="col" class="px-6 py-3 text-right">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse ($tokens as $token)
+                        <tr class="bg-white border-b hover:bg-gray-50">
+                            <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                                {{ $token->name }}
+                            </td>
+                            <td class="px-6 py-4">
+                                {{ $token->created_at->format('d/m/Y H:i') }}
+                            </td>
+                            <td class="px-6 py-4">
+                                {{ $token->last_used_at ? $token->last_used_at->diffForHumans() : 'ยังไม่เคยใช้งาน' }}
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <form action="{{ route('management.tokens.destroy', $token->id) }}" method="POST" 
+                                      onsubmit="return confirm('คุณแน่ใจหรือไม่ที่จะลบ Token นี้? ระบบที่ใช้ Token นี้จะไม่สามารถเชื่อมต่อได้อีก');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="font-medium text-red-600 hover:underline">
+                                        <i class="fas fa-trash-alt"></i> ลบ
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                                ยังไม่มีรายการ Token
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
 @endsection
-
-@push('scripts') 
-<script>
-    $(document).ready(function () {
-        // ตรวจสอบว่ามี SweetAlert และ jQuery
-        if (typeof Swal === 'undefined' || typeof $ === 'undefined') {
-            console.error('jQuery หรือ SweetAlert2 ยังไม่ได้โหลด');
-            alert('เกิดข้อผิดพลาดในการโหลดสคริปต์หน้าเว็บ');
-            return;
-        }
-
-        const csrfToken = $('meta[name="csrf-token"]').attr('content'); 
-        // (1) กำหนด URL พื้นฐานสำหรับ AJAX
-        const baseUrl = '{{ url('management/tokens') }}'; 
-
-        // --- (ส่วนที่ 1: โค้ดสำหรับสร้าง Token - เหมือนเดิม) ---
-        $('#create-token-form').on('submit', function (e) {
-            e.preventDefault();
-            const tokenName = $('#token_name').val();
-            if (!tokenName) {
-                Swal.fire('ผิดพลาด', 'กรุณาระบุชื่อ Token', 'error');
-                return;
-            }
-            
-            $.ajax({
-                url: '{{ route('management.tokens.store') }}', // ไปที่ Method 'store'
-                method: 'POST',
-                data: {
-                    _token: csrfToken,
-                    token_name: tokenName
-                },
-                success: function (response) {
-                    Swal.fire({
-                        title: 'สร้าง Token สำเร็จ!',
-                        html: `
-                            <p class="mb-4">นี่คือ Token ใหม่ของคุณ กรุณาคัดลอกและเก็บไว้ในที่ปลอดภัย ระบบจะไม่แสดง Token นี้อีก:</p>
-                            <input type="text" readonly
-                                   class="w-full bg-gray-100 border border-gray-300 rounded p-2 font-mono text-sm"
-                                   value="${response.plainTextToken}"
-                                   onclick="this.select(); document.execCommand('copy');"
-                            >
-                            <small class="text-gray-500">คลิกที่ช่องข้อความเพื่อคัดลอก</small>
-                        `,
-                        icon: 'success',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        confirmButtonText: 'รับทราบ (และรีโหลดหน้า)'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            location.reload(); 
-                        }
-                    });
-                    $('#token_name').val(''); 
-                },
-                error: function (xhr) {
-                    const errorMsg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'เกิดข้อผิดพลาดในการสร้าง Token';
-                    Swal.fire('เกิดข้อผิดพลาด', errorMsg, 'error');
-                }
-            });
-        });
-
-        // --- (ส่วนที่ 2: โค้ดสำหรับลบ Token - เหมือนเดิม) ---
-        $(document).on('click', '.delete-token-btn', function () {
-            const tokenId = $(this).data('token-id');
-            const tokenName = $(this).data('token-name');
-            const deleteUrl = baseUrl + '/' + tokenId; // (เช่น /management/tokens/1)
-
-            Swal.fire({
-                title: 'คุณแน่ใจหรือไม่?',
-                text: `คุณต้องการ Revoke (ลบ) Token ที่ชื่อ "${tokenName}" ใช่หรือไม่?`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'ใช่, ลบเลย!',
-                cancelButtonText: 'ยกเลิก'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    $.ajax({
-                        url: deleteUrl, // ไปที่ Method 'destroy'
-                        method: 'POST', 
-                        data: {
-                            _token: csrfToken,
-                            _method: 'DELETE' // ใช้ Method Spoofing ของ Laravel
-                        },
-                        success: function (response) {
-                            Swal.fire(
-                                'ลบสำเร็จ!',
-                                `Token "${tokenName}" ถูกลบแล้ว`,
-                                'success'
-                            ).then(() => {
-                                location.reload(); 
-                            });
-                        },
-                        error: function (xhr) {
-                            const errorMsg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'เกิดข้อผิดพลาดในการลบ Token';
-                            Swal.fire('เกิดข้อผิดพลาด', errorMsg, 'error');
-                        }
-                    });
-                }
-            });
-        });
-
-
-        // --- (ส่วนที่ 3: โค้ดสำหรับดูรายละเอียด) --- 
-        $(document).on('click', '.view-token-details-btn', function () {
-            const tokenId = $(this).data('token-id');
-            // ✅✅✅ สร้าง URL ให้ถูกต้อง ✅✅✅
-            const detailUrl = `${baseUrl}/${tokenId}`; // เช่น /management/tokens/123
-
-            // ยิง AJAX (GET) ไปที่ Method 'show'
-            $.ajax({
-                url: detailUrl,
-                method: 'GET', // ✅✅✅ ใช้ GET method ✅✅✅
-                success: function(response) {
-                    // จัดรูปแบบ Abilities (สิทธิ์) ให้อ่านง่าย
-                    let abilitiesHtml = 'ไม่จำกัดสิทธิ์ (Wildcard *)';
-                    if (response.abilities && response.abilities.length > 0 && response.abilities[0] !== '*') {
-                         abilitiesHtml = response.abilities.map(ability => 
-                            `<span class="inline-block bg-indigo-100 text-indigo-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">${ability}</span>`
-                        ).join(' ');
-                    } else if (response.abilities && response.abilities.length === 0) {
-                         abilitiesHtml = '<span class="text-gray-500">ไม่มีสิทธิ์ใดๆ</span>'; // กรณี []
-                    }
-
-                    // แสดงผลใน SweetAlert
-                    Swal.fire({
-                        title: `รายละเอียด Token: ${response.name}`,
-                        html: `
-                            <div class="text-left space-y-2 mt-4">
-                                <p>
-                                    <strong>สร้างเมื่อ:</strong>
-                                    <span>${response.created_at}</span>
-                                </p>
-                                <p>
-                                    <strong>ใช้งานล่าสุด:</strong>
-                                    <span>${response.last_used_at}</span>
-                                </p>
-                                <div class="pt-2">
-                                    <strong class="block mb-2">สิทธิ์ (Abilities):</strong>
-                                    <div>${abilitiesHtml}</div>
-                                </div>
-                            </div>
-                        `,
-                        icon: 'info',
-                        confirmButtonText: 'ปิด'
-                    });
-                },
-                error: function(xhr) { // ✅ เพิ่มการแสดง Error Message จาก Controller
-                    const errorMsg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'ไม่สามารถดึงรายละเอียด Token ได้';
-                    Swal.fire('เกิดข้อผิดพลาด', errorMsg, 'error');
-                }
-            });
-        });
-
-    });
-</script>
-@endpush

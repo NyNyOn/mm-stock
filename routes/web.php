@@ -180,6 +180,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/', [ApiTokenController::class, 'store'])->name('store');
             Route::get('/{tokenId}', [ApiTokenController::class, 'show'])->name('show');
             Route::delete('/{tokenId}', [ApiTokenController::class, 'destroy'])->name('destroy');
+            Route::post('/pu-settings', [ApiTokenController::class, 'updatePuSettings'])->name('updatePuSettings');
+            
         });
     });
 

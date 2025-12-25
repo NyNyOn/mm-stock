@@ -1,74 +1,135 @@
 <?php
 
-namespace App\Http\Controllers; // <-- (1) ตรวจสอบ Namespace
+namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Throwable; // <-- (2) ✅✅✅ ต้องมีบรรทัดนี้ ✅✅✅
+use App\Models\Setting;
+use App\Models\PersonalAccessToken; // ✅ เพิ่มการเรียกใช้ Model นี้
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ApiTokenController extends Controller
 {
     /**
-     * (Method: index)
      * Display a listing of the resource.
      */
     public function index(Request $request)
     {
-        $tokens = $request->user()->tokens()->orderBy('created_at', 'desc')->get();
+        // ✅ แก้ไข: ดึง Token ทั้งหมดในระบบ (แทนที่จะดึงเฉพาะของ User ปัจจุบัน)
+        // เพื่อให้ Admin เห็น Token เก่าที่อาจจะสร้างโดย User อื่น หรือสร้างผ่าน Seeder
+        $tokens = PersonalAccessToken::orderBy('created_at', 'desc')->get();
+
+        // ดึงค่า Config ปัจจุบัน
+        $puSettings = [
+            'enabled'              => Setting::where('key', 'pu_api_enabled')->value('value') ?? config('services.pu_hub.enabled', true),
+            'base_url'             => Setting::where('key', 'pu_api_base_url')->value('value') ?? config('services.pu_hub.base_url'),
+            'token'                => Setting::where('key', 'pu_api_token')->value('value') ?? config('services.pu_hub.token'),
+            'intake_path'          => Setting::where('key', 'pu_api_intake_path')->value('value') ?? config('services.pu_hub.intake_path'),
+            'inspection_path'      => Setting::where('key', 'pu_api_inspection_path')->value('value') ?? config('services.pu_hub.inspection_path'),
+            'origin_department_id' => Setting::where('key', 'pu_api_origin_department_id')->value('value') ?? config('services.pu_hub.origin_department_id'),
+            
+            // Priority Mapping
+            'priority_scheduled'   => Setting::where('key', 'pu_api_priority_scheduled')->value('value') ?? config('services.pu_hub.priorities.scheduled', 'Scheduled'),
+            'priority_urgent'      => Setting::where('key', 'pu_api_priority_urgent')->value('value') ?? config('services.pu_hub.priorities.urgent', 'Urgent'),
+            'priority_job'         => Setting::where('key', 'pu_api_priority_job')->value('value') ?? config('services.pu_hub.priorities.job', 'Job'),
+        ];
+
         return view('management.tokens.index', [
             'tokens' => $tokens,
+            'puSettings' => $puSettings,
         ]);
     }
 
     /**
-     * (Method: show)
-     * Display the specified resource's details (via AJAX).
-     */
-    // --- (3) ✅✅✅ ตรวจสอบ Parameter ตรงนี้ให้ถูกต้อง ✅✅✅ ---
-    public function show(Request $request, $tokenId)
-    {
-        try {
-            $token = $request->user()->tokens()->findOrFail($tokenId); // ใช้ $tokenId ที่รับมา
-
-            return response()->json([
-                'name' => $token->name,
-                'abilities' => $token->abilities,
-                'last_used_at' => $token->last_used_at ? $token->last_used_at->format('d/m/Y H:i:s') : 'ยังไม่เคยใช้งาน',
-                'created_at' => $token->created_at->format('d/m/Y H:i:s')
-            ]);
-
-        } catch (Throwable $e) {
-            return response()->json(['message' => 'ไม่พบ Token หรือเกิดข้อผิดพลาด: ' . $e->getMessage()], 404);
-        }
-    }
-
-    /**
-     * (Method: store)
-     * Store a newly created resource in storage.
+     * Store a new API token.
      */
     public function store(Request $request)
     {
+        $request->validate([
+            'token_name' => 'required|string|max:255',
+        ]);
+
         try {
-            $request->validate(['token_name' => 'required|string|max:255']);
-            $newToken = $request->user()->createToken($request->token_name, ['pu:callback']);
-            return response()->json(['plainTextToken' => $newToken->plainTextToken]);
+            $token = $request->user()->createToken($request->token_name);
+
+            return redirect()->route('management.tokens.index')
+                ->with('success', 'สร้าง Token สำเร็จ')
+                ->with('newToken', $token->plainTextToken);
         } catch (Throwable $e) {
-            return response()->json(['message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
+            Log::error('Error creating token: ' . $e->getMessage());
+            return back()->with('error', 'เกิดข้อผิดพลาดในการสร้าง Token');
+        }
+    }
+
+    public function show($tokenId)
+    {
+        return redirect()->route('management.tokens.index');
+    }
+
+    public function destroy(Request $request, $tokenId)
+    {
+        try {
+            // ✅ แก้ไข: ลบ Token โดยค้นหาจาก ID โดยตรง (ไม่ผ่าน user()->tokens())
+            // เพื่อให้ Admin สามารถลบ Token เก่าๆ ของระบบได้
+            $token = PersonalAccessToken::find($tokenId);
+            
+            if ($token) {
+                $token->delete();
+                return redirect()->route('management.tokens.index')->with('success', 'ลบ Token เรียบร้อยแล้ว');
+            }
+            
+            return back()->with('error', 'ไม่พบ Token ที่ต้องการลบ');
+
+        } catch (Throwable $e) {
+            Log::error('Error deleting token: ' . $e->getMessage());
+            return back()->with('error', 'เกิดข้อผิดพลาดในการลบ Token');
         }
     }
 
     /**
-     * (Method: destroy)
-     * Remove the specified resource from storage.
+     * Update PU Hub API Settings.
      */
-    public function destroy(Request $request, $tokenId)
+    public function updatePuSettings(Request $request)
     {
-         try {
-            $token = $request->user()->tokens()->findOrFail($tokenId);
-            $token->delete();
-            return response()->json(['message' => 'Token revoked successfully.']);
+        $request->validate([
+            'pu_api_enabled' => 'required|boolean', 
+            'pu_api_base_url' => 'required|url',
+            'pu_api_token' => 'required|string',
+            'pu_api_intake_path' => 'required|string',
+            'pu_api_inspection_path' => 'required|string',
+            'pu_api_origin_department_id' => 'nullable|integer',
+            // Priority Validations
+            'pu_api_priority_scheduled' => 'required|string',
+            'pu_api_priority_urgent' => 'required|string',
+            'pu_api_priority_job' => 'required|string',
+        ]);
+
+        try {
+            $settings = [
+                'pu_api_enabled'              => $request->pu_api_enabled, 
+                'pu_api_base_url'             => $request->pu_api_base_url,
+                'pu_api_token'                => $request->pu_api_token,
+                'pu_api_intake_path'          => $request->pu_api_intake_path,
+                'pu_api_inspection_path'      => $request->pu_api_inspection_path,
+                'pu_api_origin_department_id' => $request->pu_api_origin_department_id,
+                // Priority Settings
+                'pu_api_priority_scheduled'   => $request->pu_api_priority_scheduled,
+                'pu_api_priority_urgent'      => $request->pu_api_priority_urgent,
+                'pu_api_priority_job'         => $request->pu_api_priority_job,
+            ];
+
+            foreach ($settings as $key => $value) {
+                Setting::updateOrCreate(
+                    ['key' => $key],
+                    ['value' => $value]
+                );
+            }
+
+            return redirect()->route('management.tokens.index')->with('success', 'บันทึกการตั้งค่า PU Hub API เรียบร้อยแล้ว');
+
         } catch (Throwable $e) {
-            return response()->json(['message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
+            Log::error('Error updating PU settings: ' . $e->getMessage());
+            return back()->with('error', 'เกิดข้อผิดพลาดในการบันทึกการตั้งค่า: ' . $e->getMessage());
         }
     }
 }
