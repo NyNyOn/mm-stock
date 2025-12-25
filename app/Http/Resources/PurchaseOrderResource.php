@@ -31,13 +31,16 @@ class PurchaseOrderResource extends JsonResource
         }
 
         return [
-            'id'                   => $this->id,          // ✅ เพิ่ม: เพื่อให้ PU อ้างอิงกลับมาได้
-            'po_number'            => $this->po_number,   // ✅ เพิ่ม: เลขที่ใบสั่งซื้อ
-            'status'               => $this->status,      // ✅ เพิ่ม: สถานะปัจจุบัน
-            'requestor_user_id'    => $this->ordered_by_user_id,
+            // V2 Spec: requestor_user_id, origin_department_id, priority, items
+            'requestor_user_id'    => $this->ordered_by_user_id ?? $this->requester_id, // Fallback if necessary
             'origin_department_id' => $this->whenLoaded('requester', fn() => $this->requester->department_id ?? null),
-            'priority'             => $priority,
+            'priority'             => $priority, 
             'items'                => PurchaseOrderItemResource::collection($this->whenLoaded('items')),
+            
+            // Legacy / Extra fields (Keep for backward compatibility or internal use if needed)
+            'id'                   => $this->id,
+            'po_number'            => $this->po_number,
+            'status'               => $this->status,
             'created_at'           => $this->created_at->toIso8601String(),
             'updated_at'           => $this->updated_at->toIso8601String(),
         ];

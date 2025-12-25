@@ -199,4 +199,24 @@ class PurchaseOrderController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * (Inbound) รับแจ้งเตือนจาก PU Hub ว่าสินค้ามาถึงแล้ว (Step 3)
+     */
+    public function receiveHubNotification(Request $request)
+    {
+        // 1. Validate Fields
+        $request->validate([
+            'pr_item_id' => 'required',
+            'po_code'    => 'required',
+            'status'     => 'required|in:arrived_at_hub',
+        ]);
+        Log::info("API: Received Hub Notification (Arrived at Hub) for PO #{$request->po_code}", $request->all());
+        // 3. Return Success to PU System
+        return response()->json([
+            'success' => true,
+            'message' => 'Notification received: Items arrived at Hub.',
+            'dept_name' => 'MM Department (IT)' 
+        ]);
+    }
 }

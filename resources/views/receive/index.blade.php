@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('header', '📥 การตรวจสอบและรับวัสดุ (Goods Receiving)')
-@section('subtitle', "ศูนย์กลางการยืนยันการรับเข้าคลังสินค้า [$currentDeptName]")
+@section('subtitle', "ศูนย์กลางการยืนยันการรับเข้าคลังสินค้า [" . ($currentDeptName ?? 'General') . "]")
 
 @section('content')
     <div class="w-full bg-gray-50 min-h-screen pb-40 lg:pb-32 font-sans">
@@ -23,9 +23,13 @@
 
         <div class="max-w-[98%] mx-auto px-2 sm:px-4 mt-6">
             
-            @if($purchaseOrders->isEmpty())
+            {{-- ✅ ใช้ $pendingPOs ให้ตรงกับ Controller --}}
+            @if($pendingPOs->isEmpty())
                 <div class="bg-white shadow-xl rounded-2xl p-16 text-center border border-gray-200 flex flex-col items-center justify-center min-h-[400px]">
-                    <svg class="h-20 w-20 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2-414-2.414A1 1 0 006.586 13H4" /></svg>
+                    {{-- ✅ แก้ไข SVG Path ที่ผิดพลาด (l-2-414 -> l-2.414) --}}
+                    <svg class="h-20 w-20 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                    </svg>
                     <h3 class="text-2xl font-bold text-gray-900">ไม่พบรายการรอตรวจรับ</h3>
                     <p class="text-gray-500 mt-2">รายการที่ได้รับการแจ้งส่งจากฝ่ายจัดซื้อ (PU) จะปรากฏที่นี่</p>
                 </div>
@@ -35,12 +39,12 @@
                     @csrf
                     
                     <div class="space-y-10">
-                        @foreach($purchaseOrders as $po)
+                        @foreach($pendingPOs as $po)
                             <div class="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-200">
                                 <div class="bg-gray-100 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                                     <div class="flex flex-col">
                                         <span class="text-sm font-semibold text-gray-600">คำสั่งซื้อ (PO)</span>
-                                        <span class="text-xl font-black text-indigo-700">#{{ $po->po_number }}</span>
+                                        <span class="text-xl font-black text-indigo-700">#{{ $po->po_number ?? $po->id }}</span>
                                     </div>
                                     <span class="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-600 border border-blue-100 uppercase shadow-sm">
                                         สถานะ: {{ str_replace('_', ' ', $po->status) }}
@@ -68,7 +72,7 @@
                                                     $qtyToUse = (int) $remaining; 
                                                     $imgUrl = ($item->equipment && $item->equipment->latestImage) ? $item->equipment->latestImage->image_url : asset('images/placeholder.webp');
                                                     $itemName = $item->item_description ?? ($item->equipment->name ?? 'N/A');
-                                                    $unitName = $item->unit_name ?? 'หน่วย';
+                                                    $unitName = $item->equipment->unit->name ?? 'หน่วย';
                                                 @endphp
                                                 
                                                 <tr id="row-{{ $itemId }}" 
@@ -102,7 +106,7 @@
                                                         <div id="hidden-inputs-{{ $itemId }}"></div>
                                                     </td>
                                                     
-                                                    <!-- ยอดค้างรับ (ลดขนาด) -->
+                                                    <!-- ยอดค้างรับ -->
                                                     <td class="px-4 py-4 text-center font-extrabold text-xl text-red-600 bg-gray-50/50 border-r border-gray-100 align-top">
                                                         {{ $remaining }}
                                                         <span class="text-sm font-medium text-gray-500 block">{{ $unitName }}</span>
@@ -122,7 +126,7 @@
                                                         @endif
                                                     </td>
 
-                                                    <!-- 2. จำนวนรับจริง (ลดขนาด) -->
+                                                    <!-- 2. จำนวนรับจริง -->
                                                     <td class="px-4 py-4 text-center align-top bg-indigo-50/10">
                                                         <div id="qty-wrapper-{{ $itemId }}" class="flex flex-col items-center justify-center h-full min-h-[70px]">
                                                             <!-- Dynamic Content -->
@@ -226,14 +230,12 @@
 
             } else if (status === 'issue') {
                 // ISSUE: ใช้ฟิลด์ issue_qty_handled สำหรับการบันทึกปริมาณที่พบปัญหาเท่านั้น
-                // **ไม่ใช้ receive_now_quantity** เพื่อป้องกันการนำเข้าคลังทันที
                 let html = `
                     <input type="hidden" name="items[${itemId}][selected]" value="1">
                     <input type="hidden" name="items[${itemId}][issue_qty_handled]" value="${qty}">
                 `;
                 
                 if (rejectType) {
-                    // เพิ่มสถานะการ Reject เมื่อได้สาเหตุจาก Modal แล้ว
                     html += `<input type="hidden" id="final-status-input-${itemId}" name="items[${itemId}][inspection_status]" value="${rejectType}">`;
                 }
                 
@@ -246,16 +248,22 @@
         function showRejectModal(itemId) {
             console.log(`4. Modal: Showing for Item ID ${itemId}.`);
             
-            finalRejectSubmit.dataset.itemId = itemId;
-            rejectReasonSelect.setAttribute('required', 'required');
-            rejectModal.classList.remove('hidden');
+            // ✅ Check if modal elements exist
+            if (rejectModal && finalRejectSubmit && rejectReasonSelect) {
+                finalRejectSubmit.dataset.itemId = itemId;
+                rejectReasonSelect.setAttribute('required', 'required');
+                rejectModal.classList.remove('hidden');
+            }
         }
 
         function hideRejectModal() {
-            rejectReasonSelect.removeAttribute('required');
-            rejectReasonSelect.value = '';
-            rejectNotesInput.value = '';
-            rejectModal.classList.add('hidden');
+            // ✅ Check if modal elements exist
+            if (rejectModal && rejectReasonSelect && rejectNotesInput) {
+                rejectReasonSelect.removeAttribute('required');
+                rejectReasonSelect.value = '';
+                rejectNotesInput.value = '';
+                rejectModal.classList.add('hidden');
+            }
         }
         
         // --- CORE WORKFLOW LOGIC ---
@@ -349,7 +357,10 @@
         function prepareRejectSubmission(itemId, qty) {
             console.log(`4. Preparing Reject Submission for Item ${itemId}. Qty: ${qty}`);
             
-            finalRejectSubmit.value = itemId;
+            // ✅ Safety check
+            if (finalRejectSubmit) {
+                finalRejectSubmit.value = itemId;
+            }
 
             // Update hidden inputs one last time before modal (just in case)
             updateHiddenInputs(itemId, 'issue', qty); 
@@ -361,10 +372,12 @@
 
         function finalRejectSubmitAction(event) {
             event.preventDefault(); 
+            
+            if (!rejectReasonSelect || !finalRejectSubmit) return;
 
             const rejectType = rejectReasonSelect.value;
             const itemId = parseInt(finalRejectSubmit.value);
-            const rejectNotes = rejectNotesInput.value;
+            const rejectNotes = rejectNotesInput ? rejectNotesInput.value : '';
             
             if (!rejectType) {
                 console.log('ERROR: Reject reason not selected. Blocking submission.');
@@ -380,33 +393,41 @@
             }
 
             // Finalize hidden inputs: update inspection_status and add rejection notes
-            // This call uses the issue status logic, ensuring issue_qty_handled is used, not receive_now_quantity.
             updateHiddenInputs(itemId, 'issue', qtyInput.value, rejectType);
 
             // Add notes input to the main form scope
-            let notesInput = form.querySelector('#final-reject-notes');
-            if (!notesInput) {
-                notesInput = document.createElement('input');
-                notesInput.type = 'hidden';
-                notesInput.id = 'final-reject-notes';
-                form.appendChild(notesInput);
+            if (form) {
+                let notesInput = form.querySelector('#final-reject-notes');
+                if (!notesInput) {
+                    notesInput = document.createElement('input');
+                    notesInput.type = 'hidden';
+                    notesInput.id = 'final-reject-notes';
+                    form.appendChild(notesInput);
+                }
+                notesInput.name = `items[${itemId}][notes_reject_description]`;
+                notesInput.value = rejectNotes;
+                
+                // Set the submit button's value and submit the form
+                hideRejectModal();
+                console.log(`5. Final Submission: Item ${itemId} rejected with reason: ${rejectType}. Submitting form.`);
+                
+                // Submit the form using the specific reject button's value
+                const btn = form.querySelector('button[name="single_submit_reject"]');
+                if(btn) btn.value = itemId;
+                form.submit();
             }
-            notesInput.name = `items[${itemId}][notes_reject_description]`;
-            notesInput.value = rejectNotes;
-            
-            // Set the submit button's value and submit the form
-            hideRejectModal();
-            console.log(`5. Final Submission: Item ${itemId} rejected with reason: ${rejectType}. Submitting form.`);
-            
-            // Submit the form using the specific reject button's value
-            form.querySelector('button[name="single_submit_reject"]').value = itemId;
-            form.submit();
         }
 
         // Setup event listener for modal background click
-        document.getElementById('reject-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'reject-modal') {
-                hideRejectModal();
+        // ✅ แก้ไข: เพิ่มการเช็คว่ามี element จริงไหมก่อน addEventListener
+        document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('reject-modal');
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target.id === 'reject-modal') {
+                        hideRejectModal();
+                    }
+                });
             }
         });
 

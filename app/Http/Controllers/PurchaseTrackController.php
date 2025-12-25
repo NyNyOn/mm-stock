@@ -45,12 +45,16 @@ class PurchaseTrackController extends Controller
         $hasAdminRole = method_exists($user, 'isAdmin') && $user->isAdmin();
 
         // ❌ ถ้าไม่ใช่ Admin: ให้เห็นเฉพาะรายการที่ตัวเองเกี่ยวข้อง (เป็นคนขอ หรือ เป็นคนกดสั่ง)
+        // ❌ FIXED: Removed strict user check so everyone in the department can see the orders
+        // (Since the app is already separated by department DB, this is safe)
+        /*
         if (!$isSuperAdmin && !$hasAdminRole) {
             $query->where(function($q) use ($user) {
                 $q->where('ordered_by_user_id', $user->id)
                   ->orWhere('requester_id', $user->id);
             });
         }
+        */
         // ✅ ถ้าเป็น Admin (ID 9): โค้ดจะข้าม if ข้างบนไป ทำให้เห็นรายการทั้งหมด
 
         // 4. เรียงลำดับจากวันที่สั่งล่าสุด (Ordered At) และแบ่งหน้า

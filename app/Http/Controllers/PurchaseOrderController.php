@@ -164,12 +164,14 @@ class PurchaseOrderController extends Controller
         // Logic การหา Department ID (เหมือนเดิม)
         $originDeptId = null;
 
-        // 1. Setting "ผู้สั่งอัตโนมัติ"
-        $autoRequesterId = Setting::where('key', 'automation_requester_id')->value('value');
-        if ($autoRequesterId) {
-            $autoUser = \App\Models\User::find($autoRequesterId);
-            if ($autoUser && !empty($autoUser->department_id)) {
-                $originDeptId = $autoUser->department_id;
+        // 1. Setting "ผู้สั่งอัตโนมัติ" (เฉพาะ Scheduled เท่านั้น)
+        if ($order->type === 'scheduled') {
+            $autoRequesterId = Setting::where('key', 'automation_requester_id')->value('value');
+            if ($autoRequesterId) {
+                $autoUser = \App\Models\User::find($autoRequesterId);
+                if ($autoUser && !empty($autoUser->department_id)) {
+                    $originDeptId = $autoUser->department_id;
+                }
             }
         }
 
@@ -263,6 +265,21 @@ class PurchaseOrderController extends Controller
         $order->ordered_at = now();
         // ❗️ FIXED: Removed the line that was incorrectly overwriting the requester ID.
         // $order->ordered_by_user_id = Auth::id(); // This was the bug.
+
+        // ✅ Capture PO Number/Code from API Response
+        $responseData = $response->json();
+        
+        // DEBUG: Log the full response to see why we are missing po_code
+        Log::info("PU API Response for PO #{$order->id}: ", $responseData);
+
+        if (isset($responseData['po_code'])) {
+            $order->po_number = $responseData['po_code'];
+        } elseif (isset($responseData['po_number'])) {
+            $order->po_number = $responseData['po_number'];
+        } elseif (isset($responseData['pr_code'])) { // ✅ V2: Support pr_code
+            $order->po_number = $responseData['pr_code'];
+        }
+
         $order->save();
 
         return $response->json();
@@ -279,16 +296,16 @@ class PurchaseOrderController extends Controller
             return back()->with('warning', 'ไม่มีใบสั่งซื้อตามรอบที่รอดำเนินการ');
         }
 
-        // ✅ FIX FOR OLD POs: If the scheduled PO has no requester, assign one before sending.
-        if (is_null($scheduledOrder->ordered_by_user_id)) {
-            $defaultRequesterId = Setting::where('key', 'automation_requester_id')->value('value');
-            if (!$defaultRequesterId) {
-                return back()->with('error', 'ยังไม่ได้ตั้งค่าผู้สั่งอัตโนมัติ! กรุณาตั้งค่าก่อนส่งใบสั่งซื้อ');
-            }
-            $scheduledOrder->ordered_by_user_id = $defaultRequesterId;
-            $scheduledOrder->save();
-            $scheduledOrder->load('requester'); // Reload the relationship after updating
+        // ✅ ENFORCE FOR SCHEDULED POs: Always set requester to the Auto/System User
+        $defaultRequesterId = Setting::where('key', 'automation_requester_id')->value('value');
+        if (!$defaultRequesterId) {
+            return back()->with('error', 'ยังไม่ได้ตั้งค่าผู้สั่งอัตโนมัติ! กรุณาตั้งค่าก่อนส่งใบสั่งซื้อ');
         }
+
+        // Force update the requester to the system user (even if a human added items)
+        $scheduledOrder->ordered_by_user_id = $defaultRequesterId;
+        $scheduledOrder->save();
+        $scheduledOrder->load('requester'); // Reload the relationship
 
         try {
             $this->sendPurchaseOrderToApi($scheduledOrder, $request);
@@ -546,20 +563,37 @@ class PurchaseOrderController extends Controller
         // 1. Validate ข้อมูลที่ส่งมา
         $request->validate([
             'pr_item_id' => 'required',
-            'po_code'    => 'required',
-            'status'     => 'required|in:arrived_at_hub',
+            'po_code'    => 'nullable', // Allow null if pr_code is sent
+            'pr_code'    => 'nullable', // ✅ V2 Support
+            'status'     => 'required', 
         ]);
 
-        Log::info("API: Received Hub Notification for PO #{$request->po_code}", $request->all());
+        $poCode = $request->po_code ?? $request->pr_code; // Use whichever is available
+
+        if (!$poCode) {
+            return response()->json(['success' => false, 'message' => 'PO Code or PR Code is required'], 400);
+        }
+
+        Log::info("API: Received Hub Notification for PO #{$poCode}", $request->all());
 
         // 2. Logic อัปเดตสถานะในฝั่ง MM
-        // ค้นหา PO จาก po_number (ใช้ po_code ที่ส่งมา)
-        $po = PurchaseOrder::where('po_number', $request->po_code)->first();
+        // ค้นหา PO จาก po_number OR id (รองรับกรณี PU Hub ส่งกลับมาเป็น ID)
+        $po = PurchaseOrder::where('po_number', $poCode)
+                            ->orWhere('id', $poCode)
+                            ->first();
 
         if ($po) {
             // อัปเดตสถานะเป็น 'shipped_from_supplier' (แปลว่า PU แจ้งส่งของแล้ว)
             $po->status = 'shipped_from_supplier';
             $po->save();
+
+            // ✅ Update all items to 'shipped' as well
+            foreach($po->items as $item) {
+                if ($item->status === 'pending' || $item->status === 'ordered') {
+                    $item->status = 'shipped_from_supplier';
+                    $item->save();
+                }
+            }
 
             return response()->json(['success' => true, 'message' => 'PO status updated to shipped_from_supplier']);
         }

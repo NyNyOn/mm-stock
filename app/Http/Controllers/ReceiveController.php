@@ -23,7 +23,7 @@ class ReceiveController extends Controller
         $this->authorize('receive:view');
 
         try {
-            $purchaseOrders = PurchaseOrder::with([
+            $pendingPOs = PurchaseOrder::with([
                 'items' => function ($query) {
                     $query->where(function ($q) {
                         $q->whereNull('quantity_received')
@@ -34,7 +34,7 @@ class ReceiveController extends Controller
                 },
                 'orderedBy'
             ])
-            ->whereIn('status', ['ordered', 'shipped_from_supplier', 'partial_receive', 'pending']) 
+            ->whereIn('status', ['shipped_from_supplier', 'partial_receive']) 
             ->whereHas('items', function ($query) {
                 $query->where(function ($q) {
                     $q->whereNull('quantity_received')
@@ -48,7 +48,7 @@ class ReceiveController extends Controller
              $departmentsConfig = Config::get('department_stocks.departments', []);
              $currentDeptName = $departmentsConfig[$currentDeptKey]['name'] ?? strtoupper($currentDeptKey);
 
-            return view('receive.index', compact('purchaseOrders', 'currentDeptName'));
+            return view('receive.index', compact('pendingPOs', 'currentDeptName'));
 
         } catch (\Exception $e) {
             Log::error("[ReceiveController::index] Error: " . $e->getMessage());

@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Setting;
-use App\Models\PersonalAccessToken; // ✅ เพิ่มการเรียกใช้ Model นี้
+use App\Models\PersonalAccessToken; // ✅ Import Model นี้เพื่อจัดการ Token ทั้งหมด
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -15,8 +15,9 @@ class ApiTokenController extends Controller
      */
     public function index(Request $request)
     {
-        // ✅ แก้ไข: ดึง Token ทั้งหมดในระบบ (แทนที่จะดึงเฉพาะของ User ปัจจุบัน)
-        // เพื่อให้ Admin เห็น Token เก่าที่อาจจะสร้างโดย User อื่น หรือสร้างผ่าน Seeder
+        // ✅ แก้ไข: ดึง Token ทั้งหมดในระบบ (แทนที่จะดึงเฉพาะของ User ปัจจุบัน $request->user()->tokens())
+        // สาเหตุที่ของเก่าไม่ขึ้นเพราะมันถูกสร้างโดย User อื่น หรือระบบ Seeder
+        // การใช้ PersonalAccessToken::... จะทำให้เห็นทั้งหมดครับ
         $tokens = PersonalAccessToken::orderBy('created_at', 'desc')->get();
 
         // ดึงค่า Config ปัจจุบัน
@@ -69,8 +70,7 @@ class ApiTokenController extends Controller
     public function destroy(Request $request, $tokenId)
     {
         try {
-            // ✅ แก้ไข: ลบ Token โดยค้นหาจาก ID โดยตรง (ไม่ผ่าน user()->tokens())
-            // เพื่อให้ Admin สามารถลบ Token เก่าๆ ของระบบได้
+            // ✅ แก้ไข: ลบโดยใช้ ID ตรงๆ เพื่อให้ Admin ลบของคนอื่นได้ด้วย
             $token = PersonalAccessToken::find($tokenId);
             
             if ($token) {

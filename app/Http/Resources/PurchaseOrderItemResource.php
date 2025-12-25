@@ -15,6 +15,9 @@ class PurchaseOrderItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            // ✅ AUTO-FIX: Send Local ID so we can match it later
+            'id' => $this->id,
+            
             // 1. แก้ไขชื่อสินค้า: เช็คก่อนว่ามี equipment ไหม
             // ถ้ามี: ใช้ชื่อจาก Equipment
             // ถ้าไม่มี (null): ใช้ item_description ที่เราบันทึกตอน create
