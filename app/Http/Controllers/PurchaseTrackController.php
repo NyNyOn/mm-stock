@@ -16,7 +16,6 @@ class PurchaseTrackController extends Controller
         // 1. กำหนดสถานะที่จะแสดงในหน้า Tracking
         // ✅ เพิ่ม 'pending' เข้าไป เพื่อให้เห็นรายการที่รอส่งด้วย
         $trackingStatuses = [
-            'pending',                // <--- เพิ่มสถานะนี้
             'ordered',                
             'approved',               
             'shipped_from_supplier',  
@@ -57,10 +56,9 @@ class PurchaseTrackController extends Controller
         */
         // ✅ ถ้าเป็น Admin (ID 9): โค้ดจะข้าม if ข้างบนไป ทำให้เห็นรายการทั้งหมด
 
-        // 4. เรียงลำดับจากวันที่สั่งล่าสุด (Ordered At) และแบ่งหน้า
-        // ใช้ created_at เป็นตัวสำรองในการเรียงลำดับ สำหรับรายการ pending ที่ยังไม่มี ordered_at
-        $purchaseOrders = $query->orderBy('ordered_at', 'desc')
-                                ->orderBy('created_at', 'desc') 
+        // 4. เรียงลำดับ: เอาล่าสุดขึ้นก่อนเสมอ (ตาม ID หรือ Created At)
+        // ตามที่ User ขอ: "เลข Po ล่าสุดอยู่บนเสมอ" -> ตีความว่าเป็นรายการล่าสุด
+        $purchaseOrders = $query->orderBy('id', 'desc')
                                 ->paginate(10);
 
         return view('purchase-track.index', compact('purchaseOrders'));

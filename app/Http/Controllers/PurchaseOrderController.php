@@ -272,13 +272,27 @@ class PurchaseOrderController extends Controller
         // DEBUG: Log the full response to see why we are missing po_code
         Log::info("PU API Response for PO #{$order->id}: ", $responseData);
 
+        // Store full response data
+        $order->pu_data = $responseData;
+
+        // Determine PR Number
+        if (isset($responseData['pr_code'])) {
+            $order->pr_number = $responseData['pr_code'];
+        }
+
+        // Determine PO Number
         if (isset($responseData['po_code'])) {
             $order->po_number = $responseData['po_code'];
         } elseif (isset($responseData['po_number'])) {
             $order->po_number = $responseData['po_number'];
-        } elseif (isset($responseData['pr_code'])) { // ✅ V2: Support pr_code
-            $order->po_number = $responseData['pr_code'];
         }
+        
+        // If we only got a PR code and no PO code yet, we ensure PO number is NULL (or keep existing if partial update)
+        // However, standard flow is: Request -> PR -> PO.
+        // So initially we might only get PR.
+        // If the user previously had a PO number (unlikely in this flow), we don't want to wipe it unless we are sure.
+        
+        // No explicit wipe of po_number here to be safe, as we are relying on what keys are present.
 
         $order->save();
 
@@ -402,6 +416,38 @@ class PurchaseOrderController extends Controller
         }
 
         return redirect()->route('purchase-orders.index')->with('success', "ส่งใบสั่งซื้อตาม Job ทั้งหมด ({$successCount} รายการ) สำเร็จ");
+    }
+
+    public function submitSingleJobOrder(Request $request, PurchaseOrder $purchaseOrder)
+    {
+        $this->authorize('po:manage');
+
+        if ($purchaseOrder->status !== 'pending') {
+            return back()->with('error', 'ใบสั่งซื้อนี้ไม่ได้อยู่ในสถานะรอดำเนินการ');
+        }
+
+        // ✅ FIX FOR SINGLE PO: If no requester, assign one before sending.
+        $defaultJobRequesterId = Setting::where('key', 'automation_job_requester_id')->value('value');
+        
+        if (is_null($purchaseOrder->ordered_by_user_id)) {
+            if (!$defaultJobRequesterId) {
+                return back()->with('error', 'ยังไม่ได้ตั้งค่าผู้สั่งตาม Job! กรุณาตั้งค่าก่อนส่งใบสั่งซื้อ');
+            }
+            $purchaseOrder->ordered_by_user_id = $defaultJobRequesterId;
+            $purchaseOrder->save();
+            $purchaseOrder->load('requester');
+        }
+
+        try {
+            $this->sendPurchaseOrderToApi($purchaseOrder, $request);
+            return back()->with('success', "ส่งใบสั่งซื้อ ID: {$purchaseOrder->id} (Job) สำเร็จ");
+        } catch (ConnectionException $e) {
+            $errorMessage = "ID {$purchaseOrder->id} ล้มเหลว (Connection Error): ไม่สามารถเชื่อมต่อกับ PU Hub API ได้ - " . $e->getMessage();
+            Log::error($errorMessage);
+            return back()->with('error', $errorMessage);
+        } catch (\Exception $e) {
+            return back()->with('error', "เกิดข้อผิดพลาด: " . $e->getMessage());
+        }
     }
 
     public function addItemToUrgent(Request $request, Equipment $equipment)
@@ -577,8 +623,9 @@ class PurchaseOrderController extends Controller
         Log::info("API: Received Hub Notification for PO #{$poCode}", $request->all());
 
         // 2. Logic อัปเดตสถานะในฝั่ง MM
-        // ค้นหา PO จาก po_number OR id (รองรับกรณี PU Hub ส่งกลับมาเป็น ID)
+        // ค้นหา PO จาก po_number OR pr_number OR id (รองรับกรณี PU Hub ส่งกลับมาเป็น ID)
         $po = PurchaseOrder::where('po_number', $poCode)
+                            ->orWhere('pr_number', $poCode)
                             ->orWhere('id', $poCode)
                             ->first();
 

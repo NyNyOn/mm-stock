@@ -28,12 +28,23 @@
                         <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-4">
                             <div class="flex items-center gap-4">
                                 <div class="bg-white border border-gray-200 p-2.5 rounded-lg shadow-sm">
-                                    <span class="text-xs font-bold text-gray-500 block text-center leading-none">PO</span>
+                                    <span class="text-xs font-bold text-gray-500 block text-center leading-none">
+                                        {{ !empty($po->po_number) ? 'PO' : (!empty($po->pr_number) ? 'PR' : 'ID') }}
+                                    </span>
                                     <span class="text-sm font-bold text-indigo-600 block text-center leading-none mt-0.5">#{{ $po->id }}</span>
                                 </div>
                                 <div>
                                     <div class="flex items-center gap-2">
-                                        <h3 class="text-xl font-bold text-gray-800 tracking-tight">{{ $po->po_number ?? 'รอเลข PO' }}</h3>
+                                        {{-- ✅ Show PO Number if available, otherwise show PR Number --}}
+                                        @if(!empty($po->po_number))
+                                            <h3 class="text-xl font-bold text-gray-800 tracking-tight">{{ $po->po_number }}</h3>
+                                        @elseif(!empty($po->pr_number))
+                                            <h3 class="text-xl font-bold text-gray-800 tracking-tight">{{ $po->pr_number }}</h3>
+                                            <span class="text-xs text-gray-500 font-medium self-end mb-1">(PR)</span>
+                                        @else
+                                            <h3 class="text-xl font-bold text-gray-400 tracking-tight">รอเลข PO</h3>
+                                        @endif
+                                        
                                         <span class="px-2 py-0.5 rounded text-xs font-medium 
                                             {{ $po->type == 'urgent' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800' }}">
                                             {{ ucfirst($po->type) }}
@@ -123,8 +134,13 @@
                             <!-- Timeline / Progress Bar -->
                             <div class="mb-10 mt-2 px-4">
                                 @php
+                                    $items = $po->items;
                                     $steps = [
-                                        'ordered' => ['label' => 'สั่งซื้อแล้ว', 'desc' => 'ส่งใบสั่งซื้อให้ PU', 'icon' => 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'],
+                                        'ordered' => [
+                                            'label' => !empty($po->po_number) ? 'ออก PO แล้ว' : (!empty($po->pr_number) ? 'ออก PR แล้ว' : 'สั่งซื้อแล้ว'), 
+                                            'desc' => !empty($po->po_number) ? 'ได้รับเลข PO เรียบร้อย' : (!empty($po->pr_number) ? 'รอออกเลข PO' : 'ส่งคำขอไปที่ PU'), 
+                                            'icon' => 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
+                                        ],
                                         'shipped_from_supplier' => ['label' => 'อยู่ระหว่างจัดส่ง', 'desc' => 'PU แจ้งส่งของ', 'icon' => 'M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0'],
                                         'completed' => ['label' => 'รับของสำเร็จ', 'desc' => 'เข้าสต๊อกเรียบร้อย', 'icon' => 'M5 13l4 4L19 7']
                                     ];
@@ -132,7 +148,10 @@
                                     $currentStatus = $po->status;
                                     if ($currentStatus == 'partial_receive') $currentStatus = 'shipped_from_supplier'; 
                                     if ($currentStatus == 'approved') $currentStatus = 'ordered';
-                                    if ($currentStatus == 'pending') $currentStatus = 'ordered';
+                                    if ($currentStatus == 'pending') $currentStatus = 'ordered'; 
+
+                                    // Check if we have PR but no PO yet
+                                    $isPrOnly = !empty($po->pr_number) && empty($po->po_number);
 
                                     $statusKeys = array_keys($steps);
                                     $currentIndex = array_search($currentStatus, $statusKeys);

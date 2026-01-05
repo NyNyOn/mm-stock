@@ -205,17 +205,45 @@ class PurchaseOrderController extends Controller
      */
     public function receiveHubNotification(Request $request)
     {
+        Log::info("API: Received Hub Notification", $request->all());
+
         // 1. Validate Fields
         $request->validate([
             'pr_item_id' => 'required',
-            'po_code'    => 'required',
-            'status'     => 'required|in:arrived_at_hub',
+            'po_code'    => 'nullable',
+            'pr_code'    => 'nullable',
+            'status'     => 'required', 
         ]);
-        Log::info("API: Received Hub Notification (Arrived at Hub) for PO #{$request->po_code}", $request->all());
+        
+        $poCode = $request->po_code ?? $request->pr_code;
+
+        if (!$poCode) {
+             return response()->json(['success' => false, 'message' => 'PO Code or PR Code is required'], 400);
+        }
+
+        // 2. Logic อัปเดตสถานะในฝั่ง MM
+        $po = PurchaseOrder::where('po_number', $poCode)
+                            ->orWhere('pr_number', $poCode)
+                            ->orWhere('id', $poCode)
+                            ->first();
+
+        if ($po) {
+            // Updated: Accept various statuses or map them.
+            // If PU sends 'ordered' but context is "Notification of Shipping", we mark it "shipped_from_supplier".
+            // Or we blindly trust: $po->status = 'shipped_from_supplier';
+            // User requested: "Status not changed, still shows only PR Issued". 
+            // Correct status is 'shipped_from_supplier'.
+            $po->status = 'shipped_from_supplier';
+            $po->save();
+            Log::info("API: Updated PO #{$po->id} to 'shipped_from_supplier'");
+        } else {
+            Log::warning("API: PO not found for code: {$poCode}");
+        }
+
         // 3. Return Success to PU System
         return response()->json([
             'success' => true,
-            'message' => 'Notification received: Items arrived at Hub.',
+            'message' => 'Notification received processed.',
             'dept_name' => 'MM Department (IT)' 
         ]);
     }

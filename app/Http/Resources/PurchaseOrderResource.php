@@ -30,9 +30,15 @@ class PurchaseOrderResource extends JsonResource
             $priority = 'Normal'; // Fallback value ป้องกัน Error 500
         }
 
+        $autoRequesterId = \App\Models\Setting::where('key', 'automation_requester_id')->value('value');
+        $jobRequesterId = \App\Models\Setting::where('key', 'automation_job_requester_id')->value('value');
+
         return [
             // V2 Spec: requestor_user_id, origin_department_id, priority, items
-            'requestor_user_id'    => $this->ordered_by_user_id ?? $this->requester_id, // Fallback if necessary
+            // Fix: Prioritize 'automation_requester_id' (System User, e.g., 12) which is known to be valid in PU.
+            // If not set, try 'ordered_by_user_id', then Auth ID, then 1.
+            'requestor_user_id'    => $autoRequesterId ?? $this->ordered_by_user_id ?? $jobRequesterId ?? auth()->id() ?? 1,
+
             'origin_department_id' => $this->whenLoaded('requester', fn() => $this->requester->department_id ?? null),
             'priority'             => $priority, 
             'items'                => PurchaseOrderItemResource::collection($this->whenLoaded('items')),

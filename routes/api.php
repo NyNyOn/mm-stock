@@ -32,6 +32,18 @@ Route::middleware('auth')->group(function () {
     // (Internal AJAX routes omitted/commented out as per your file)
 });
 
+// ✅ Public Routes for External Systems (PU, etc.)
+Route::prefix('v1')->group(function () {
+    // ✅ เรียกใช้ Controller ผ่านชื่อเล่น (Alias)
+    Route::get('/equipments', [V1EquipmentController::class, 'index'])->name('api.v1.equipments.index');
+
+    // ✅ เพิ่ม: ดึงรายละเอียด 1 ชิ้น (โดยระบุ ID)
+    Route::get('/equipments/{id}', [V1EquipmentController::class, 'show'])->name('api.v1.equipments.show');
+
+    // ✅ เพิ่ม: รับ Webhook จาก PU (Public)
+    Route::post('/notify-hub-arrival', [PurchaseOrderController::class, 'receiveHubNotification']);
+});
+
 
 // --- API v1 สำหรับระบบภายนอก (ใช้ Sanctum Token) ---
 Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
@@ -41,11 +53,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->where('filename', '.*')
         ->name('nas.image');
 
-    // ✅ เรียกใช้ Controller ผ่านชื่อเล่น (Alias)
-    Route::get('/equipments', [V1EquipmentController::class, 'index'])->name('api.v1.equipments.index');
 
-    // ✅ เพิ่ม: ดึงรายละเอียด 1 ชิ้น (โดยระบุ ID)
-    Route::get('/equipments/{id}', [V1EquipmentController::class, 'show'])->name('api.v1.equipments.show');
 
     // --- Routes สำหรับระบบ PU (Inbound to this app) ---
 
@@ -67,8 +75,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Delivery Notification
      Route::post('/po-delivery-notification/{purchaseOrder}', [PurchaseOrderController::class, 'notifyDelivery'])
           ->name('api.v1.po-delivery-notification');
-    // เพิ่ม Route นี้เพื่อให้รองรับ POST Request จาก PU Hub
-    Route::post('/notify-hub-arrival', [PurchaseOrderController::class, 'receiveHubNotification']);
+
 
 });
 

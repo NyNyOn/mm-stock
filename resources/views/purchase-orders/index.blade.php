@@ -126,6 +126,17 @@
                             <p class="text-xs text-gray-600">ผู้ร้องขอ: {{ $order->glpi_requester_name ?? 'N/A' }}</p>
                         </div>
                         <div class="flex items-center flex-shrink-0 space-x-2">
+                            {{-- ✅ ปุ่มส่งใบงานเดี่ยว --}}
+                            <form id="submit-single-job-form-{{ $order->id }}" action="{{ route('purchase-orders.submitSingleJobOrder', $order->id) }}" method="POST">
+                                @csrf
+                            </form>
+                            <button type="button"
+                                    onclick="confirmAndSubmitForm(event, 'submit-single-job-form-{{ $order->id }}', 'ยืนยันการส่ง?', 'ต้องการส่งเฉพาะใบงานนี้ไปที่ฝ่ายจัดซื้อใช่หรือไม่?')"
+                                    class="px-3 py-1 text-xs font-bold text-green-700 bg-green-200 rounded-lg hover:bg-green-300 button-soft"
+                                    title="ส่งใบงานนี้">
+                                <i class="fas fa-paper-plane"></i> ส่ง
+                            </button>
+
                             <form id="delete-po-form-{{ $order->id }}" action="{{ route('purchase-orders.destroy', $order->id) }}" method="POST">
                                 @csrf @method('DELETE')
                             </form>

@@ -114,7 +114,9 @@ class ReceiveController extends Controller
                         continue;
                     }
 
-                    $equipment->increment('quantity', $receiveNowQty);
+                    // $equipment->increment('quantity', $receiveNowQty); // ❌ Increment does not fire model events
+                    $equipment->quantity += $receiveNowQty;
+                    $equipment->save(); // ✅ Save fires 'saving' event which updates status
                     
                     Transaction::create([
                         'equipment_id'    => $equipment->id,

@@ -30,6 +30,8 @@ class PurchaseOrder extends Model
      */
     protected $fillable = [
         'po_number',
+        'pr_number', // Added
+        'pu_data',   // Added
         'ordered_by_user_id', // Refers to user in the CENTRAL 'depart_it_db'
         'ordered_at',
         'status',
@@ -47,6 +49,7 @@ class PurchaseOrder extends Model
      */
     protected $casts = [
         'ordered_at' => 'datetime',
+        'pu_data' => 'array', // Added
     ];
 
     /**

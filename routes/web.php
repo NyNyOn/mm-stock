@@ -144,6 +144,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/job-orders/create', [JobOrderController::class, 'create'])->name('job-orders.create');
         Route::post('/job-orders', [JobOrderController::class, 'store'])->name('job-orders.store');
         Route::post('/purchase-orders/submit-job-orders', [PurchaseOrderController::class, 'submitJobOrders'])->name('purchase-orders.submitJobOrders');
+        Route::post('/purchase-orders/{purchaseOrder}/submit-single-job', [PurchaseOrderController::class, 'submitSingleJobOrder'])->name('purchase-orders.submitSingleJobOrder'); // ✅ New Route for Single Submission
         Route::get('/receive/job-order/{purchaseOrder}', [ReceiveController::class, 'showJobOrder'])->name('receive.job-order');
         Route::post('/purchase-orders/{purchaseOrder}/add-item', [PurchaseOrderController::class, 'addItem'])->name('purchase-orders.add-item');
         Route::post('/purchase-orders/run-glpi-sync', [PurchaseOrderController::class, 'runGlpiSync'])->name('purchase-orders.runGlpiSync');
