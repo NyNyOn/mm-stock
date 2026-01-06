@@ -482,6 +482,19 @@ class TransactionController extends Controller
             'dept_key' => 'nullable|string' 
         ]);
 
+        // ✅ CHECK: ตรวจสอบการประเมินความพึงพอใจ
+        // (ตรวจสอบเฉพาะกรณีเบิกให้ตัวเอง หรือ receiver_id ตรงกับตัวเอง)
+        $receiverId = $request->items[0]['receiver_id'] ?? $loggedInUser->id; // ใช้ item แรกเป็นเกณฑ์ (Cart มักจะเป็นคนเดียวกัน)
+        if ($receiverId == $loggedInUser->id) {
+            $unratedTransactions = $this->getUnratedTransactions($loggedInUser->id);
+            if ($unratedTransactions->count() > 0) {
+                return response()->json([
+                    'message' => "คุณมีรายการอุปกรณ์ที่ยังไม่ได้ให้คะแนน",
+                    'unrated_items' => $unratedTransactions->values()
+                ], 403);
+            }
+        }
+
         DB::beginTransaction();
         try {
             $results = [];

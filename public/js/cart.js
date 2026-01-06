@@ -276,6 +276,18 @@ async function submitCart() {
             await Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'บันทึกรายการเบิกเรียบร้อยแล้ว', timer: 2000, showConfirmButton: false });
             cart = []; saveCart(); closeCartModal(); window.location.reload();
         } else {
+            // ✅ INCREASED UX: ถ้าติดเรื่องประเมิน ให้เด้งไปหน้าประเมินเลย
+            if (res.status === 403 && data.unrated_items) {
+                closeCartModal();
+                if (typeof openRatingModal === 'function') {
+                    openRatingModal(data.unrated_items);
+                    Swal.fire({ icon: 'warning', title: 'กรุณาประเมินความพึงพอใจ', text: 'คุณมีรายการที่ใช้งานเสร็จแล้ว กรุณาให้คะแนนก่อนเบิกใหม่ครับ', confirmButtonText: 'ตกลง' });
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Browser Error: openRatingModal function not found.' });
+                }
+                return;
+            }
+
             Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: data.message || 'Unknown Error', confirmButtonText: 'ปิด' });
         }
     } catch (e) {

@@ -114,7 +114,7 @@
                                                         $btnStates = [ 
                                                             'consumable' => [ 'text' => 'เบิกด่วน', 'icon' => 'fas fa-bolt', 'class' => 'bg-red-600 hover:bg-red-700' ], 
                                                             'returnable' => [ 'text' => 'ยืมใช้', 'icon' => 'fas fa-hand-holding', 'class' => 'bg-blue-600 hover:bg-blue-700' ], 
-                                                            'partial_return' => [ 'text' => 'เบิก', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600' ], 
+                                                            'partial_return' => [ 'text' => 'เบิกเหลือคืนได้', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600' ], 
                                                             'unset' => [ 'text' => 'รอระบุ', 'icon' => 'fas fa-clock', 'class' => 'bg-gray-400 cursor-not-allowed' ] 
                                                         ];
                                                         $typeKey = $item->withdrawal_type ?? 'unset';
@@ -217,8 +217,8 @@
                                     } else {
                                         $btnStates = [ 
                                             'consumable' => [ 'text' => 'เบิกด่วน', 'icon' => 'fas fa-bolt', 'class' => 'bg-red-600 hover:bg-red-700' ], 
-                                            'returnable' => [ 'text' => 'ยืมใช้', 'icon' => 'fas fa-hand-holding', 'class' => 'bg-blue-600 hover:bg-blue-700' ], 
-                                            'partial_return' => [ 'text' => 'เบิก', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600' ], 
+                                            'returnable' => [ 'text' => 'ยืมแล้วต้องคืน', 'icon' => 'fas fa-hand-holding', 'class' => 'bg-blue-600 hover:bg-blue-700' ], 
+                                            'partial_return' => [ 'text' => 'เบิกเหลือคืนได้', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600' ], 
                                             'unset' => [ 'text' => 'รอระบุ', 'icon' => 'fas fa-clock', 'class' => 'bg-gray-400 cursor-not-allowed' ] 
                                         ];
                                         $typeKey = $item->withdrawal_type ?? 'unset';

@@ -171,14 +171,14 @@
                  @if($txn->status == 'pending' && Auth::user()->can('equipment:manage'))
                     <form action="{{ route('transactions.adminConfirmShipment', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitConfirmShipment(this);">
                         @csrf 
-                        <button type="submit" class="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 shadow-sm">
-                            <i class="fas fa-paper-plane text-xs"></i>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition-all flex items-center gap-2 transform hover:scale-105 font-bold text-sm">
+                            <i class="fas fa-paper-plane"></i> <span>ยืนยันส่งของ</span>
                         </button>
                     </form>
                     <form action="{{ route('transactions.userCancel', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitAdminReject(this);">
                         @method('PATCH') @csrf 
-                        <button type="submit" class="p-1.5 bg-white border border-red-200 text-red-500 rounded hover:bg-red-50">
-                            <i class="fas fa-times text-xs"></i>
+                        <button type="submit" class="px-4 py-2 bg-white border-2 border-red-100 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-200 transition-all flex items-center gap-2 font-bold text-sm">
+                            <i class="fas fa-times"></i> <span>ปฏิเสธ</span>
                         </button>
                     </form>
                  @endif
