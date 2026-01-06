@@ -21,7 +21,8 @@
                 <p class="text-sm text-gray-500">กรุณาจัดการรายการเมื่อใช้งานเสร็จสิ้น</p>
             </div>
             
-            <div class="overflow-x-auto">
+            {{-- Desktop Table View --}}
+            <div class="hidden md:block overflow-x-auto">
                 <table class="w-full">
                     <thead class="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider">
                         <tr>
@@ -90,6 +91,70 @@
                     </tbody>
                 </table>
             </div>
+
+            {{-- Mobile Card View --}}
+            <div class="block md:hidden divide-y divide-gray-100">
+                @forelse ($returnableItems as $item)
+                    @php
+                        $remaining = abs($item->quantity_change) - $item->returned_quantity;
+                        $imgUrl = asset('images/placeholder.webp');
+                        if ($item->equipment && $item->equipment->latestImage) {
+                            $deptKey = config('department_stocks.default_nas_dept_key', 'mm');
+                            $imgUrl = route('nas.image', ['deptKey' => $deptKey, 'filename' => $item->equipment->latestImage->file_name]);
+                        }
+                    @endphp
+                    <div class="p-4 bg-white">
+                        <div class="flex gap-4">
+                             {{-- Image --}}
+                             <div class="flex-shrink-0 w-20 h-20 bg-gray-100 rounded-xl overflow-hidden border border-gray-100">
+                                <img src="{{ $imgUrl }}" class="w-full h-full object-cover">
+                            </div>
+                            
+                            {{-- Info --}}
+                            <div class="flex-1 min-w-0">
+                                <h4 class="font-bold text-gray-800 text-sm mb-1 break-words">{{ optional($item->equipment)->name ?? 'Unknown' }}</h4>
+                                <p class="text-xs text-gray-500 mb-2">{{ optional($item->equipment)->serial_number }}</p>
+                                
+                                <div class="flex items-center text-xs text-gray-500 mb-2">
+                                     <i class="far fa-calendar-alt mr-1"></i>
+                                     {{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y') }}
+                                </div>
+                            </div>
+                            
+                            {{-- Remaining Badge --}}
+                            <div class="flex flex-col items-center justify-start pt-1">
+                                <span class="flex flex-col items-center justify-center w-10 h-10 bg-blue-50 text-blue-700 rounded-xl border border-blue-100">
+                                    <span class="text-xs font-semibold">เหลือ</span>
+                                    <span class="text-sm font-bold leading-none">{{ $remaining }}</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        {{-- Action Button --}}
+                        <div class="mt-3">
+                             @if(isset($pendingReturnTxnIds) && in_array($item->id, $pendingReturnTxnIds))
+                                <div class="w-full py-2 text-center text-sm font-bold text-yellow-700 bg-yellow-50 rounded-lg border border-yellow-200">
+                                    <i class="fas fa-clock mr-1"></i> รอตรวจสอบ
+                                </div>
+                            @else
+                                <button 
+                                    type="button"
+                                    class="action-btn w-full py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 active:scale-95 transition-all shadow-md shadow-indigo-200 flex justify-center items-center"
+                                    data-id="{{ $item->id }}"
+                                    data-name="{{ optional($item->equipment)->name }}"
+                                    data-remaining="{{ $remaining }}">
+                                    จัดการรายการ <i class="fas fa-chevron-right ml-2 text-xs"></i>
+                                </button>
+                            @endif
+                        </div>
+                    </div>
+                @empty
+                    <div class="p-8 text-center text-gray-400 bg-gray-50">
+                        <i class="fas fa-box-open text-4xl mb-3 block opacity-50"></i>
+                        <span class="text-sm">ไม่พบรายการค้างส่งคืน</span>
+                    </div>
+                @endforelse
+            </div>
             @if($returnableItems->hasPages())
             <div class="p-4 border-t border-gray-100 bg-gray-50">
                 {{ $returnableItems->appends(['history_page' => $userReturnHistory->currentPage()])->links() }}
@@ -102,7 +167,8 @@
             <div class="p-5 border-b border-gray-100">
                 <h3 class="text-lg font-bold text-gray-800">🕒 ประวัติคำขอคืนของคุณ</h3>
             </div>
-            <div class="overflow-x-auto scrollbar-soft">
+            {{-- Desktop Table View --}}
+            <div class="hidden md:block overflow-x-auto scrollbar-soft">
                 <table class="w-full">
                     <thead class="bg-gray-50">
                         <tr>
@@ -143,6 +209,41 @@
                         @endforelse
                     </tbody>
                 </table>
+            </div>
+
+            {{-- Mobile Card View --}}
+            <div class="block md:hidden divide-y divide-gray-100">
+                @forelse ($userReturnHistory as $history)
+                    <div class="p-4 bg-white">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-bold text-gray-800 text-sm mr-2">{{ optional(optional($history->originalTransaction)->equipment)->name ?? 'N/A' }}</h4>
+                            <span class="text-xs text-gray-500 whitespace-nowrap">{{ $history->created_at->format('d/m/Y') }}</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-2">
+                                @if($history->action_type == 'write_off')
+                                    <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">ใช้หมด</span>
+                                @else
+                                    <span class="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs font-medium">คืนของ</span>
+                                @endif
+                                <span class="text-sm">จำนวน: <strong>{{ $history->quantity_returned }}</strong></span>
+                            </div>
+                            
+                            <div>
+                                @if($history->status == 'approved')
+                                    <span class="px-2 py-1 text-xs font-bold text-green-700 bg-green-100 rounded-full">อนุมัติ</span>
+                                @elseif($history->status == 'rejected')
+                                    <span class="px-2 py-1 text-xs font-bold text-red-700 bg-red-100 rounded-full">ปฏิเสธ</span>
+                                @else
+                                    <span class="px-2 py-1 text-xs font-bold text-yellow-700 bg-yellow-100 rounded-full">รออนุมัติ</span>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                @empty
+                    <div class="p-8 text-center text-gray-400">คุณยังไม่มีประวัติการขอคืน</div>
+                @endforelse
             </div>
             @if($userReturnHistory->hasPages())
             <div class="p-4 border-t border-gray-100">
@@ -250,7 +351,7 @@
 
             <div class="p-6">
                 {{-- Choice Buttons --}}
-                <div class="grid grid-cols-2 gap-4 mb-6" id="choiceContainer">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" id="choiceContainer">
                     {{-- Option 1: Return --}}
                     <div class="choice-card cursor-pointer border-2 border-gray-200 rounded-xl p-4 text-center hover:border-blue-500 hover:bg-blue-50 transition-all group" onclick="selectAction('return')">
                         <div class="w-12 h-12 mx-auto bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">

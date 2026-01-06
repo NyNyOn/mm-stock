@@ -40,106 +40,114 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto scrollbar-soft">
-                <table class="w-full">
-                    <thead class="bg-gray-50 uppercase text-xs font-semibold text-gray-500">
-                        <tr>
-                            <th class="px-6 py-4 text-left tracking-wider">อุปกรณ์ / Serial</th>
-                            <th class="px-4 py-4 text-center tracking-wider w-32">จำนวนในระบบ</th>
-                            <th class="px-4 py-4 text-center tracking-wider w-64">ผลการนับจริง</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 bg-white" id="items-table-body">
-                        @foreach($items as $item)
-                            @php
-                                $isCounted = !is_null($item->counted_quantity) && $item->counted_quantity !== '';
-                                $rowClass = $isCounted ? 'bg-green-50' : '';
-                            @endphp
-                            <tr id="row-{{ $item->id }}" class="transition-all duration-200 {{ $rowClass }}">
-                                {{-- Column 1: Equipment Info --}}
-                                <td class="px-6 py-4">
-                                    <div class="flex items-center">
-                                        <div class="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500">
-                                            <i class="fas fa-box"></i>
+            <div class="w-full">
+                <!-- Desktop Header -->
+                <div class="hidden md:flex bg-gray-50 uppercase text-xs font-semibold text-gray-500 border-b border-gray-200">
+                    <div class="px-6 py-4 flex-1 tracking-wider">อุปกรณ์ / Serial</div>
+                    <div class="px-4 py-4 w-32 text-center tracking-wider">จำนวนในระบบ</div>
+                    <div class="px-4 py-4 w-96 text-center tracking-wider">ผลการนับจริง</div>
+                </div>
+
+                <!-- Items Container -->
+                <div class="divide-y divide-gray-100 bg-white" id="items-table-body">
+                    @foreach($items as $item)
+                        @php
+                            $isCounted = !is_null($item->counted_quantity) && $item->counted_quantity !== '';
+                            $rowClass = $isCounted ? 'bg-green-50' : '';
+                        @endphp
+                        
+                        <!-- Responsive Row Item -->
+                        <div id="row-{{ $item->id }}" class="transition-all duration-200 {{ $rowClass }} flex flex-col md:flex-row md:items-center relative border-b md:border-b-0 last:border-0 hover:bg-gray-50">
+                            
+                            {{-- Column 1: Equipment Info --}}
+                            <div class="px-6 py-4 flex-1">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-12 w-12 md:h-10 md:w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500">
+                                        <i class="fas fa-box text-lg md:text-base"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-base md:text-sm font-bold text-gray-900 leading-tight">
+                                            {{ $item->equipment->name ?? 'อุปกรณ์ถูกลบ' }}
                                         </div>
-                                        <div class="ml-4">
-                                            <div class="text-sm font-bold text-gray-900">
-                                                {{ $item->equipment->name ?? 'อุปกรณ์ถูกลบ' }}
-                                            </div>
-                                            <div class="text-xs text-gray-500 font-mono mt-0.5">
-                                                {{ $item->equipment->serial_number ?? '-' }}
-                                            </div>
+                                        <div class="text-xs text-gray-500 font-mono mt-0.5">
+                                            SN: {{ $item->equipment->serial_number ?? '-' }}
                                         </div>
                                     </div>
-                                </td>
+                                </div>
+                            </div>
 
-                                {{-- Column 2: Expected Quantity --}}
-                                <td class="px-4 py-4 text-center">
-                                    <span class="inline-flex items-center justify-center px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
-                                        {{ $item->expected_quantity }}
-                                    </span>
-                                </td>
+                            {{-- Column 2: Expected Quantity --}}
+                            <div class="px-6 md:px-4 py-2 md:py-4 flex items-center justify-between md:justify-center md:w-32 bg-gray-50/50 md:bg-transparent">
+                                <span class="md:hidden text-xs font-bold text-gray-500 uppercase">จำนวนในระบบ:</span>
+                                <span class="inline-flex items-center justify-center px-4 py-1.5 rounded-full text-base font-bold bg-blue-100 text-blue-800 shadow-sm">
+                                    {{ $item->expected_quantity }}
+                                </span>
+                            </div>
 
-                                {{-- Column 3: Action Buttons (High Speed UI) --}}
-                                <td class="px-4 py-4 text-center">
-                                    <input type="hidden" 
-                                           id="input-qty-{{ $item->id }}" 
-                                           name="items[{{ $item->id }}][counted_quantity]" 
-                                           value="{{ $item->counted_quantity }}"
-                                           class="item-input">
+                            {{-- Column 3: Action Buttons (High Speed UI) --}}
+                            <div class="px-6 py-4 md:w-96 text-center">
+                                <input type="hidden" 
+                                       id="input-qty-{{ $item->id }}" 
+                                       name="items[{{ $item->id }}][counted_quantity]" 
+                                       value="{{ $item->counted_quantity }}"
+                                       class="item-input">
 
-                                    {{-- State 1: ยังไม่ได้เลือก --}}
-                                    <div id="actions-{{ $item->id }}" class="flex items-center justify-center gap-2 {{ $isCounted ? 'hidden' : '' }}">
-                                        <button type="button" 
-                                                onclick="markAsCorrect({{ $item->id }}, {{ $item->expected_quantity }})"
-                                                class="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-sm transition-all active:scale-95 group">
-                                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                            <span class="font-bold">ครบ ({{ $item->expected_quantity }})</span>
-                                        </button>
-                                        
-                                        <button type="button" 
-                                                onclick="showManualInput({{ $item->id }})"
-                                                class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors border border-gray-200"
-                                                title="ระบุจำนวนเอง">
-                                            <span class="text-sm font-medium">ไม่ครบ</span>
-                                        </button>
-                                    </div>
+                                {{-- State 1: ยังไม่ได้เลือก --}}
+                                <div id="actions-{{ $item->id }}" class="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-2 {{ $isCounted ? 'hidden' : '' }}">
+                                    <button type="button" 
+                                            onclick="markAsCorrect({{ $item->id }}, {{ $item->expected_quantity }})"
+                                            class="w-full md:flex-1 flex items-center justify-center gap-2 px-6 py-3 md:py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl shadow-md active:scale-95 transition-all group">
+                                        <svg class="w-6 h-6 md:w-5 md:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                        <span class="font-bold text-lg md:text-base">ครบ ({{ $item->expected_quantity }})</span>
+                                    </button>
+                                    
+                                    <button type="button" 
+                                            onclick="showManualInput({{ $item->id }})"
+                                            class="w-full md:w-auto px-6 py-3 md:py-2 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-300 shadow-sm font-medium transition-colors"
+                                            title="ระบุจำนวนเอง">
+                                        <span class="text-base md:text-sm">ไม่ครบ / ระบุเอง</span>
+                                    </button>
+                                </div>
 
-                                    {{-- State 2: โหมดกรอกเอง --}}
-                                    <div id="manual-{{ $item->id }}" class="hidden flex items-center justify-center gap-2">
-                                        <input type="number" 
-                                               id="manual-input-{{ $item->id }}"
-                                               class="w-24 text-center border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-                                               placeholder="0"
-                                               min="0"
-                                               onkeydown="if(event.key === 'Enter') { event.preventDefault(); confirmManual({{ $item->id }}); }">
-                                        
-                                        <button type="button" onclick="confirmManual({{ $item->id }})" class="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 shadow-sm">
+                                {{-- State 2: โหมดกรอกเอง --}}
+                                <div id="manual-{{ $item->id }}" class="hidden flex items-center justify-center gap-2">
+                                    <input type="number" 
+                                           id="manual-input-{{ $item->id }}"
+                                           class="w-32 md:w-24 text-center text-lg font-bold border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 shadow-sm input-zoom-disable"
+                                           placeholder="0"
+                                           min="0"
+                                           onkeydown="if(event.key === 'Enter') { event.preventDefault(); confirmManual({{ $item->id }}); }">
+                                    
+                                    <button type="button" onclick="confirmManual({{ $item->id }})" class="p-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 shadow-md active:scale-95">
+                                        <svg class="w-6 h-6 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    </button>
+                                    <button type="button" onclick="resetItem({{ $item->id }})" class="p-3 text-gray-400 hover:text-red-500">
+                                        <svg class="w-6 h-6 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    </button>
+                                </div>
+
+                                {{-- State 3: นับเสร็จแล้ว --}}
+                                <div id="completed-{{ $item->id }}" class="{{ $isCounted ? '' : 'hidden' }} flex items-center justify-between md:justify-center gap-4 animate-fade-in p-2 md:p-0 bg-green-50/50 md:bg-transparent rounded-lg">
+                                    <div class="flex items-center gap-3">
+                                        <span class="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-600">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                        </button>
-                                        <button type="button" onclick="resetItem({{ $item->id }})" class="p-2 text-gray-400 hover:text-red-500">
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                        </button>
-                                    </div>
-
-                                    {{-- State 3: นับเสร็จแล้ว --}}
-                                    <div id="completed-{{ $item->id }}" class="{{ $isCounted ? '' : 'hidden' }} flex items-center justify-center gap-3 animate-fade-in">
-                                        <div class="flex flex-col items-center">
-                                            <span class="text-xs text-gray-500">นับได้</span>
-                                            <span id="display-qty-{{ $item->id }}" class="text-xl font-bold text-green-700">
+                                        </span>
+                                        <div class="flex flex-col items-start md:items-center">
+                                            <span class="text-xs text-gray-500 font-bold uppercase">นับได้จริง</span>
+                                            <span id="display-qty-{{ $item->id }}" class="text-2xl font-black text-green-700 leading-none">
                                                 {{ $item->counted_quantity }}
                                             </span>
                                         </div>
-                                        <button type="button" onclick="resetItem({{ $item->id }})" class="ml-2 text-xs text-gray-400 hover:text-blue-500 underline decoration-dotted">
-                                            แก้ไข
-                                        </button>
                                     </div>
+                                    <button type="button" onclick="resetItem({{ $item->id }})" class="px-3 py-1.5 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-lg hover:text-blue-600 hover:border-blue-300 shadow-sm transition-colors">
+                                        แก้ไข
+                                    </button>
+                                </div>
 
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
             </div>
 
             <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 text-sm text-gray-500 flex justify-between items-center">

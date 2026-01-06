@@ -536,7 +536,7 @@
                             let myHtml = `<div class="p-5 soft-card rounded-2xl gentle-shadow"><h2 class="mb-4 text-xl font-bold text-gray-800 dark:text-gray-100"><i class="fas fa-store text-green-500"></i> สต็อกของคุณ (เบิกได้)</h2><div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">`;
                             data.myStock.forEach(item => {
                                 const unit = item.unit?.name || 'ชิ้น';
-                                let imgUrl = item.image_url ? item.image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
+                                let imgUrl = item.live_search_image_url ? item.live_search_image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
                                 
                                 let avgRating = parseFloat(item.avg_rating) || 0;
                                 let ratingCount = item.rating_count || 0;
@@ -586,7 +586,7 @@
                         if (data.otherStock && data.otherStock.length > 0) {
                              let otherHtml = `<div class="p-5 soft-card rounded-2xl gentle-shadow"><h2 class="mb-4 text-xl font-bold text-gray-800 dark:text-gray-100">พบในแผนกอื่น</h2><div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">`;
                              data.otherStock.forEach(item => {
-                                 const unit = item.unit?.name || 'ชิ้น'; const imgUrl = item.image_url ? item.image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
+                                 const unit = item.unit?.name || 'ชิ้น'; const imgUrl = item.live_search_image_url ? item.live_search_image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
                                  otherHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800 opacity-70">
                                  <div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700 group">
                                      <img src="${imgUrl}" class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" onclick="openImageViewer('${imgUrl}')">

@@ -51,98 +51,109 @@
                                     </span>
                                 </div>
 
-                                <div class="overflow-x-auto custom-scrollbar">
-                                    <table class="min-w-full divide-y divide-gray-200 table-fixed">
-                                        <thead class="bg-white text-gray-500 text-xs uppercase font-bold tracking-wider sticky top-0">
-                                            <tr>
-                                                <th class="px-4 py-3 w-20 text-center">รูปภาพ</th>
-                                                <th class="px-4 py-3 w-1/3 text-left">รายละเอียดและข้อมูล PO</th>
-                                                <th class="px-4 py-3 w-24 text-center bg-gray-50/50">ยอดค้างรับ</th>
-                                                <th class="px-4 py-3 w-64 text-left pl-6 bg-indigo-50/10">1. ผลการตรวจรับ</th>
-                                                <th class="px-4 py-3 w-32 text-center bg-indigo-50/10">2. จำนวนรับจริง</th>
-                                                <th class="px-4 py-3 w-48 text-right pr-6 bg-indigo-50/10">3. การดำเนินการ</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="bg-white divide-y divide-gray-100 text-sm">
-                                            @foreach($po->items as $item)
-                                                @php
-                                                    $remaining = $item->quantity_ordered - ($item->quantity_received ?? 0);
-                                                    $isLinked = !is_null($item->equipment);
-                                                    $itemId = (int) $item->id;
-                                                    $qtyToUse = (int) $remaining; 
-                                                    $imgUrl = ($item->equipment && $item->equipment->latestImage) ? $item->equipment->latestImage->image_url : asset('images/placeholder.webp');
-                                                    $itemName = $item->item_description ?? ($item->equipment->name ?? 'N/A');
-                                                    $unitName = $item->equipment->unit->name ?? 'หน่วย';
-                                                @endphp
+                                <div class="w-full">
+                                    <!-- Desktop Header (Hidden on Mobile) -->
+                                    <div class="hidden md:flex bg-white text-gray-500 text-xs uppercase font-bold tracking-wider sticky top-0 border-b border-gray-200">
+                                        <div class="px-4 py-3 w-20 text-center">รูปภาพ</div>
+                                        <div class="px-4 py-3 flex-1 text-left">รายละเอียดและข้อมูล PO</div>
+                                        <div class="px-4 py-3 w-24 text-center bg-gray-50/50">ยอดค้างรับ</div>
+                                        <div class="px-4 py-3 w-64 text-left pl-6 bg-indigo-50/10">1. ผลการตรวจรับ</div>
+                                        <div class="px-4 py-3 w-32 text-center bg-indigo-50/10">2. จำนวนรับจริง</div>
+                                        <div class="px-4 py-3 w-48 text-right pr-6 bg-indigo-50/10">3. การดำเนินการ</div>
+                                    </div>
+
+                                    <!-- Rows Container -->
+                                    <div class="divide-y divide-gray-100 text-sm bg-white">
+                                        @foreach($po->items as $item)
+                                            @php
+                                                $remaining = $item->quantity_ordered - ($item->quantity_received ?? 0);
+                                                $isLinked = !is_null($item->equipment);
+                                                $itemId = (int) $item->id;
+                                                $qtyToUse = (int) $remaining; 
+                                                $imgUrl = ($item->equipment && $item->equipment->latestImage) ? $item->equipment->latestImage->image_url : asset('images/placeholder.webp');
+                                                $itemName = $item->item_description ?? ($item->equipment->name ?? 'N/A');
+                                                $unitName = $item->equipment->unit->name ?? 'หน่วย';
+                                            @endphp
+                                            
+                                            <!-- Responsive Row Item -->
+                                            <div id="row-{{ $itemId }}" 
+                                                data-item-id="{{ $itemId }}" 
+                                                data-max-qty="{{ $qtyToUse }}" 
+                                                data-status="" 
+                                                class="flex flex-col md:flex-row transition-colors duration-200 hover:bg-gray-50 border-b md:border-b-0 last:border-0 relative">
                                                 
-                                                <tr id="row-{{ $itemId }}" 
-                                                    data-item-id="{{ $itemId }}" 
-                                                    data-max-qty="{{ $qtyToUse }}" 
-                                                    data-status="" 
-                                                    class="transition-colors duration-200 hover:bg-gray-50">
-                                                    
-                                                    <!-- รูปภาพ -->
-                                                    <td class="px-4 py-4 align-top text-center">
-                                                        <img src="{{ $imgUrl }}" onerror="this.onerror=null;this.src='{{ asset('images/placeholder.webp') }}';" 
-                                                             class="w-16 h-16 rounded-xl object-cover border-2 border-gray-200 mx-auto bg-white shadow-md">
-                                                    </td>
-                                                    
-                                                    <!-- รายละเอียดสินค้าและข้อมูล PO -->
-                                                    <td class="px-4 py-4 align-top">
-                                                        <p class="text-base font-bold text-gray-900 line-clamp-2 mb-1">{{ $itemName }}</p>
-                                                        <div class="text-xs text-gray-500 space-y-0.5">
-                                                            <p><span class="font-semibold text-gray-700">รหัสอุปกรณ์:</span> {{ $item->equipment_id ?? 'N/A' }}</p>
-                                                            <p>
-                                                                <span class="font-semibold text-gray-700">สั่งซื้อ:</span> <span class="font-bold text-indigo-600">{{ $item->quantity_ordered }}</span> {{ $unitName }}
-                                                                | <span class="font-semibold text-gray-700">รับเข้าแล้ว:</span> <span class="font-bold text-green-600">{{ $item->quantity_received ?? 0 }}</span> {{ $unitName }}
-                                                            </p>
-                                                            @if(!$isLinked) 
-                                                                <p class="text-red-500 font-medium flex items-center gap-1 mt-1">
-                                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                                                    ไม่สามารถนำเข้าระบบได้ (ไม่มีรหัสอุปกรณ์ผูก)
-                                                                </p> 
-                                                            @endif
-                                                        </div>
-                                                        <div id="hidden-inputs-{{ $itemId }}"></div>
-                                                    </td>
-                                                    
-                                                    <!-- ยอดค้างรับ -->
-                                                    <td class="px-4 py-4 text-center font-extrabold text-xl text-red-600 bg-gray-50/50 border-r border-gray-100 align-top">
-                                                        {{ $remaining }}
-                                                        <span class="text-sm font-medium text-gray-500 block">{{ $unitName }}</span>
-                                                    </td>
-
-                                                    <!-- 1. ผลการตรวจรับ -->
-                                                    <td class="px-4 py-4 pl-6 align-top bg-indigo-50/10">
-                                                        @if($isLinked)
-                                                            <select id="status-{{ $itemId }}" onchange="handleStatusChange({{ $itemId }})"
-                                                                    class="w-full text-sm font-semibold border-gray-300 rounded-xl py-2.5 px-3 shadow-md focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
-                                                                <option value="" disabled selected>-- เลือกผลการตรวจ --</option>
-                                                                <option value="pass">✅ ครบถ้วนสมบูรณ์ (รับเข้าคลัง)</option>
-                                                                <option value="issue">⚠️ พบปัญหา (แจ้งส่งคืน)</option>
-                                                            </select>
-                                                        @else
-                                                            <span class="text-red-500 text-sm p-2 bg-red-50 rounded-lg shadow-inner block text-center">🚫 ไม่ผ่านเกณฑ์การรับเข้า</span>
+                                                <!-- 1. รูปภาพ (Image) -->
+                                                <div class="p-4 md:w-20 md:text-center flex-shrink-0 flex items-center justify-center md:items-start md:justify-center bg-gray-50 md:bg-transparent">
+                                                    <img src="{{ $imgUrl }}" onerror="this.onerror=null;this.src='{{ asset('images/placeholder.webp') }}';" 
+                                                         class="w-20 h-20 md:w-16 md:h-16 rounded-xl object-cover border-2 border-gray-200 bg-white shadow-md">
+                                                </div>
+                                                
+                                                <!-- 2. รายละเอียด (Details) -->
+                                                <div class="px-4 py-2 md:py-4 md:flex-1">
+                                                    <div class="md:hidden text-xs font-bold text-gray-400 uppercase mb-1">รายละเอียดสินค้า</div>
+                                                    <p class="text-base font-bold text-gray-900 line-clamp-2 mb-1">{{ $itemName }}</p>
+                                                    <div class="text-xs text-gray-500 space-y-0.5">
+                                                        <p><span class="font-semibold text-gray-700">รหัสอุปกรณ์:</span> {{ $item->equipment_id ?? 'N/A' }}</p>
+                                                        <p>
+                                                            <span class="font-semibold text-gray-700">สั่งซื้อ:</span> <span class="font-bold text-indigo-600">{{ $item->quantity_ordered }}</span> {{ $unitName }}
+                                                            | <span class="font-semibold text-gray-700">รับเข้าแล้ว:</span> <span class="font-bold text-green-600">{{ $item->quantity_received ?? 0 }}</span> {{ $unitName }}
+                                                        </p>
+                                                        @if(!$isLinked) 
+                                                            <p class="text-red-500 font-medium flex items-center gap-1 mt-1">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                                ไม่สามารถนำเข้าระบบได้ (ไม่มีรหัสอุปกรณ์ผูก)
+                                                            </p> 
                                                         @endif
-                                                    </td>
+                                                    </div>
+                                                    <div id="hidden-inputs-{{ $itemId }}"></div>
+                                                </div>
+                                                
+                                                <!-- 3. ยอดค้างรับ (Remaining) -->
+                                                <div class="px-4 py-2 md:py-4 md:w-24 md:text-center md:bg-gray-50/50 md:border-r border-gray-100 flex items-center justify-between md:flex-col md:justify-start">
+                                                    <span class="md:hidden text-sm font-bold text-gray-600">ยอดค้างรับ:</span>
+                                                    <div class="text-center">
+                                                        <div class="font-extrabold text-xl text-red-600">{{ $remaining }}</div>
+                                                        <span class="text-sm font-medium text-gray-500">{{ $unitName }}</span>
+                                                    </div>
+                                                </div>
 
-                                                    <!-- 2. จำนวนรับจริง -->
-                                                    <td class="px-4 py-4 text-center align-top bg-indigo-50/10">
-                                                        <div id="qty-wrapper-{{ $itemId }}" class="flex flex-col items-center justify-center h-full min-h-[70px]">
+                                                <!-- 4. ผลการตรวจรับ (Inspection) -->
+                                                <div class="px-4 py-2 md:py-4 md:w-64 md:pl-6 bg-indigo-50/10 border-t md:border-t-0 border-dashed border-gray-200">
+                                                    <label class="md:hidden block text-xs font-bold text-indigo-500 uppercase mb-1">1. ผลการตรวจรับ</label>
+                                                    @if($isLinked)
+                                                        <select id="status-{{ $itemId }}" onchange="handleStatusChange({{ $itemId }})"
+                                                                class="w-full text-sm font-semibold border-gray-300 rounded-xl py-2.5 px-3 shadow-md focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer">
+                                                            <option value="" disabled selected>-- เลือกผลการตรวจ --</option>
+                                                            <option value="pass">✅ ครบถ้วนสมบูรณ์ (รับเข้าคลัง)</option>
+                                                            <option value="issue">⚠️ พบปัญหา (แจ้งส่งคืน)</option>
+                                                        </select>
+                                                    @else
+                                                        <span class="text-red-500 text-sm p-2 bg-red-50 rounded-lg shadow-inner block text-center">🚫 ไม่ผ่านเกณฑ์การรับเข้า</span>
+                                                    @endif
+                                                </div>
+
+                                                <!-- 5. จำนวนรับจริง (Quantity) -->
+                                                <div class="px-4 py-2 md:py-4 md:w-32 md:text-center bg-indigo-50/10">
+                                                    <div class="flex items-center justify-between md:justify-center h-full">
+                                                        <label class="md:hidden text-xs font-bold text-indigo-500 uppercase mr-4">2. จำนวนรับจริง</label>
+                                                        <div id="qty-wrapper-{{ $itemId }}" class="flex-1 md:flex-none flex flex-col items-end md:items-center justify-center min-h-[50px] md:min-h-[70px]">
                                                             <!-- Dynamic Content -->
                                                         </div>
-                                                    </td>
+                                                    </div>
+                                                </div>
 
-                                                    <!-- 3. การดำเนินการ -->
-                                                    <td class="px-4 py-4 text-right pr-6 align-top bg-indigo-50/10">
-                                                        <div id="action-buttons-{{ $itemId }}" class="min-h-[44px] flex items-center justify-end">
+                                                <!-- 6. การดำเนินการ (Actions) -->
+                                                <div class="px-4 py-3 md:py-4 md:w-48 md:pr-6 bg-indigo-50/10 md:text-right border-t md:border-t-0 border-gray-100">
+                                                     <div class="flex items-center justify-between md:justify-end h-full">
+                                                        <label class="md:hidden text-xs font-bold text-indigo-500 uppercase mr-4">3. ยืนยัน</label>
+                                                        <div id="action-buttons-{{ $itemId }}" class="flex-1 md:flex-none flex items-center justify-end min-h-[44px]">
                                                             <!-- Dynamic Buttons -->
                                                         </div>
-                                                    </td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
+                                                     </div>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
                                 </div>
                             </div>
                         @endforeach

@@ -5,7 +5,8 @@
 
 @section('content')
 <div class="p-6 soft-card gentle-shadow rounded-2xl">
-    <div class="overflow-x-auto">
+    {{-- Desktop Table View --}}
+    <div class="hidden md:block overflow-x-auto">
         <table class="min-w-full text-sm bg-white divide-y-2 divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
@@ -115,6 +116,87 @@
                 @endforelse
             </tbody>
         </table>
+    </div>
+
+    {{-- Mobile Card View --}}
+    <div class="block md:hidden space-y-4">
+        @forelse ($disposals as $item)
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 relative overflow-hidden">
+                {{-- Status Stripe --}}
+                <div class="absolute left-0 top-0 bottom-0 w-1.5 {{ $item->status == 'sold' ? 'bg-green-500' : 'bg-yellow-400' }}"></div>
+                
+                <div class="flex gap-4 mb-4 pl-2">
+                    {{-- Image Logic (Copied from desktop) --}}
+                    @php
+                        $imageUrl = asset('images/placeholder.webp');
+                        $displayImage = optional($item->primaryImage)->exists ? $item->primaryImage : $item->latestImage; 
+                        if (optional($displayImage)->exists) {
+                            $imageUrl = $displayImage->image_url;
+                        } else {
+                            $mainStock = \App\Models\Equipment::with(['primaryImage', 'latestImage'])
+                                ->where('name', $item->name)
+                                ->where('part_no', $item->part_no)
+                                ->where('id', '!=', $item->id)
+                                ->whereIn('status', ['available', 'low_stock', 'out_of_stock'])
+                                ->whereHas('images')
+                                ->first();
+                            if ($mainStock) {
+                                $mainImage = optional($mainStock->primaryImage)->exists ? $mainStock->primaryImage : $mainStock->latestImage;
+                                if(optional($mainImage)->exists) $imageUrl = $mainImage->image_url;
+                            }
+                        }
+                    @endphp
+                    <div class="flex-shrink-0 w-20 h-20 bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                        <img src="{{ $imageUrl }}" alt="{{ $item->name }}" class="w-full h-full object-contain p-1"
+                             onerror="this.onerror=null; this.src='{{ asset('images/placeholder.webp') }}';">
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-bold text-gray-900 truncate pr-2">{{ $item->name }}</h3>
+                            @if($item->status == 'disposed')
+                                <span class="flex-shrink-0 px-2 py-0.5 text-[10px] font-bold text-yellow-800 bg-yellow-100 rounded-lg">รอขาย</span>
+                            @elseif($item->status == 'sold')
+                                <span class="flex-shrink-0 px-2 py-0.5 text-[10px] font-bold text-green-800 bg-green-100 rounded-lg">ขายแล้ว</span>
+                            @endif
+                        </div>
+                        <p class="text-xs text-gray-500 mt-0.5">{{ $item->part_no ?? '-' }}</p>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="inline-block px-2 py-1 bg-gray-100 rounded text-[10px] text-gray-600 font-mono">
+                                SN: {{ $item->serial_number ?? 'N/A' }}
+                            </span>
+                            @if(optional($item->category)->name)
+                                <span class="inline-block px-2 py-1 bg-purple-50 text-purple-700 rounded text-[10px] font-bold">
+                                    {{ $item->category->name }}
+                                </span>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Mobile Actions --}}
+                @if($item->status == 'disposed')
+                    <div class="flex gap-2 pl-2">
+                        <form id="restore-form-mobile-{{$item->id}}" action="{{ route('disposal.restore', $item->id) }}" method="POST" class="flex-1">@csrf</form>
+                        <button type="button" onclick="confirmAndSubmitForm(event, 'restore-form-mobile-{{$item->id}}', 'ยืนยันการคืนสต็อก?', 'อุปกรณ์ชิ้นนี้จะกลับไปมีสถานะ Available')"
+                            class="flex-1 py-2 text-sm font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 active:scale-95 transition-all">
+                            <i class="fas fa-undo mr-1"></i> คืนสต็อก
+                        </button>
+                        
+                        <form id="sell-form-mobile-{{$item->id}}" action="{{ route('disposal.sell', $item->id) }}" method="POST" class="flex-1">@csrf</form>
+                        <button type="button" onclick="confirmAndSubmitForm(event, 'sell-form-mobile-{{$item->id}}', 'ยืนยันการขาย?', 'อุปกรณ์ชิ้นนี้จะถูกเปลี่ยนสถานะเป็น &quot;ขายแล้ว&quot;!')"
+                            class="flex-1 py-2 text-sm font-bold text-white bg-green-600 rounded-xl hover:bg-green-700 shadow-md shadow-green-200 active:scale-95 transition-all">
+                            <i class="fas fa-dollar-sign mr-1"></i> ขายแล้ว
+                        </button>
+                    </div>
+                @endif
+            </div>
+        @empty
+            <div class="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                <i class="text-gray-300 fas fa-box-open fa-3x mb-3"></i>
+                <p class="text-gray-500 font-medium">ไม่มีรายการ</p>
+            </div>
+        @endforelse
     </div>
 
     @if($disposals->hasPages())

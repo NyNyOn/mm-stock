@@ -62,14 +62,14 @@
                         <div class="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -z-0 opacity-50 pointer-events-none"></div>
 
                         {{-- Main Image (Trigger Lightbox) --}}
-                        <div class="relative w-full aspect-[4/3] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden group shadow-md mb-4 z-10 cursor-pointer hover:shadow-xl transition-all duration-300"
+                        <div class="relative w-full aspect-[4/3] bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden group shadow-md mb-4 z-10 cursor-pointer hover:shadow-xl transition-all duration-300 min-h-[200px]"
                              onclick="openLocalLightbox()">
                             
                             <div class="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-white text-xs font-mono font-bold px-3 py-1 rounded-lg shadow-lg border border-white/10 z-20">
                                 #<span id="img-badge-id">...</span>
                             </div>
 
-                            <img id="details-primary-image" src="" alt="Equipment" class="w-full h-full object-contain p-4 transition-transform duration-500 group-hover:scale-105">
+                            <img id="details-primary-image" src="" alt="Equipment" class="w-full h-full object-contain p-4 transition-transform duration-500 group-hover:scale-105" onerror="this.src='https://placehold.co/600x400/e2e8f0/64748b?text=No+Image'">
                             
                             {{-- Hover Hint --}}
                             <div class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">

@@ -105,10 +105,11 @@ class InventorySearchController extends Controller
                         }
                         $imageFileName = $primaryImage ? $primaryImage->file_name : null;
 
-                        if ($imageFileName) {
-                            $item->image_url = route('nas.image', ['deptKey' => $key, 'filename' => $imageFileName]);
+                        if ($imageFileName && trim($imageFileName) !== '') {
+                            // Use manual URL construction to avoid route name conflicts
+                            $item->live_search_image_url = url("nas-images/{$key}/{$imageFileName}");
                         } else {
-                            $item->image_url = asset('images/placeholder.webp');
+                            $item->live_search_image_url = 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image'; 
                         }
 
                         // ✅ คะแนน (แปลงเป็น float เพื่อความชัวร์)

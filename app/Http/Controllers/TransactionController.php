@@ -197,9 +197,12 @@ class TransactionController extends Controller
             $deptKey = $item->dept_key ?? $defaultDeptKey;
 
             try {
-                $item->image_url = $imageFileName ? url("nas-images/{$deptKey}/{$imageFileName}") : asset('images/placeholder.webp');
+                // Use manual URL to avoid route conflicts and replace placeholder with external service
+                $item->image_url = ($imageFileName && trim($imageFileName) !== '') 
+                    ? url("nas-images/{$deptKey}/{$imageFileName}") 
+                    : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
             } catch (\Exception $e) {
-                $item->image_url = asset('images/placeholder.webp');
+                $item->image_url = 'https://placehold.co/400x300/e2e8f0/64748b?text=Error';
             }
             $item->unit_name = $item->unit->name ?? 'N/A';
             
@@ -697,10 +700,13 @@ class TransactionController extends Controller
             if ($unratedTransactions->count() > 0) {
                 $defaultDeptKey = config('department_stocks.default_nas_dept_key', 'mm');
                 $unratedTransactions->transform(function ($tx) use ($defaultDeptKey) {
-                    $imgUrl = asset('images/placeholder.webp');
+                    $imgUrl = 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
                     if ($tx->equipment && $tx->equipment->latestImage) {
                         try {
-                            $imgUrl = route('nas.image', ['deptKey' => $defaultDeptKey, 'filename' => $tx->equipment->latestImage->file_name]);
+                            $fname = $tx->equipment->latestImage->file_name;
+                            if ($fname && trim($fname) !== '') {
+                                $imgUrl = url("nas-images/{$defaultDeptKey}/{$fname}");
+                            }
                         } catch (\Exception $e) {}
                     }
                     $tx->equipment_image_url = $imgUrl;

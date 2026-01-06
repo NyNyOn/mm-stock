@@ -11,7 +11,7 @@ function loadCart() {
 function addToCart(id, name, thumbnail, maxStock) {
     const existing = cart.find(i => i.id === id);
     if (existing) {
-        if (existing.quantity < maxStock) { existing.quantity++; showToast(`เพิ่ม ${name} เป็น ${existing.quantity} ชิ้น`, 'success'); } 
+        if (existing.quantity < maxStock) { existing.quantity++; showToast(`เพิ่ม ${name} เป็น ${existing.quantity} ชิ้น`, 'success'); }
         else { showToast('จำนวนสินค้าถึงขีดจำกัดแล้ว', 'warning'); return; }
     } else {
         cart.push({ id, name, thumbnail, quantity: 1, maxStock, purpose: '', receiver_id: null, receiver_name: '' });
@@ -27,17 +27,19 @@ function saveCart() { localStorage.setItem('mm_stock_cart', JSON.stringify(cart)
 function updateCartCount() {
     const count = cart.reduce((sum, item) => sum + item.quantity, 0);
     const badge = document.getElementById('cart-count');
-    if(badge) { badge.innerText = count; count > 0 ? badge.classList.remove('hidden') : badge.classList.add('hidden'); }
+    if (badge) { badge.innerText = count; count > 0 ? badge.classList.remove('hidden') : badge.classList.add('hidden'); }
 }
 
 function renderCartItems() {
     const container = document.getElementById('cart-items-container');
+    const mobileContainer = document.getElementById('cart-mobile-container');
     const emptyMsg = document.getElementById('empty-cart-msg');
     const table = container.closest('table');
     container.innerHTML = '';
+    if (mobileContainer) mobileContainer.innerHTML = '';
 
-    if (cart.length === 0) { emptyMsg.classList.remove('hidden'); if(table) table.classList.add('hidden'); return; }
-    emptyMsg.classList.add('hidden'); if(table) table.classList.remove('hidden');
+    if (cart.length === 0) { emptyMsg.classList.remove('hidden'); if (table) table.classList.add('hidden'); return; }
+    emptyMsg.classList.add('hidden'); if (table) table.classList.remove('hidden');
 
     const purposeOptions = document.getElementById('purpose-options-template')?.innerHTML || '<option value="general_use">เบิกใช้งานทั่วไป</option>';
     const isOtherMode = document.querySelector('input[name="global_receiver_type"]:checked').value === 'other';
@@ -46,17 +48,32 @@ function renderCartItems() {
     const recCols = document.querySelectorAll('.receiver-col');
     recCols.forEach(col => isOtherMode ? col.classList.remove('hidden') : col.classList.add('hidden'));
 
+    const tableContainer = document.getElementById('cart-table-container');
+
     cart.forEach((item, index) => {
         let receiverHtml = '';
+        let mobileReceiverHtml = '';
+
         if (isOtherMode) {
+            // Desktop Select
             receiverHtml = `
             <td class="px-4 py-3 align-middle receiver-col">
                 <select class="item-receiver-select w-full text-sm" data-index="${index}" style="width: 100%;">
                     ${item.receiver_id ? `<option value="${item.receiver_id}" selected>${item.receiver_name}</option>` : ''}
                 </select>
             </td>`;
+
+            // Mobile Select
+            mobileReceiverHtml = `
+            <div class="mt-3 relative">
+                <label class="block text-xs font-semibold text-gray-700 mb-1">ผู้รับ (Receiver)</label>
+                <select class="item-receiver-select-mobile w-full text-sm border-gray-300 rounded-md" data-index="${index}" style="width: 100%;">
+                    ${item.receiver_id ? `<option value="${item.receiver_id}" selected>${item.receiver_name}</option>` : ''}
+                </select>
+            </div>`;
         }
 
+        // Desktop Row
         const row = `
             <tr class="hover:bg-gray-50 border-b last:border-0 transition-colors">
                 <td class="px-4 py-3 align-middle"><div class="flex items-center"><img class="h-10 w-10 rounded border object-cover bg-gray-100" src="${item.thumbnail || '/images/placeholder.webp'}" onerror="this.src='/images/placeholder.webp'"><div class="ml-3"><div class="text-sm font-medium text-gray-900 max-w-[150px] truncate" title="${item.name}">${item.name}</div><div class="text-xs text-gray-500">สต็อก: ${item.maxStock}</div></div></div></td>
@@ -66,24 +83,71 @@ function renderCartItems() {
                 <td class="px-4 py-3 text-center align-middle"><button onclick="removeItem(${index})" class="text-red-400 hover:text-red-600 p-1.5 rounded-full hover:bg-red-50 transition" title="ลบ"><i class="fas fa-trash-alt"></i></button></td>
             </tr>`;
         container.insertAdjacentHTML('beforeend', row);
-        
+
+        // Sync Desktop Purpose
         const purposeSelect = container.lastElementChild.querySelector('.purpose-select');
         if (purposeSelect && item.purpose) purposeSelect.value = item.purpose;
+
+        // Mobile Card
+        if (mobileContainer) {
+            const card = `
+                <div class="bg-white border boundary-gray-200 rounded-xl p-4 shadow-sm relative">
+                    <button onclick="removeItem(${index})" class="absolute top-2 right-2 text-gray-400 hover:text-red-500"><i class="fas fa-trash-alt"></i></button>
+                    <div class="flex items-center mb-4">
+                        <img class="h-12 w-12 rounded-lg border object-cover bg-gray-100" src="${item.thumbnail || '/images/placeholder.webp'}" onerror="this.src='/images/placeholder.webp'">
+                        <div class="ml-3 pr-6">
+                            <div class="text-sm font-bold text-gray-900 line-clamp-1" title="${item.name}">${item.name}</div>
+                            <div class="text-xs text-gray-500">คงเหลือในสต็อก: ${item.maxStock}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <!-- Quantity -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">จำนวน (Quantity)</label>
+                            <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden w-full">
+                                <button onclick="updateItem(${index}, 'qty', ${item.quantity - 1})" class="w-1/3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold border-r">-</button>
+                                <input type="number" min="1" max="${item.maxStock}" value="${item.quantity}" onchange="updateItem(${index}, 'qty', this.value)" class="w-1/3 text-center border-none focus:ring-0 text-gray-900 font-bold bg-white">
+                                <button onclick="updateItem(${index}, 'qty', ${item.quantity + 1})" class="w-1/3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold border-l">+</button>
+                            </div>
+                        </div>
+
+                        <!-- Purpose -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">วัตถุประสงค์ (Purpose)</label>
+                            <select onchange="updateItem(${index}, 'purpose', this.value)" class="purpose-select-mobile w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm py-2">
+                                ${purposeOptions}
+                            </select>
+                        </div>
+
+                        <!-- Receiver (If Other Mode) -->
+                        ${mobileReceiverHtml}
+                    </div>
+                </div>
+            `;
+            mobileContainer.insertAdjacentHTML('beforeend', card);
+
+            // Sync Mobile Purpose
+            const mobPurposeSelect = mobileContainer.lastElementChild.querySelector('.purpose-select-mobile');
+            if (mobPurposeSelect && item.purpose) mobPurposeSelect.value = item.purpose;
+        }
     });
 
     // Initialize Select2 สำหรับรายชิ้น (ถ้ามี)
     if (isOtherMode && typeof window.laravelRoutes !== 'undefined') {
-        $('.item-receiver-select').each(function() {
+        $('.item-receiver-select, .item-receiver-select-mobile').each(function () {
             const $this = $(this);
             const index = $this.data('index');
             const item = cart[index];
-            
+
+            const isMobile = $this.hasClass('item-receiver-select-mobile');
+
             $this.select2({
-                dropdownParent: $('#cartModal'),
+                dropdownParent: isMobile ? $this.parent() : $('#cartModal'),
                 placeholder: 'ค้นหาชื่อ...',
                 allowClear: true,
                 ajax: {
-                    url: window.laravelRoutes.ajaxHandler, 
+                    url: window.laravelRoutes.ajaxHandler,
                     type: 'POST',
                     dataType: 'json',
                     delay: 250,
@@ -101,7 +165,7 @@ function renderCartItems() {
             }).on('select2:clear', function (e) {
                 updateItem(index, 'receiver', { id: null, text: '' });
             });
-            
+
             if (item.receiver_id && item.receiver_name) {
                 const newOption = new Option(item.receiver_name, item.receiver_id, true, true);
                 $this.append(newOption).trigger('change');
@@ -121,8 +185,8 @@ function updateItem(index, type, val) {
         cart[index].receiver_id = val.id;
         cart[index].receiver_name = val.text;
     }
-    saveCart(); 
-    if(type === 'qty') renderCartItems(); 
+    saveCart();
+    if (type === 'qty') renderCartItems();
 }
 
 function removeItem(index) {
@@ -132,7 +196,7 @@ function removeItem(index) {
 }
 
 function clearCart() {
-    if(cart.length === 0) return;
+    if (cart.length === 0) return;
     Swal.fire({ title: 'ล้างตะกร้าทั้งหมด?', text: "รายการทั้งหมดในตะกร้าจะหายไป", icon: 'warning', showCancelButton: true, confirmButtonText: 'ยืนยัน', cancelButtonText: 'ยกเลิก' }).then((result) => {
         if (result.isConfirmed) { cart = []; saveCart(); renderCartItems(); showToast('ล้างตะกร้าเรียบร้อย', 'info'); }
     });
@@ -146,21 +210,21 @@ function applyPurposeToAll() {
     } else { Swal.fire('กรุณาเลือกก่อน', 'กรุณาเลือกวัตถุประสงค์ที่ช่องบรรทัดแรกก่อน แล้วค่อยกดปุ่มนี้', 'info'); }
 }
 
-function openCartModal() { 
-    renderCartItems(); 
-    document.getElementById('cartModal').classList.remove('hidden'); 
-    document.body.style.overflow = 'hidden'; 
+function openCartModal() {
+    renderCartItems();
+    document.getElementById('cartModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
 }
-function closeCartModal() { 
-    document.getElementById('cartModal').classList.add('hidden'); 
-    document.body.style.overflow = 'auto'; 
+function closeCartModal() {
+    document.getElementById('cartModal').classList.add('hidden');
+    document.body.style.overflow = 'auto';
 }
 
 function toggleGlobalReceiverInput() {
     const isOther = document.querySelector('input[name="global_receiver_type"]:checked').value === 'other';
-    
+
     // ถ้ากลับมาเลือกตัวเอง ให้เคลียร์ค่าผู้รับในตะกร้าทั้งหมดเป็น null
-    if (!isOther) { 
+    if (!isOther) {
         cart.forEach(i => { i.receiver_id = null; i.receiver_name = ''; });
         saveCart();
     }
@@ -169,7 +233,7 @@ function toggleGlobalReceiverInput() {
 
 async function submitCart() {
     if (cart.length === 0) return Swal.fire('ตะกร้าว่างเปล่า', 'กรุณาเลือกสินค้าก่อน', 'warning');
-    
+
     const isOtherMode = document.querySelector('input[name="global_receiver_type"]:checked').value === 'other';
     const missingReceiver = isOtherMode && cart.some(i => !i.receiver_id);
 
@@ -180,17 +244,17 @@ async function submitCart() {
     const missingPurpose = cart.some(i => !i.purpose);
     if (missingPurpose) {
         const confirm = await Swal.fire({ title: 'วัตถุประสงค์ไม่ครบ', text: 'บางรายการยังไม่ระบุ ยืนยันทำต่อหรือไม่? (ระบบจะใช้วัตถุประสงค์ทั่วไป)', icon: 'question', showCancelButton: true, confirmButtonText: 'ยืนยันการเบิก', cancelButtonText: 'กลับไปแก้ไข' });
-        if(!confirm.isConfirmed) return;
+        if (!confirm.isConfirmed) return;
     }
 
-    const currentDeptKey = new URLSearchParams(window.location.search).get('dept') || 'it'; 
+    const currentDeptKey = new URLSearchParams(window.location.search).get('dept') || 'it';
 
     const payload = {
         items: cart.map(i => ({
             equipment_id: i.id,
             quantity: i.quantity,
-            notes: i.purpose, 
-            receiver_id: i.receiver_id 
+            notes: i.purpose,
+            receiver_id: i.receiver_id
         })),
         dept_key: currentDeptKey
     };
@@ -200,22 +264,22 @@ async function submitCart() {
     Swal.fire({ title: 'กำลังบันทึกข้อมูล...', text: 'กรุณารอสักครู่', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
 
     try {
-        const res = await fetch(window.laravelRoutes.bulkWithdraw, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken }, 
-            body: JSON.stringify(payload) 
+        const res = await fetch(window.laravelRoutes.bulkWithdraw, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify(payload)
         });
-        
+
         const data = await res.json();
-        
-        if (res.ok) { 
+
+        if (res.ok) {
             await Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'บันทึกรายการเบิกเรียบร้อยแล้ว', timer: 2000, showConfirmButton: false });
-            cart = []; saveCart(); closeCartModal(); window.location.reload(); 
-        } else { 
+            cart = []; saveCart(); closeCartModal(); window.location.reload();
+        } else {
             Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: data.message || 'Unknown Error', confirmButtonText: 'ปิด' });
         }
-    } catch (e) { 
-        console.error(e); 
+    } catch (e) {
+        console.error(e);
         Swal.fire({ icon: 'error', title: 'การเชื่อมต่อล้มเหลว', text: 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่', confirmButtonText: 'ปิด' });
     }
 }

@@ -106,14 +106,7 @@
                         <i class="mr-2 fas fa-user-cog"></i> ตั้งค่าผู้สั่งตาม Job
                     </button>
 
-                    @if ($glpiOrders->isNotEmpty())
-                        <form id="submit-glpi-orders-form" action="{{ route('purchase-orders.submitJobOrders') }}" method="POST" class="hidden">@csrf</form>
-                        <button type="button"
-                            onclick="confirmAndSubmitForm(event, 'submit-glpi-orders-form', 'ยืนยันส่งใบสั่งซื้อตาม Job?', 'ใบสั่งซื้อตาม Job ทั้งหมดจะถูกส่งไปที่ฝ่ายจัดซื้อ')"
-                            class="flex items-center px-4 py-2 text-sm font-bold text-gray-700 bg-gradient-to-br from-gray-200 to-gray-300 rounded-xl hover:shadow-lg button-soft">
-                            <i class="mr-2 fas fa-paper-plane"></i><span>ส่งใบสั่งซื้อตาม Job ทั้งหมด</span>
-                        </button>
-                    @endif
+
                 </div>
             </div>
 

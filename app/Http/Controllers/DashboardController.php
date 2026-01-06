@@ -55,10 +55,11 @@ class DashboardController extends Controller
                 }
 
                 return (object) [
+                    'id' => $category->id,
                     'name' => $category->name,
                     // ✅✅✅ สำคัญ: ต้องมีบรรทัดนี้เพื่อให้ View เรียกใช้ได้
                     'next_check_date' => $nextCheckDate ? $nextCheckDate->toIso8601String() : null,
-                    'formatted_date' => $nextCheckDate ? $nextCheckDate->format('d/m/Y') : '-', 
+                    'formatted_date' => (isset($lastCheck) && $lastCheck) ? $lastCheck->format('d/m/Y') : '-', 
                     'item_count' => $category->equipments->count(),
                     'status' => $status,
                     'days_left' => $daysLeft
@@ -67,7 +68,8 @@ class DashboardController extends Controller
             ->filter()
             ->sortBy('days_left')
             ->values()
-            ->take(5);
+            ->values()
+            ->take(20);
 
         // --- 2. รายการนัดหมาย (Scheduled) ---
         $scheduledStockChecks = StockCheck::with(['items.equipment.category'])

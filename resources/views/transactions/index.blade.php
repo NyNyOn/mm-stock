@@ -94,8 +94,8 @@
         </div>
     @endif
 
-    {{-- TABLE CONTAINER --}}
-    <div class="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+    {{-- TABLE CONTAINER (Desktop) --}}
+    <div class="hidden md:block bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
@@ -116,6 +116,11 @@
         </div>
     </div>
 
+    {{-- CARD CONTAINER (Mobile) --}}
+    <div class="block md:hidden space-y-4">
+        @include('transactions.partials._mobile_cards', ['transactions' => $transactions])
+    </div>
+
     {{-- Pagination --}}
     <div class="mt-4">
         {{ $transactions->links() }}
@@ -125,10 +130,10 @@
 
 {{-- MODERN DETAILS MODAL --}}
 <div id="detailsModal" class="fixed inset-0 z-50 flex items-center justify-center hidden bg-gray-900 bg-opacity-60 backdrop-blur-sm transition-opacity duration-300">
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden transform transition-all scale-100 m-4 relative">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transform transition-all scale-100 m-4 relative">
         
         {{-- 1. Header with Gradient --}}
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex justify-between items-center">
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex justify-between items-center flex-shrink-0">
             <div class="flex items-center gap-3">
                 <div class="bg-white/20 p-2 rounded-lg text-white">
                     <i class="fas fa-file-invoice text-xl"></i>
@@ -143,14 +148,14 @@
             </button>
         </div>
 
-        {{-- 2. Body Content --}}
-        <div class="p-6 sm:p-8 space-y-6">
+        {{-- 2. Body Content (Scrollable) --}}
+        <div class="p-6 sm:p-8 space-y-6 overflow-y-auto custom-scrollbar">
             
             {{-- Top Section: Image & Key Info --}}
             <div class="flex flex-col sm:flex-row gap-6">
                 {{-- Image Container --}}
-                <div class="flex-shrink-0 w-full sm:w-40 h-40 bg-gray-100 rounded-xl border border-gray-200 shadow-sm overflow-hidden relative group">
-                    <img id="modalImg" src="" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Equipment Image">
+                <div class="flex-shrink-0 w-full sm:w-40 h-40 bg-gray-50 rounded-xl border border-gray-200 shadow-sm overflow-hidden relative group flex items-center justify-center">
+                    <img id="modalImg" src="" class="max-w-full max-h-full object-contain p-1" alt="Equipment Image">
                 </div>
 
                 {{-- Text Info --}}
@@ -224,7 +229,7 @@
         </div>
         
         {{-- 3. Modal Footer --}}
-        <div class="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-100">
+        <div class="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-100 flex-shrink-0">
             <button onclick="closeDetailsModal()" class="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-100 hover:text-gray-900 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200">
                 ปิดหน้าต่าง
             </button>

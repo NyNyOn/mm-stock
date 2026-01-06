@@ -5,7 +5,8 @@
 
 @section('content')
 <div class="p-6 soft-card gentle-shadow">
-    <div class="overflow-x-auto">
+    {{-- Desktop Table View --}}
+    <div class="hidden md:block overflow-x-auto">
         <table class="min-w-full text-sm bg-white divide-y-2 divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
@@ -72,6 +73,63 @@
                 @endforelse
             </tbody>
         </table>
+    </div>
+
+    {{-- Mobile Card View --}}
+    <div class="block md:hidden space-y-4">
+        @forelse ($borrowedItems as $transaction)
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 relative overflow-hidden">
+                <div class="flex gap-4">
+                    {{-- Image (Reusing Logic) --}}
+                    @php
+                        $equipment = optional($transaction->equipment);
+                        $displayImage = $equipment->primaryImage->exists ? $equipment->primaryImage : $equipment->latestImage;
+                        $imageUrl = $displayImage->image_url; 
+                    @endphp
+                    <div class="flex-shrink-0 w-20 h-20 bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                        <img src="{{ $imageUrl }}" 
+                             alt="{{ $equipment->name ?? 'N/A' }}" 
+                             class="w-full h-full object-contain p-1"
+                             onerror="this.onerror=null; this.src='https://placehold.co/100x100/e2e8f0/64748b?text=Error';">
+                    </div>
+
+                    {{-- Content --}}
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-bold text-gray-900 truncate pr-2">{{ $equipment->name ?? 'Equipment Deleted' }}</h3>
+                        <p class="text-xs text-gray-500 font-mono">{{ $equipment->serial_number ?? 'N/A' }}</p>
+                        
+                        <div class="mt-2 space-y-1">
+                            <div class="flex items-center text-xs text-gray-600">
+                                <i class="fas fa-user w-4 text-center text-blue-500 mr-1"></i>
+                                <span class="truncate">{{ optional($transaction->user)->fullname ?? 'N/A' }}</span>
+                            </div>
+                            <div class="flex items-center text-xs text-gray-600">
+                                <i class="fas fa-clock w-4 text-center text-orange-500 mr-1"></i>
+                                <span>{{ $transaction->transaction_date->format('d/m/Y H:i') }}</span>
+                            </div>
+                             <div class="flex items-center text-xs text-gray-600">
+                                <i class="fas fa-cube w-4 text-center text-green-500 mr-1"></i>
+                                <span>จำนวน: <strong>{{ abs($transaction->quantity_change) }}</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Mobile Action --}}
+                <div class="mt-4 pt-3 border-t border-gray-100">
+                    <button
+                        onclick="openReturnModal({{ $transaction->id }}, '{{ $equipment->name ?? 'N/A' }}')"
+                        class="w-full py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 active:scale-95 transition-all shadow-md shadow-blue-200">
+                        <i class="fas fa-undo mr-1"></i> คืนอุปกรณ์ / แจ้งเสีย
+                    </button>
+                </div>
+            </div>
+        @empty
+            <div class="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                <i class="mb-4 text-green-300 fas fa-check-circle fa-3x"></i>
+                <h4 class="text-lg font-semibold text-gray-500">ไม่มีรายการค้างส่งคืน</h4>
+            </div>
+        @endforelse
     </div>
 </div>
 

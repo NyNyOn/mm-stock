@@ -33,7 +33,8 @@
             </form>
         </div>
 
-        <div class="overflow-x-auto">
+        {{-- Desktop Table Container --}}
+        <div class="hidden overflow-x-auto md:block">
             <table class="min-w-full text-sm bg-white">
                 <thead class="bg-gray-50">
                     <tr>
@@ -113,6 +114,79 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+
+        {{-- Mobile Card List Container --}}
+        <div class="space-y-4 md:hidden">
+            @forelse($users as $user)
+            <div class="p-5 bg-white border border-gray-100 shadow-sm rounded-2xl">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="flex items-center justify-center w-10 h-10 text-lg font-bold text-indigo-600 bg-indigo-100 rounded-full">
+                            {{ substr($user->fullname, 0, 1) }}
+                        </div>
+                        <div>
+                            <div class="text-base font-bold text-gray-900">{{ $user->fullname }}</div>
+                            <div class="text-sm text-gray-500">{{ $user->username }}</div>
+                        </div>
+                    </div>
+                     <div>
+                        @if($user->serviceUserRole && $user->serviceUserRole->userGroup)
+                            <span class="px-2 py-1 text-xs font-semibold leading-5 text-blue-800 bg-blue-100 rounded-lg">
+                                {{ $user->serviceUserRole->userGroup->name }}
+                            </span>
+                        @else
+                            <span class="px-2 py-1 text-xs font-semibold leading-5 text-gray-800 bg-gray-100 rounded-lg">
+                                ผู้ใช้ทั่วไป
+                            </span>
+                        @endif
+                    </div>
+                </div>
+
+                <div class="pt-3 mt-3 border-t border-gray-100">
+                    <div class="flex flex-col gap-2">
+                         @can('user:manage')
+                            @can('manage-user-role', $user)
+                                @if($user->serviceUserRole && $user->serviceUserRole->userGroup)
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <button
+                                            onclick="openAssignModal('{{ $user->id }}', '{{ $user->fullname }}', '{{ $user->serviceUserRole->group_id }}', '{{ $user->serviceUserRole->userGroup->name }}')"
+                                            class="flex items-center justify-center w-full px-4 py-2 text-sm font-bold text-yellow-700 bg-yellow-100 rounded-xl hover:bg-yellow-200">
+                                            <i class="mr-2 fas fa-exchange-alt"></i> เปลี่ยนกลุ่ม
+                                        </button>
+
+                                        <form action="{{ route('management.users.removeGroup', $user->id) }}" method="POST" class="w-full">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="button"
+                                                    onclick="confirmRemoveFromGroup(this.closest('form'), '{{ $user->fullname }}', '{{ $user->serviceUserRole->userGroup->name }}')"
+                                                    class="flex items-center justify-center w-full px-4 py-2 text-sm font-bold text-red-700 bg-red-100 rounded-xl hover:bg-red-200">
+                                                <i class="mr-2 fas fa-user-minus"></i> นำออก
+                                            </button>
+                                        </form>
+                                    </div>
+                                @else
+                                    <button
+                                        onclick="openAssignModal('{{ $user->id }}', '{{ $user->fullname }}', '', '')"
+                                        class="flex items-center justify-center w-full px-4 py-2 text-sm font-bold text-green-700 bg-green-100 rounded-xl hover:bg-green-200">
+                                       <i class="mr-2 fas fa-user-plus"></i> กำหนดกลุ่ม
+                                    </button>
+                                @endif
+                            @else
+                                <div class="p-2 text-xs text-center text-gray-400 bg-gray-50 rounded-xl">
+                                    <i class="fas fa-lock mr-1"></i> ไม่มีสิทธิ์จัดการผู้ใช้นี้
+                                </div>
+                            @endcan
+                        @endcan
+                    </div>
+                </div>
+            </div>
+            @empty
+            <div class="p-8 text-center bg-gray-50 rounded-2xl">
+                 <i class="mb-3 text-4xl text-gray-400 fas fa-users-slash"></i>
+                <p class="text-gray-500">ไม่พบข้อมูลผู้ใช้งาน</p>
+            </div>
+            @endforelse
         </div>
     </div>
 </div>

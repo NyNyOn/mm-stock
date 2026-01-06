@@ -19,7 +19,7 @@ if (typeof Swal === 'undefined') {
 
 // Helper: Format Date (dd/mm/yyyy)
 if (typeof window.formatDate === 'undefined') {
-    window.formatDate = function(dateString) {
+    window.formatDate = function (dateString) {
         if (!dateString) return '-';
         try {
             const d = new Date(dateString);
@@ -30,7 +30,7 @@ if (typeof window.formatDate === 'undefined') {
 
 // Helper: Format DateTime (dd/mm/yyyy hh:mm)
 if (typeof window.formatDateTime === 'undefined') {
-    window.formatDateTime = function(dateString) {
+    window.formatDateTime = function (dateString) {
         if (!dateString) return '-';
         try {
             const d = new Date(dateString);
@@ -41,7 +41,7 @@ if (typeof window.formatDateTime === 'undefined') {
 
 // Helper: Withdrawal Type Text
 if (typeof window.getWithdrawalTypeText === 'undefined') {
-    window.getWithdrawalTypeText = function(type) {
+    window.getWithdrawalTypeText = function (type) {
         const types = {
             consumable: 'เบิก (ไม่ต้องคืน)',
             returnable: 'ยืม (ต้องคืน)',
@@ -53,7 +53,7 @@ if (typeof window.getWithdrawalTypeText === 'undefined') {
 
 // Helper: Transaction Type Text
 if (typeof window.getTransactionTypeText === 'undefined') {
-    window.getTransactionTypeText = function(type) {
+    window.getTransactionTypeText = function (type) {
         const types = {
             receive: 'รับเข้า',
             withdraw: 'เบิก',
@@ -87,7 +87,7 @@ function createStatusBadgeInternal(status) {
 }
 
 // Helper: Close any modal by ID (UPDATED: Force Clear Files)
-window.closeModal = function(modalId) {
+window.closeModal = function (modalId) {
     if (modalId === 'equipment-details-modal') {
         window.closeDetailsModal();
         return;
@@ -96,36 +96,36 @@ window.closeModal = function(modalId) {
     if (modal) {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
-        
+
         // Check if any other modals are open before restoring scroll
         const openModals = document.querySelectorAll('.fixed.inset-0.z-50:not(.hidden), .fixed.inset-0.z-40:not(.hidden)');
         if (openModals.length === 0) {
             document.body.style.overflow = '';
         }
-        
+
         // Reset Forms
         const form = modal.querySelector('form');
         if (form) {
             form.reset();
-            
+
             // ✅ FORCE CLEAR FILE INPUTS (แก้ปัญหารูปค้างเมื่อปิด Modal)
             const fileInputs = form.querySelectorAll('input[type="file"]');
             fileInputs.forEach(input => {
-                input.value = ''; 
-                try { input.files = (new DataTransfer()).files; } catch(e) {}
+                input.value = '';
+                try { input.files = (new DataTransfer()).files; } catch (e) { }
                 input.dispatchEvent(new Event('change'));
             });
 
             // Clear plugins and dynamic elements
-            if(typeof clearImagePreviews === 'function') clearImagePreviews(form);
-            if(typeof clearServerErrors === 'function') clearServerErrors(form);
-            
+            if (typeof clearImagePreviews === 'function') clearImagePreviews(form);
+            if (typeof clearServerErrors === 'function') clearServerErrors(form);
+
             // Reset Select2 if exists
             if (typeof $ !== 'undefined' && $.fn.select2) {
                 $(form).find('.select2').val(null).trigger('change');
             }
             // Reset Stepper if exists
-            if(typeof form.updateStepperUI === 'function') {
+            if (typeof form.updateStepperUI === 'function') {
                 form.updateStepperUI(1);
             }
         }
@@ -144,7 +144,7 @@ window.closeModal = function(modalId) {
  */
 function setCoverImage(imageId, equipmentId) {
     console.log(`[Image] Attempting to set image ID ${imageId} as cover for Equipment ID ${equipmentId}.`);
-    
+
     if (!imageId || !equipmentId) {
         Swal.fire('ผิดพลาด', 'ไม่พบข้อมูล Image ID หรือ Equipment ID', 'error');
         return;
@@ -169,54 +169,54 @@ function setCoverImage(imageId, equipmentId) {
         },
         body: JSON.stringify({ image_id: imageId, equipment_id: equipmentId })
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok.');
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            console.log(`[Image] Success: Image ${imageId} set as cover.`);
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok.');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                console.log(`[Image] Success: Image ${imageId} set as cover.`);
 
-            // 2. UI Update Logic: ลบสถานะ Cover จากรูปภาพเก่าทั้งหมด
-            const imageList = document.getElementById('image-gallery'); 
-            if (imageList) {
-                imageList.querySelectorAll('.image-card').forEach(item => {
-                    // ลบ class ที่แสดงสถานะปก
-                    item.classList.remove('border-green-500', 'ring-2', 'ring-green-500/50'); 
-                    
-                    // ซ่อน Badge 'COVER' จากรูปภาพอื่น
-                    const badge = item.querySelector('.cover-badge');
-                    if (badge) badge.classList.add('hidden');
-                });
-            }
-            
-            // 3. UI Update Logic: ตั้งสถานะ Cover ให้กับรูปภาพใหม่ที่ถูกเลือก
-            const currentItem = document.querySelector(`.image-card[data-image-id="${imageId}"]`);
-            if (currentItem) {
-                // เพิ่ม class ที่แสดงสถานะปกและเน้นด้วย ring
-                currentItem.classList.add('border-green-500', 'ring-2', 'ring-green-500/50');
-                const badge = currentItem.querySelector('.cover-badge');
-                if (badge) badge.classList.remove('hidden');
-                
-                // อัปเดต primary image display ในหน้า Edit/Detail ทันที (ถ้ามี)
-                const primaryImageDisplay = document.getElementById('equipment-primary-image-display');
-                if (primaryImageDisplay) {
-                     const imgSrc = currentItem.querySelector('img').src; 
-                     primaryImageDisplay.src = imgSrc;
+                // 2. UI Update Logic: ลบสถานะ Cover จากรูปภาพเก่าทั้งหมด
+                const imageList = document.getElementById('image-gallery');
+                if (imageList) {
+                    imageList.querySelectorAll('.image-card').forEach(item => {
+                        // ลบ class ที่แสดงสถานะปก
+                        item.classList.remove('border-green-500', 'ring-2', 'ring-green-500/50');
+
+                        // ซ่อน Badge 'COVER' จากรูปภาพอื่น
+                        const badge = item.querySelector('.cover-badge');
+                        if (badge) badge.classList.add('hidden');
+                    });
                 }
+
+                // 3. UI Update Logic: ตั้งสถานะ Cover ให้กับรูปภาพใหม่ที่ถูกเลือก
+                const currentItem = document.querySelector(`.image-card[data-image-id="${imageId}"]`);
+                if (currentItem) {
+                    // เพิ่ม class ที่แสดงสถานะปกและเน้นด้วย ring
+                    currentItem.classList.add('border-green-500', 'ring-2', 'ring-green-500/50');
+                    const badge = currentItem.querySelector('.cover-badge');
+                    if (badge) badge.classList.remove('hidden');
+
+                    // อัปเดต primary image display ในหน้า Edit/Detail ทันที (ถ้ามี)
+                    const primaryImageDisplay = document.getElementById('equipment-primary-image-display');
+                    if (primaryImageDisplay) {
+                        const imgSrc = currentItem.querySelector('img').src;
+                        primaryImageDisplay.src = imgSrc;
+                    }
+                }
+
+                Swal.fire('สำเร็จ!', 'ตั้งค่ารูปภาพปกเรียบร้อยแล้ว', 'success');
+            } else {
+                Swal.fire('ผิดพลาด', data.message || 'ไม่สามารถตั้งค่ารูปภาพปกได้', 'error');
             }
-            
-            Swal.fire('สำเร็จ!', 'ตั้งค่ารูปภาพปกเรียบร้อยแล้ว', 'success');
-        } else {
-            Swal.fire('ผิดพลาด', data.message || 'ไม่สามารถตั้งค่ารูปภาพปกได้', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('[Image] Error setting cover image:', error);
-        Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
-    });
+        })
+        .catch(error => {
+            console.error('[Image] Error setting cover image:', error);
+            Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+        });
 }
 
 
@@ -246,7 +246,7 @@ function deleteImage(imageId) {
 // ==========================================================================
 
 // ✅ Show Add Modal
-window.showAddModal = async function() {
+window.showAddModal = async function () {
     const modal = document.getElementById('add-equipment-modal');
     const modalBody = document.getElementById('add-form-content-wrapper');
 
@@ -257,44 +257,44 @@ window.showAddModal = async function() {
             existingForm.reset();
             existingForm.querySelectorAll('input[type="file"]').forEach(i => {
                 i.value = '';
-                try { i.files = (new DataTransfer()).files; } catch(e) {}
+                try { i.files = (new DataTransfer()).files; } catch (e) { }
                 i.dispatchEvent(new Event('change'));
             });
-            if(typeof clearImagePreviews === 'function') clearImagePreviews(existingForm);
+            if (typeof clearImagePreviews === 'function') clearImagePreviews(existingForm);
         }
 
         modal.classList.remove('hidden');
         modal.classList.add('flex');
-        
+
         // Load Add Form HTML via AJAX (to get fresh token and clean state)
-        if(modalBody) {
-             modalBody.innerHTML = '<div class="p-10 text-center"><i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i><p class="mt-2 text-gray-500">กำลังโหลดฟอร์ม...</p></div>';
-             try {
-                 const response = await fetch('/equipment/create');
-                 if (!response.ok) throw new Error('Network response was not ok');
-                 const html = await response.text();
-                 modalBody.innerHTML = html;
-                 
-                 // ✅ Initialize Form Components
-                 const form = modalBody.querySelector('form');
-                 if(form) {
-                     attachFormEventListeners(form);
-                     // Initialize Select2 for Add Form
-                     if (typeof $ !== 'undefined' && $.fn.select2) {
-                         $(form).find('.select2').select2({ dropdownParent: $(modal), width: '100%' });
-                     }
-                 }
-                 
-             } catch(e) {
-                 console.error(e);
-                 modalBody.innerHTML = '<p class="text-red-500 text-center">โหลดฟอร์มไม่สำเร็จ</p>';
-             }
+        if (modalBody) {
+            modalBody.innerHTML = '<div class="p-10 text-center"><i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i><p class="mt-2 text-gray-500">กำลังโหลดฟอร์ม...</p></div>';
+            try {
+                const response = await fetch('/equipment/create');
+                if (!response.ok) throw new Error('Network response was not ok');
+                const html = await response.text();
+                modalBody.innerHTML = html;
+
+                // ✅ Initialize Form Components
+                const form = modalBody.querySelector('form');
+                if (form) {
+                    attachFormEventListeners(form);
+                    // Initialize Select2 for Add Form
+                    if (typeof $ !== 'undefined' && $.fn.select2) {
+                        $(form).find('.select2').select2({ dropdownParent: $(modal), width: '100%' });
+                    }
+                }
+
+            } catch (e) {
+                console.error(e);
+                modalBody.innerHTML = '<p class="text-red-500 text-center">โหลดฟอร์มไม่สำเร็จ</p>';
+            }
         }
     }
 };
 
 // ✅ Show Edit Modal
-window.showEditModal = async function(id) {
+window.showEditModal = async function (id) {
     const modal = document.getElementById('edit-equipment-modal');
     const modalBody = document.getElementById('edit-form-content-wrapper');
 
@@ -306,29 +306,29 @@ window.showEditModal = async function(id) {
         existingForm.reset();
         existingForm.querySelectorAll('input[type="file"]').forEach(i => {
             i.value = '';
-            try { i.files = (new DataTransfer()).files; } catch(e) {}
+            try { i.files = (new DataTransfer()).files; } catch (e) { }
             i.dispatchEvent(new Event('change'));
         });
-        if(typeof clearImagePreviews === 'function') clearImagePreviews(existingForm);
+        if (typeof clearImagePreviews === 'function') clearImagePreviews(existingForm);
     }
-    
+
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 
-    if(modalBody) {
+    if (modalBody) {
         modalBody.innerHTML = '<div class="flex justify-center items-center h-48"><i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i></div>';
         try {
             // Try specific AJAX route first, then fallback
             let response = await fetch(`/ajax/equipment/${id}/edit-form`);
             if (!response.ok) response = await fetch(`/equipment/${id}/edit`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-            
+
             if (!response.ok) throw new Error('Failed to load edit form');
-            
+
             const html = await response.text();
             modalBody.innerHTML = html;
-            
+
             const form = modalBody.querySelector('form');
-            if(form) {
+            if (form) {
                 attachFormEventListeners(form);
                 // ✅ Re-initialize Select2 for Edit Form (Critical)
                 if (typeof $ !== 'undefined' && $.fn.select2) {
@@ -343,7 +343,7 @@ window.showEditModal = async function(id) {
 };
 
 // ✅ Delete Equipment
-window.deleteEquipment = async function(id, name) {
+window.deleteEquipment = async function (id, name) {
     const result = await Swal.fire({
         title: 'ยืนยันการลบ?',
         html: `คุณต้องการลบ <b>${name || 'รายการนี้'}</b> ใช่หรือไม่?`,
@@ -381,7 +381,7 @@ window.deleteEquipment = async function(id, name) {
 function attachFormEventListeners(form) {
     if (!form) return;
     form.noValidate = true;
-    
+
     // Prevent duplicate listeners
     form.removeEventListener('submit', handleFormSubmit);
     form.addEventListener('submit', handleFormSubmit);
@@ -396,43 +396,43 @@ function attachFormEventListeners(form) {
     closeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const modal = form.closest('.fixed');
-            if(modal && modal.id) {
+            if (modal && modal.id) {
                 window.closeModal(modal.id);
             } else {
                 form.reset();
                 const fileInput = form.querySelector('input[type="file"]');
-                if(fileInput) { 
-                    fileInput.value = ''; 
-                    try { fileInput.files = (new DataTransfer()).files; } catch(e) {}
-                    fileInput.dispatchEvent(new Event('change')); 
+                if (fileInput) {
+                    fileInput.value = '';
+                    try { fileInput.files = (new DataTransfer()).files; } catch (e) { }
+                    fileInput.dispatchEvent(new Event('change'));
                 }
                 clearImagePreviews(form);
-                if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); document.body.style.overflow = ''; }
+                if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); document.body.style.overflow = ''; }
             }
         });
     });
 
     // Stepper Logic (for Add/Edit)
     const suffix = form.id.split('-').pop();
-    if(form.querySelector(`#next-step-btn-${suffix}`)) {
+    if (form.querySelector(`#next-step-btn-${suffix}`)) {
         initializeStepper(form, suffix);
     }
-    
+
     // MSDS Logic
     const msdsCheck = document.getElementById(`has_msds_checkbox-${suffix}`);
-    if(msdsCheck) msdsCheck.addEventListener('change', handleMsdsCheckboxChange);
-    
+    if (msdsCheck) msdsCheck.addEventListener('change', handleMsdsCheckboxChange);
+
     const msdsBtn = document.getElementById(`manage-msds-btn-${suffix}`);
-    if(msdsBtn) {
+    if (msdsBtn) {
         // Clone to remove old listeners
         const newBtn = msdsBtn.cloneNode(true);
         msdsBtn.parentNode.replaceChild(newBtn, msdsBtn);
         newBtn.addEventListener('click', () => openMsdsModal(form));
     }
-    
+
     // ✅ Serial Gen Trigger (เมื่อเปลี่ยนหมวดหมู่)
     const catSelect = document.getElementById(`category_id-${suffix}`);
-    if(catSelect) {
+    if (catSelect) {
         // ใช้ jQuery on change เพราะ Select2 อาจกิน event
         if (typeof $ !== 'undefined') {
             $(catSelect).on('change', () => generateSerialNumber(suffix));
@@ -442,7 +442,7 @@ function attachFormEventListeners(form) {
     }
     // ปุ่ม Generate SN Manual
     const genSnBtn = document.getElementById(`generate-serial-btn-${suffix}`);
-    if(genSnBtn) {
+    if (genSnBtn) {
         genSnBtn.addEventListener('click', () => generateSerialNumber(suffix));
     }
 }
@@ -451,7 +451,7 @@ async function handleFormSubmit(event) {
     event.preventDefault();
     const form = event.target;
     const formData = new FormData(form);
-    
+
     // Method Spoofing for Laravel
     const methodInput = form.querySelector('input[name="_method"]');
     if (methodInput && ['PUT', 'PATCH'].includes(methodInput.value.toUpperCase())) {
@@ -460,7 +460,7 @@ async function handleFormSubmit(event) {
 
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn ? submitBtn.innerHTML : '';
-    if(submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...'; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...'; }
 
     try {
         const response = await fetch(form.action, {
@@ -486,14 +486,14 @@ async function handleFormSubmit(event) {
             await Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success');
             window.location.reload();
         }
-    } catch(e) {
+    } catch (e) {
         console.error(e);
         // แสดง Error ที่ชัดเจน
         let msg = e.message;
-        if(msg.includes('Unexpected token')) msg = 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์ (อาจไม่ใช่ JSON)';
+        if (msg.includes('Unexpected token')) msg = 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์ (อาจไม่ใช่ JSON)';
         Swal.fire('Error', msg, 'error');
     } finally {
-        if(submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
     }
 }
 
@@ -502,11 +502,11 @@ function setupImagePreviews(form) {
     const suffix = form.id.split('-').pop();
     const input = document.getElementById(`images-${suffix}`);
     const container = document.getElementById(`image-previews-${suffix}`);
-    if(!input || !container) return;
+    if (!input || !container) return;
 
     input.addEventListener('change', (e) => {
         container.innerHTML = '';
-        
+
         // ถ้าไม่มีไฟล์ (เช่นถูกเคลียร์ค่า) ให้จบการทำงาน
         if (!input.files || input.files.length === 0) return;
 
@@ -522,12 +522,12 @@ function setupImagePreviews(form) {
                 const img = document.createElement('img');
                 img.src = ev.target.result;
                 img.className = "w-full h-full object-cover rounded border";
-                
+
                 const btn = document.createElement('button');
                 btn.type = "button";
                 btn.innerHTML = "&times;";
                 btn.className = "absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow opacity-0 group-hover:opacity-100 transition";
-                
+
                 // ✅ แก้ไข: เมื่อกดลบ ให้สร้าง FileList ใหม่ที่ตัดไฟล์นั้นออกแล้วใส่กลับ input
                 btn.onclick = () => {
                     const dt = new DataTransfer();
@@ -553,7 +553,7 @@ function setupImagePreviews(form) {
 function setupPasteHandler(form) {
     const suffix = form.id.split('-').pop();
     const fileInput = document.getElementById(`images-${suffix}`);
-    
+
     if (!fileInput) return;
 
     form.addEventListener('paste', (e) => {
@@ -585,8 +585,8 @@ function setupPasteHandler(form) {
 
         // 3. ถ้าเจอภาพ ให้อัปเดต input
         if (hasImage) {
-            e.preventDefault(); 
-            fileInput.files = dt.files; 
+            e.preventDefault();
+            fileInput.files = dt.files;
             fileInput.dispatchEvent(new Event('change'));
 
             if (typeof Swal !== 'undefined') {
@@ -603,20 +603,20 @@ function setupPasteHandler(form) {
 function setupExistingImageDeletion(form) {
     const suffix = form.id.split('-').pop();
     const container = document.getElementById(`existing-images-container-${suffix}`);
-    if(!container) return;
-    
+    if (!container) return;
+
     container.addEventListener('click', (e) => {
         const btn = e.target.closest('.delete-existing-image-btn');
-        if(btn) {
+        if (btn) {
             const id = btn.dataset.imageId;
             const input = document.getElementById(`delete_image_${id}`);
             const imgWrapper = document.getElementById(`image-${id}-wrapper`);
-            if(input && imgWrapper) {
+            if (input && imgWrapper) {
                 input.disabled = !input.disabled;
                 imgWrapper.style.opacity = input.disabled ? '1' : '0.4';
                 btn.innerHTML = input.disabled ? '<i class="fas fa-times"></i>' : '<i class="fas fa-undo"></i>';
-                btn.className = input.disabled 
-                    ? 'delete-existing-image-btn absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 transition-colors' 
+                btn.className = input.disabled
+                    ? 'delete-existing-image-btn absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 transition-colors'
                     : 'delete-existing-image-btn absolute top-1 right-1 bg-yellow-500 text-white p-1 rounded-full shadow hover:bg-yellow-600 transition-colors';
             }
         }
@@ -631,26 +631,26 @@ function displayValidationErrors(form, errors, suffix) {
     for (const field in errors) {
         const baseField = field.split('.')[0];
         const input = form.querySelector(`[name="${baseField}"], [name="${baseField}[]"]`) || document.getElementById(`${baseField}-${suffix}`);
-        
-        if(input) {
+
+        if (input) {
             input.classList.add('is-invalid');
             let errorDiv = input.parentNode.querySelector('.invalid-feedback');
-            if(!errorDiv) {
+            if (!errorDiv) {
                 errorDiv = document.createElement('div');
                 errorDiv.className = 'invalid-feedback text-red-500 text-xs mt-1';
                 input.parentNode.appendChild(errorDiv);
             }
             errorDiv.textContent = errors[field][0];
-            
-             // Detect step
+
+            // Detect step
             const stepPanel = input.closest('.step-panel');
             if (stepPanel && firstErrorStep === null) {
-                 const match = stepPanel.id.match(/step-(\d+)-panel/);
-                 if(match) firstErrorStep = parseInt(match[1]);
+                const match = stepPanel.id.match(/step-(\d+)-panel/);
+                if (match) firstErrorStep = parseInt(match[1]);
             }
         }
     }
-    
+
     // Switch to error step if using stepper
     if (firstErrorStep && typeof form.updateStepperUI === 'function') {
         form.updateStepperUI(firstErrorStep);
@@ -660,7 +660,7 @@ function displayValidationErrors(form, errors, suffix) {
 function clearImagePreviews(form) {
     const suffix = form.id.split('-').pop();
     const container = document.getElementById(`image-previews-${suffix}`);
-    if(container) container.innerHTML = '';
+    if (container) container.innerHTML = '';
 }
 
 function clearServerErrors(form) {
@@ -674,30 +674,30 @@ function initializeStepper(form, suffix) {
     const total = 3;
     const updateUI = (s) => {
         step = s;
-        for(let i=1; i<=total; i++) {
+        for (let i = 1; i <= total; i++) {
             const p = document.getElementById(`step-${i}-panel-${suffix}`);
-            if(p) p.classList.toggle('hidden', i!==step);
-            
+            if (p) p.classList.toggle('hidden', i !== step);
+
             const ind = document.getElementById(`step-indicator-${i}-${suffix}`);
-            if(ind) {
-                ind.classList.toggle('active', i===step);
-                ind.classList.toggle('completed', i<step);
-                ind.classList.toggle('pending', i>step);
+            if (ind) {
+                ind.classList.toggle('active', i === step);
+                ind.classList.toggle('completed', i < step);
+                ind.classList.toggle('pending', i > step);
             }
         }
         const prev = document.getElementById(`prev-step-btn-${suffix}`);
         const next = document.getElementById(`next-step-btn-${suffix}`);
         const sub = document.getElementById(`submit-btn-${suffix}`);
-        if(prev) prev.classList.toggle('hidden', step===1);
-        if(next) next.classList.toggle('hidden', step===total);
-        if(sub) sub.classList.toggle('hidden', step!==total);
+        if (prev) prev.classList.toggle('hidden', step === 1);
+        if (next) next.classList.toggle('hidden', step === total);
+        if (sub) sub.classList.toggle('hidden', step !== total);
     };
-    
+
     const nextBtn = document.getElementById(`next-step-btn-${suffix}`);
     const prevBtn = document.getElementById(`prev-step-btn-${suffix}`);
-    if(nextBtn) nextBtn.addEventListener('click', () => { if(step<total) updateUI(step+1); });
-    if(prevBtn) prevBtn.addEventListener('click', () => { if(step>1) updateUI(step-1); });
-    
+    if (nextBtn) nextBtn.addEventListener('click', () => { if (step < total) updateUI(step + 1); });
+    if (prevBtn) prevBtn.addEventListener('click', () => { if (step > 1) updateUI(step - 1); });
+
     form.updateStepperUI = updateUI;
     updateUI(1);
 }
@@ -706,12 +706,12 @@ function initializeStepper(form, suffix) {
 async function generateSerialNumber(suffix) {
     const catSelect = document.getElementById(`category_id-${suffix}`);
     const serialInput = document.getElementById(`serial_number-${suffix}`);
-    
+
     // เช็คค่าจาก Select2 หรือ Native Select
     let catValue = catSelect ? (catSelect.value || $(catSelect).val()) : null;
-    
-    if(!catValue || !serialInput) return;
-    
+
+    if (!catValue || !serialInput) return;
+
     try {
         const res = await fetch("/ajax/next-serial", {
             method: 'POST',
@@ -719,20 +719,20 @@ async function generateSerialNumber(suffix) {
             body: JSON.stringify({ category_id: catValue })
         });
         const data = await res.json();
-        if(data.success) {
+        if (data.success) {
             serialInput.value = data.serial_number;
             // Flash effect
             serialInput.classList.add('bg-green-100');
             setTimeout(() => serialInput.classList.remove('bg-green-100'), 500);
         }
-    } catch(e) { console.error(e); }
+    } catch (e) { console.error(e); }
 }
 
 // --- MSDS Logic ---
 function handleMsdsCheckboxChange(e) {
     const suffix = e.target.id.split('-').pop();
     const container = document.getElementById(`msds-management-container-${suffix}`);
-    if(container) container.style.display = e.target.checked ? 'block' : 'none';
+    if (container) container.style.display = e.target.checked ? 'block' : 'none';
 }
 
 async function openMsdsModal(form) {
@@ -751,7 +751,7 @@ async function openMsdsModal(form) {
 // 4. EQUIPMENT DETAILS MODAL (NEW)
 // ==========================================================================
 
-window.showDetailsModal = async function(equipmentId) {
+window.showDetailsModal = async function (equipmentId) {
     const modal = document.getElementById('equipment-details-modal');
     const loading = document.getElementById('details-loading');
     const errorMsg = document.getElementById('details-error-message');
@@ -789,9 +789,9 @@ window.showDetailsModal = async function(equipmentId) {
 };
 
 function populateDetails(item) {
-    const setText = (id, val) => { 
-        const el = document.getElementById(id); 
-        if(el) el.textContent = (val === null || val === undefined || val === '') ? '-' : val; 
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (val === null || val === undefined || val === '') ? '-' : val;
     };
 
     currentDetailName = item.name;
@@ -820,7 +820,7 @@ function populateDetails(item) {
     setText('details-updated-by', `โดย: ${updater}`);
 
     const statusWrapper = document.getElementById('details-status-container');
-    if(statusWrapper) {
+    if (statusWrapper) {
         statusWrapper.innerHTML = '';
         statusWrapper.appendChild(createStatusBadgeInternal(item.status));
     }
@@ -828,26 +828,26 @@ function populateDetails(item) {
     const msdsTab = document.getElementById('details-msds-tab');
     const msdsDetails = document.getElementById('details-msds-details');
     const msdsLink = document.getElementById('details-msds-file');
-    
+
     if (item.has_msds) {
-        if(msdsTab) msdsTab.classList.remove('hidden');
-        if(msdsDetails) msdsDetails.textContent = item.msds_details || '-';
+        if (msdsTab) msdsTab.classList.remove('hidden');
+        if (msdsDetails) msdsDetails.textContent = item.msds_details || '-';
         if (msdsLink && item.msds_file_url) {
             msdsLink.href = item.msds_file_url;
             msdsLink.classList.remove('hidden');
             msdsLink.classList.add('inline-flex');
         }
     } else {
-        if(msdsTab) msdsTab.classList.add('hidden');
+        if (msdsTab) msdsTab.classList.add('hidden');
     }
-    
+
     const firstTab = document.querySelector("[onclick*='details-tab-main']");
-    if(firstTab) switchDetailsTab(firstTab, 'details-tab-main');
+    if (firstTab) switchDetailsTab(firstTab, 'details-tab-main');
 
     const historyBox = document.getElementById('details-transactions');
-    if(historyBox) {
+    if (historyBox) {
         historyBox.innerHTML = '';
-        if(item.transactions && item.transactions.length > 0) {
+        if (item.transactions && item.transactions.length > 0) {
             item.transactions.forEach(t => {
                 const isPlus = t.quantity_change >= 0;
                 const div = document.createElement('div');
@@ -877,10 +877,14 @@ function setupGallery(item) {
     const primaryImg = document.getElementById('details-primary-image');
     const thumbContainer = document.getElementById('details-gallery-thumbnails');
     if (!primaryImg || !thumbContainer) return;
-    
-    thumbContainer.innerHTML = '';
-    let finalUrl = 'https://placehold.co/600x400/e2e8f0/64748b?text=No+Image';
 
+    thumbContainer.innerHTML = '';
+
+    // Default Fallback
+    const fallbackUrl = 'https://placehold.co/600x400/e2e8f0/64748b?text=No+Image';
+    let finalUrl = fallbackUrl;
+
+    // Determine Images List
     if (item.images_list && item.images_list.length > 0) {
         currentDetailImages = item.images_list;
         finalUrl = currentDetailImages[0];
@@ -891,19 +895,29 @@ function setupGallery(item) {
         currentDetailImages = [item.image_url];
         finalUrl = item.image_url;
     } else {
-        currentDetailImages = [finalUrl];
+        currentDetailImages = [fallbackUrl];
     }
 
+    // Set Primary Image with Error Handling
     primaryImg.src = finalUrl;
+    primaryImg.onerror = function () {
+        if (this.src !== fallbackUrl) {
+            this.src = fallbackUrl;
+        }
+    };
 
+    // Build Thumbnails
     if (currentDetailImages.length > 1) {
         currentDetailImages.forEach(url => {
             const div = document.createElement('div');
             div.className = 'relative aspect-square cursor-pointer group';
-            div.innerHTML = `<img src="${url}" class="w-full h-full object-cover rounded border-2 border-transparent hover:border-indigo-500 transition shadow-sm">`;
+            div.innerHTML = `<img src="${url}" class="w-full h-full object-cover rounded border-2 border-transparent hover:border-indigo-500 transition shadow-sm" onerror="this.src='${fallbackUrl}'">`;
             div.onclick = () => {
                 primaryImg.style.opacity = '0.5';
-                setTimeout(() => { primaryImg.src = url; primaryImg.style.opacity = '1'; }, 150);
+                setTimeout(() => {
+                    primaryImg.src = url;
+                    primaryImg.style.opacity = '1';
+                }, 150);
             };
             thumbContainer.appendChild(div);
         });
@@ -919,7 +933,7 @@ function setupDetailButtons(item) {
     const userCanBypass = document.querySelector('meta[name="can-bypass-frozen"]')?.content === 'true';
     const isFrozen = item.status && item.status.toLowerCase() === 'frozen';
     const shouldLock = isFrozen && !userCanBypass;
-    
+
     if (editBtn) {
         // 1. สร้างปุ่มใหม่จากต้นฉบับเสมอ (เพื่อล้าง Event Listener เก่า และค่า Display เก่า)
         const newEdit = editBtn.cloneNode(true);
@@ -931,7 +945,7 @@ function setupDetailButtons(item) {
         } else {
             newEdit.style.display = 'inline-flex'; // แสดง (บังคับ display ใหม่)
             newEdit.setAttribute('data-equipment-id', item.id);
-            
+
             // ผูก Event Handler
             newEdit.addEventListener('click', () => {
                 window.closeDetailsModal();
@@ -940,32 +954,43 @@ function setupDetailButtons(item) {
         }
 
         // 3. แทนที่ปุ่มเก่าด้วยปุ่มใหม่ใน DOM
-        if(editBtn.parentNode) {
-            editBtn.parentNode.replaceChild(newEdit, editBtn); 
+        if (editBtn.parentNode) {
+            editBtn.parentNode.replaceChild(newEdit, editBtn);
         }
     }
 
     if (printBtn) {
         const newPrint = printBtn.cloneNode(true);
-        if(printBtn.parentNode) {
+        if (printBtn.parentNode) {
             printBtn.parentNode.replaceChild(newPrint, printBtn);
         }
         newPrint.setAttribute('data-equipment-id', item.id);
         newPrint.addEventListener('click', () => {
-            const sn = item.serial_number && item.serial_number !== '-' ? item.serial_number : String(item.id);
+            // ✅ IMPROVED VALIDATION: Enforce Serial Number
+            const sn = item.serial_number;
+            if (!sn || sn === '-' || sn.trim() === '') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'ไม่สามารถพิมพ์ QR Code ได้',
+                    text: 'กรุณาสร้าง Serial Number ให้กับอุปกรณ์นี้ก่อนพิมพ์ QR Code',
+                    confirmButtonText: 'รับทราบ'
+                });
+                return;
+            }
+
             window.closeDetailsModal();
             setTimeout(() => {
                 if (typeof window.openQrCodeModal === 'function') {
                     window.openQrCodeModal(sn, item.name);
                     const qrModal = document.getElementById('qr-code-modal');
-                    if(qrModal) { qrModal.classList.remove('hidden'); qrModal.style.zIndex = '99999'; }
+                    if (qrModal) { qrModal.classList.remove('hidden'); qrModal.style.zIndex = '99999'; }
                 }
             }, 200);
         });
     }
 }
 
-window.switchDetailsTab = function(selectedBtn, targetPanelId) {
+window.switchDetailsTab = function (selectedBtn, targetPanelId) {
     document.querySelectorAll('.details-tab-btn').forEach(btn => {
         btn.className = 'details-tab-btn flex-1 py-2 px-4 text-sm font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 transition-all duration-200';
         btn.removeAttribute('aria-current');
@@ -974,21 +999,21 @@ window.switchDetailsTab = function(selectedBtn, targetPanelId) {
     selectedBtn.className = 'details-tab-btn flex-1 py-2 px-4 text-sm font-bold rounded-lg shadow-sm bg-white dark:bg-gray-600 text-indigo-600 dark:text-white transition-all duration-200 ring-1 ring-black/5';
     selectedBtn.setAttribute('aria-current', 'page');
     const target = document.getElementById(targetPanelId);
-    if(target) target.classList.remove('hidden');
+    if (target) target.classList.remove('hidden');
 }
 
-window.triggerDetailImageSlider = function() {
+window.triggerDetailImageSlider = function () {
     if (typeof window.openImageSlider === 'function') {
         window.openImageSlider(currentDetailImages, currentDetailName);
     } else {
         const primaryImg = document.getElementById('details-primary-image');
-        if(primaryImg) window.open(primaryImg.src, '_blank');
+        if (primaryImg) window.open(primaryImg.src, '_blank');
     }
 }
 
-window.closeDetailsModal = function() {
+window.closeDetailsModal = function () {
     const modal = document.getElementById('equipment-details-modal');
-    if(modal) {
+    if (modal) {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
         document.body.style.overflow = '';
@@ -999,22 +1024,22 @@ window.closeDetailsModal = function() {
 // 5. IMAGE SLIDER / LIGHTBOX
 // ==========================================================================
 
-window.openImageSlider = function(images, title) {
+window.openImageSlider = function (images, title) {
     if (!images || images.length === 0) return;
     galleryImages = images;
     currentGalleryIndex = 0;
     const caption = document.getElementById('gallery-caption');
-    if(caption) caption.textContent = title || 'รายละเอียด';
+    if (caption) caption.textContent = title || 'รายละเอียด';
     updateGalleryView();
     const modal = document.getElementById('gallery-modal');
-    if(modal) {
+    if (modal) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         document.body.style.overflow = 'hidden';
     }
 }
 
-window.changeGalleryImage = function(direction) {
+window.changeGalleryImage = function (direction) {
     currentGalleryIndex += direction;
     if (currentGalleryIndex >= galleryImages.length) currentGalleryIndex = 0;
     if (currentGalleryIndex < 0) currentGalleryIndex = galleryImages.length - 1;
@@ -1026,35 +1051,35 @@ function updateGalleryView() {
     const counter = document.getElementById('gallery-counter');
     const prevBtn = document.getElementById('gallery-prev');
     const nextBtn = document.getElementById('gallery-next');
-    if(img) { img.style.opacity = '0'; setTimeout(() => { img.src = galleryImages[currentGalleryIndex]; img.style.opacity = '1'; }, 150); }
-    if(counter) counter.textContent = `${currentGalleryIndex + 1} / ${galleryImages.length}`;
-    if(prevBtn) prevBtn.classList.toggle('hidden', galleryImages.length <= 1);
-    if(nextBtn) nextBtn.classList.toggle('hidden', galleryImages.length <= 1);
+    if (img) { img.style.opacity = '0'; setTimeout(() => { img.src = galleryImages[currentGalleryIndex]; img.style.opacity = '1'; }, 150); }
+    if (counter) counter.textContent = `${currentGalleryIndex + 1} / ${galleryImages.length}`;
+    if (prevBtn) prevBtn.classList.toggle('hidden', galleryImages.length <= 1);
+    if (nextBtn) nextBtn.classList.toggle('hidden', galleryImages.length <= 1);
 }
 
-window.closeGalleryModal = function() {
+window.closeGalleryModal = function () {
     const modal = document.getElementById('gallery-modal');
-    if(modal) modal.classList.add('hidden');
+    if (modal) modal.classList.add('hidden');
     const detailsModal = document.getElementById('equipment-details-modal');
-    if(!detailsModal || detailsModal.classList.contains('hidden')) document.body.style.overflow = '';
+    if (!detailsModal || detailsModal.classList.contains('hidden')) document.body.style.overflow = '';
 }
 
 // ==========================================================================
 // 6. QR CODE & BARCODE
 // ==========================================================================
 
-window.openQrCodeModal = function(data, name) {
+window.openQrCodeModal = function (data, name) {
     const modal = document.getElementById('qr-code-modal');
     if (!modal) return;
 
-    const titleEl = document.getElementById('qr-modal-title');
-    if(titleEl) titleEl.textContent = name || 'QR Code';
+    const titleEl = document.getElementById('qr-modal-name');
+    if (titleEl) titleEl.textContent = name || 'QR Code';
 
     // QR
     const qrContainer = document.getElementById('qr-code-container');
-    if(qrContainer) {
+    if (qrContainer) {
         qrContainer.innerHTML = '';
-        if (typeof QRCode !== 'undefined') new QRCode(qrContainer, { text: data, width: 200, height: 200, colorDark : "#000000", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
+        if (typeof QRCode !== 'undefined') new QRCode(qrContainer, { text: data, width: 200, height: 200, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
         else qrContainer.innerHTML = '<p class="text-red-500">Library Missing</p>';
     }
 
@@ -1064,36 +1089,50 @@ window.openQrCodeModal = function(data, name) {
     if (barcodeContainer) {
         if (typeof JsBarcode !== 'undefined') {
             JsBarcode(barcodeContainer, data, { format: "CODE128", lineColor: "#000", width: 2, height: 60, displayValue: false });
-            if(barcodeName) barcodeName.textContent = data;
+            if (barcodeName) barcodeName.textContent = name; // ✅ User Request: Show Name instead of SN
         }
     }
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    modal.style.zIndex = '99999'; 
+    modal.style.zIndex = '99999';
 
     const printBtn = document.getElementById('print-qr-btn');
-    if(printBtn) {
+    if (printBtn) {
         const newBtn = printBtn.cloneNode(true);
         printBtn.parentNode.replaceChild(newBtn, printBtn);
         newBtn.addEventListener('click', () => {
             const printWindow = window.open('', '', 'height=600,width=800');
             const qrImg = qrContainer.querySelector('img')?.src || '';
-            const barcodeImg = barcodeContainer.toDataURL ? barcodeContainer.toDataURL() : '';
+            const barcodeImg = barcodeContainer.toDataURL ? barcodeContainer.toDataURL() : null;
 
             printWindow.document.write('<html><head><title>Print Tags</title>');
-            printWindow.document.write('<style>body { font-family: "Sarabun", sans-serif; text-align: center; margin: 20px; } .tag-card { border: 1px dashed #999; padding: 20px; margin: 10px; display: inline-block; width: 250px; vertical-align: top; page-break-inside: avoid; } .qr-img { width: 150px; height: 150px; } .barcode-img { width: 200px; height: 60px; margin-top: 10px; } .title { font-weight: bold; font-size: 16px; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .code { font-family: monospace; font-size: 14px; color: #555; }</style>');
+            printWindow.document.write('<style>');
+            printWindow.document.write('body { font-family: "Sarabun", sans-serif; text-align: center; margin: 0; padding: 20px; }');
+            printWindow.document.write('.tag-card { border: 1px solid #000; padding: 10px; margin: 10px; display: inline-flex; flex-direction: column; align-items: center; width: 280px; page-break-inside: avoid; border-radius: 0px; }');
+            printWindow.document.write('.title { font-weight: bold; font-size: 18px; margin-bottom: 5px; line-height: 1.2; text-align: center; word-wrap: break-word; width: 100%; display: none; }'); // Hide duplicate top title if user wants name at bottom? I'll hide it for now to match specific "below barcode" request cleanly.
+            printWindow.document.write('.qr-img { width: 140px; height: 140px; margin: 5px 0; }');
+            printWindow.document.write('.barcode-container { width: 100%; display: flex; justify-content: center; margin-top: 5px; }');
+            printWindow.document.write('.barcode-img { max-width: 90%; height: 50px; }');
+            printWindow.document.write('.code { font-family: "Sarabun", sans-serif; font-size: 14px; color: #000; font-weight: bold; margin-top: 5px; word-wrap: break-word; }'); // Use Sarabun for Name
+            printWindow.document.write('</style>');
             printWindow.document.write('</head><body>');
-            
-            printWindow.document.write('<div class="tag-card">');
-            if(qrImg) printWindow.document.write(`<img src="${qrImg}" class="qr-img" />`);
-            printWindow.document.write(`<div class="title">${name}</div><div class="code">${data}</div></div>`);
 
-            if(barcodeImg) {
-                printWindow.document.write('<div class="tag-card">');
-                printWindow.document.write(`<img src="${barcodeImg}" class="barcode-img" />`);
-                printWindow.document.write(`<div class="title">${name}</div><div class="code">${data}</div></div>`);
+            // ✅ SINGLE CARD LAYOUT
+            printWindow.document.write('<div class="tag-card">');
+            // printWindow.document.write(`<div class="title">${name}</div>`); // Hiding top title to prioritize bottom as requested
+
+            if (qrImg) {
+                printWindow.document.write(`<img src="${qrImg}" class="qr-img" />`);
             }
+
+            if (barcodeImg) {
+                printWindow.document.write(`<div class="barcode-container"><img src="${barcodeImg}" class="barcode-img" /></div>`);
+            }
+
+            // ✅ User Request: text below barcode should be Equipment Name
+            printWindow.document.write(`<div class="code">${name}</div>`);
+            printWindow.document.write('</div>');
 
             printWindow.document.write('</body></html>');
             printWindow.document.close();
@@ -1106,7 +1145,7 @@ window.openQrCodeModal = function(data, name) {
 // 7. PO OPERATIONS
 // ==========================================================================
 
-window.confirmAddItemToPo = function(event, form, type) {
+window.confirmAddItemToPo = function (event, form, type) {
     event.preventDefault();
     const equipmentName = form.dataset.equipmentName;
     const poTypeName = type === 'ด่วน' ? 'ใบสั่งซื้อด่วน' : 'ใบสั่งซื้อตามรอบ';
@@ -1116,7 +1155,7 @@ window.confirmAddItemToPo = function(event, form, type) {
     }).then((result) => { if (result.isConfirmed) form.submit(); });
 }
 
-window.showQuantityModal = function(event, form) {
+window.showQuantityModal = function (event, form) {
     event.preventDefault();
     const equipmentName = form.dataset.equipmentName;
     Swal.fire({

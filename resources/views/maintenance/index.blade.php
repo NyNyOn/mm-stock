@@ -13,7 +13,8 @@
 
         {{-- Main Content Card --}}
         <div class="p-6 soft-card">
-            <div class="overflow-x-auto">
+            {{-- Desktop Table View --}}
+            <div class="hidden md:block overflow-x-auto">
                 <table class="w-full text-sm text-left text-gray-600">
                     <thead class="text-xs text-gray-500 uppercase bg-gray-50/50">
                         <tr>
@@ -79,6 +80,68 @@
                         @endforelse {{-- Ensure @endforelse is present --}}
                     </tbody>
                 </table>
+            </div>
+
+            {{-- Mobile Card View --}}
+            <div class="block md:hidden space-y-4">
+                @forelse ($maintenanceLogs as $log)
+                    @php
+                        $mainEquipment = optional($log->mainStockItem); 
+                        $displayImage = $mainEquipment->primaryImage->exists ? $mainEquipment->primaryImage : $mainEquipment->latestImage;
+                        $imageUrl = $displayImage->image_url; 
+                    @endphp
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div class="p-4 pb-0">
+                            <div class="flex gap-4 mb-3">
+                                {{-- Image --}}
+                                <div class="flex-shrink-0 w-20 h-20 bg-gray-50 rounded-xl border border-gray-100 overflow-hidden">
+                                     <img src="{{ $imageUrl }}"
+                                          alt="{{ $mainEquipment->name ?? 'N/A' }}"
+                                          class="w-full h-full object-cover"
+                                          onerror="this.onerror=null; this.src='https://placehold.co/100x100/e2e8f0/64748b?text=Error';">
+                                </div>
+                                {{-- Header Info --}}
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="font-bold text-gray-800 text-sm mb-1 break-words line-clamp-2">{{ $mainEquipment->name ?? ($log->equipment->name ?? 'N/A') }}</h3>
+                                    <p class="text-xs text-gray-500 font-mono mb-2">{{ $log->equipment->serial_number ?? 'N/A' }}</p>
+                                    <div class="flex items-center text-xs text-gray-500">
+                                        <i class="far fa-user mr-1.5 text-blue-500"></i> {{ $log->reportedBy->fullname ?? 'N/A' }}
+                                    </div>
+                                    <div class="flex items-center text-xs text-gray-500 mt-1">
+                                        <i class="far fa-clock mr-1.5 text-orange-500"></i> {{ $log->created_at->format('d/m/Y H:i') }}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {{-- Problem Description --}}
+                            <div class="bg-red-50 rounded-lg p-3 border border-red-100 mb-4">
+                                <span class="text-xs font-bold text-red-800 block mb-1">รายละเอียดปัญหา:</span>
+                                <p class="text-sm text-gray-700 leading-relaxed">{{ $log->problem_description }}</p>
+                            </div>
+                        </div>
+
+                        {{-- Action Buttons --}}
+                         <form class="flex border-t border-gray-100 divide-x divide-gray-100"
+                               action="{{ route('maintenance.update', $log->id) }}"
+                               method="POST"
+                               onsubmit="confirmAction(event, this);">
+                            @csrf
+                            <button type="submit" name="action" value="complete_repair"
+                                    class="flex-1 py-3 text-sm font-bold text-green-600 bg-white hover:bg-green-50 active:bg-green-100 transition-colors flex items-center justify-center group">
+                                <i class="fas fa-check mr-2 transform group-active:scale-125 transition-transform"></i> ซ่อมเสร็จ
+                            </button>
+                            <button type="submit" name="action" value="write_off"
+                                    class="flex-1 py-3 text-sm font-bold text-red-600 bg-white hover:bg-red-50 active:bg-red-100 transition-colors flex items-center justify-center group">
+                                <i class="fas fa-trash mr-2 transform group-active:scale-125 transition-transform"></i> ตัดจำหน่าย
+                            </button>
+                        </form>
+                    </div>
+                @empty
+                    <div class="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                        <i class="fas fa-tools text-gray-300 text-4xl mb-3 block"></i>
+                        <span class="text-gray-500 font-medium">ไม่มีรายการซ่อม</span>
+                    </div>
+                @endforelse
             </div>
         </div>
     </div>

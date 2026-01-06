@@ -13,17 +13,16 @@
     </div>
 
     <div class="overflow-hidden soft-card rounded-2xl gentle-shadow">
-        <div class="overflow-x-auto scrollbar-soft">
+        {{-- Table View (Desktop) --}}
+        <div class="hidden md:block overflow-x-auto scrollbar-soft">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gradient-to-r from-blue-50 to-purple-50">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">ชื่องาน</th>
-                        {{-- ✅ เน้น: ประเภทอุปกรณ์ --}}
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">ประเภทอุปกรณ์</th> 
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">กำหนดการ/วันที่ทำล่าสุด</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">สถานะ</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">ผู้ตรวจนับ</th>
-                        {{-- ✅ เน้น: ปุ่มดำเนินการ --}}
                         <th class="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">ดำเนินการ</th>
                     </tr>
                 </thead>
@@ -33,7 +32,6 @@
                             <td class="px-6 py-4 text-sm font-medium">
                                 <a href="{{ route('stock-checks.show', $check) }}" class="hover:text-blue-600 transition-colors">{{ $check->name }}</a>
                             </td>
-                            {{-- ✅ แสดงชื่อ Category พร้อม Badge --}}
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
                                 @if ($check->category)
                                     <span class="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full bg-purple-100 text-purple-800 border border-purple-200">
@@ -66,7 +64,6 @@
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                 {{ $check->checker->fullname ?? '-' }}
                             </td>
-                            {{-- ✅ ปุ่มดำเนินการ (Action Button) --}}
                             <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                                 @if ($check->status !== 'completed')
                                     <a href="{{ route('stock-checks.perform', $check) }}" 
@@ -90,6 +87,84 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+
+        {{-- Mobile Card View (Mobile) --}}
+        <div class="block md:hidden space-y-4 p-4 bg-gray-50">
+            @forelse ($stockChecks as $check)
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative">
+                    <!-- Status Stripe -->
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 
+                        {{ $check->status === 'completed' ? 'bg-green-500' : ($check->status === 'in_progress' ? 'bg-blue-500' : 'bg-yellow-400') }}">
+                    </div>
+                    
+                    <div class="p-5 pl-6">
+                        <div class="flex justify-between items-start mb-3">
+                            <h3 class="text-lg font-bold text-gray-800 leading-tight">
+                                <a href="{{ route('stock-checks.show', $check) }}" class="hover:text-blue-600">
+                                    {{ $check->name }}
+                                </a>
+                            </h3>
+                            <!-- Status Badge -->
+                            @if ($check->status === 'completed')
+                                <span class="flex-shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-green-100 text-green-700">เสร็จสิ้น</span>
+                            @elseif ($check->status === 'in_progress')
+                                <span class="flex-shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-100 text-blue-700">กำลังดำเนินการ</span>
+                            @else
+                                <span class="flex-shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-yellow-100 text-yellow-700">รอดำเนินการ</span>
+                            @endif
+                        </div>
+
+                        <div class="space-y-2 mb-4">
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-cubes w-5 text-purple-500"></i>
+                                <span class="font-medium mr-2">หมวดหมู่:</span>
+                                @if ($check->category)
+                                    <span class="text-purple-700 font-bold">{{ $check->category->name }}</span>
+                                @else
+                                    <span class="text-gray-500">ทั้งหมด</span>
+                                @endif
+                            </div>
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-calendar-alt w-5 text-orange-500"></i>
+                                @if ($check->status === 'completed' && $check->completed_at)
+                                    <span class="font-medium mr-2">เสร็จเมื่อ:</span>
+                                    <span class="text-green-600 font-bold">{{ $check->completed_at->format('d/m/Y H:i') }}</span>
+                                @else
+                                    <span class="font-medium mr-2">กำหนดการ:</span>
+                                    <span class="text-gray-700">{{ $check->scheduled_date->format('d/m/Y') }}</span>
+                                @endif
+                            </div>
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-user w-5 text-blue-400"></i>
+                                <span class="font-medium mr-2">ผู้ตรวจ:</span>
+                                <span>{{ $check->checker->fullname ?? '-' }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Action Button -->
+                        @if ($check->status !== 'completed')
+                            <a href="{{ route('stock-checks.perform', $check) }}" 
+                               class="block w-full text-center py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-bold shadow-lg shadow-green-200 active:scale-95 transition-transform">
+                                <i class="fas fa-play mr-2"></i> เริ่มตรวจนับ
+                            </a>
+                        @else
+                            <a href="{{ route('stock-checks.show', $check) }}" 
+                               class="block w-full text-center py-3 bg-white border border-gray-200 text-indigo-600 rounded-xl font-bold hover:bg-gray-50">
+                                <i class="fas fa-eye mr-2"></i> ดูรายละเอียด
+                            </a>
+                        @endif
+                    </div>
+                </div>
+            @empty
+                <div class="text-center py-10">
+                    <div class="text-6xl mb-4">😭</div>
+                    <p class="text-gray-500 font-medium">ไม่พบงานตรวจนับสต็อก</p>
+                    <a href="{{ route('stock-checks.create') }}" class="inline-block mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg font-bold shadow-md">
+                        สร้างงานใหม่
+                    </a>
+                </div>
+            @endforelse
         </div>
         
         {{-- Pagination --}}

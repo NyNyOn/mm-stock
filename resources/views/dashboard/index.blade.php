@@ -246,108 +246,123 @@
         {{-- ========================================================= --}}
         <div class="space-y-6">
 
-            {{-- 5.1 รอบการนับสต๊อก (REDESIGNED: Clean White + Red Gradient + 3D) --}}
-            <div class="p-5 bg-white soft-card rounded-2xl gentle-shadow border border-gray-100 relative overflow-hidden">
-                {{-- Decorative Header Accent --}}
-                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-200 via-red-300 to-red-500"></div>
-                
-                <h3 class="mb-4 text-lg font-bold text-gray-800 flex items-center">
-                    <i class="fas fa-clipboard-list mr-2 text-indigo-500"></i> รอบการนับสต๊อก (105 วัน)
-                </h3>
-                
-                <div class="space-y-4 overflow-y-auto max-h-72 scrollbar-soft pr-2">
+            {{-- 5.1 รอบการนับสต๊อก (REDESIGNED: Grid Layout with Letter Avatars) --}}
+            <div class="col-span-full mb-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-clipboard-list mr-2 text-indigo-500"></i> รอบการนับสต๊อก (105 วัน)
+                        <span class="ml-2 text-xs font-normal text-gray-500 hidden md:inline">* แสดง 20 รายการล่าสุดที่ต้องตรวจสอบ</span>
+                    </h3>
+                    <a href="{{ route('stock-checks.index') }}" class="text-sm font-bold text-blue-600 hover:text-blue-800">
+                        ดูทั้งหมด <i class="ml-1 fas fa-arrow-right"></i>
+                    </a>
+                </div>
+
+                <div class="flex flex-col space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                     @forelse($stockCycles as $cycle)
                         @php
-                            $totalCycleDays = 105;
-                            $daysElapsed = $totalCycleDays - $cycle->days_left;
-                            $progressPercent = min(100, max(0, ($daysElapsed / $totalCycleDays) * 100));
-                            $daysLeftInt = (int)$cycle->days_left;
+                            $daysLeft = (int) $cycle->days_left; 
+                            $totalCycle = 105;
+                            $percent = max(0, min(100, (($totalCycle - $daysLeft) / $totalCycle) * 100));
+                            if ($daysLeft < 0) $percent = 100;
                             
-                            // 🔥 DESIGN LOGIC: Remove Green -> White -> Red Gradient
-                            $statusConfig = match($cycle->status) {
-                                'locked' => [
-                                    'icon' => 'fas fa-lock',
-                                    'icon_bg' => 'bg-red-100',
-                                    'icon_text' => 'text-red-600',
-                                    'border_left' => 'border-l-4 border-red-500',
-                                    'progress_gradient' => 'bg-gradient-to-r from-red-500 to-red-700', // แดงเข้มสุด
-                                    'status_text' => 'ระงับการเบิก',
-                                    'badge_class' => 'bg-red-100 text-red-700'
-                                ],
-                                'warning' => [
-                                    'icon' => 'fas fa-exclamation-triangle',
-                                    'icon_bg' => 'bg-orange-100',
-                                    'icon_text' => 'text-orange-600',
-                                    'border_left' => 'border-l-4 border-orange-400',
-                                    'progress_gradient' => 'bg-gradient-to-r from-orange-400 via-red-400 to-red-500', // ส้มไปแดง
-                                    'status_text' => 'ใกล้ครบกำหนด',
-                                    'badge_class' => 'bg-orange-100 text-orange-700'
-                                ],
-                                default => [ // Safe (Formerly Green -> Now Clean White/Blue)
-                                    'icon' => 'fas fa-shield-alt',
-                                    'icon_bg' => 'bg-gray-100', // พื้นหลังไอคอนสีขาว/เทา
-                                    'icon_text' => 'text-blue-500', // ไอคอนสีฟ้า (สบายตา)
-                                    'border_left' => 'border-l-4 border-blue-400',
-                                    'progress_gradient' => 'bg-gradient-to-r from-blue-300 to-indigo-400', // ฟ้าไปม่วงอ่อน (ไม่ใช้เขียว)
-                                    'status_text' => 'ปกติ',
-                                    'badge_class' => 'bg-gray-100 text-gray-600'
-                                ]
-                            };
-
-                            $progressText = $daysLeftInt > 0 ? "เหลืออีก {$daysLeftInt} วัน" : ($daysLeftInt == 0 ? "ครบกำหนดวันนี้" : "เลยมา " . abs($daysLeftInt) . " วัน");
+                            // Color Logic
+                            $colors = ['red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
+                            $colorIndex = crc32($cycle->name) % count($colors);
+                            $baseColor = $colors[$colorIndex];
+                            
+                            // Status Logic
+                            $barColor = 'bg-gradient-to-r from-green-400 to-green-500';
+                            $statusText = 'ปกติ';
+                            $statusBadge = 'bg-green-100 text-green-700 border-green-200';
+                            $cardBorder = 'border-l-4 border-l-transparent text-gray-500 hover:border-l-gray-300';
+                            $rowBg = 'bg-white hover:bg-gray-50';
+                            $urgent = false;
+                            
+                            if($percent > 75) {
+                                $barColor = 'bg-gradient-to-r from-orange-400 to-orange-500';
+                                $statusText = 'ใกล้ถึงกำหนด';
+                                $statusBadge = 'bg-orange-100 text-orange-800 border-orange-200';
+                                $cardBorder = 'border-l-4 border-l-orange-500';
+                                $rowBg = 'bg-orange-50/40 hover:bg-orange-50';
+                                $urgent = true;
+                            }
+                            if($percent >= 95 || $daysLeft < 0) {
+                                $barColor = 'bg-gradient-to-r from-red-500 to-red-600 animate-pulse';
+                                $statusText = 'รายการด่วน';
+                                $statusBadge = 'bg-red-100 text-red-800 border-red-200';
+                                $cardBorder = 'border-l-4 border-l-red-500';
+                                $rowBg = 'bg-red-50/40 hover:bg-red-50';
+                                $urgent = true;
+                            }
+                            
+                            $firstChar = mb_substr($cycle->name, 0, 1);
                         @endphp
-
-                        {{-- Card Item --}}
-                        <div class="bg-white rounded-xl shadow-[0_3px_10px_rgba(0,0,0,0.08)] border border-gray-100 p-4 transition-all hover:-translate-y-1 hover:shadow-lg relative overflow-hidden group {{ $statusConfig['border_left'] }}">
+                        
+                        <div class="relative flex flex-col xl:flex-row items-center p-4 border rounded-xl shadow-sm transition-all duration-300 group {{ $rowBg }} {{ $cardBorder }}">
                             
-                            {{-- Header: Icon + Name --}}
-                            <div class="flex items-start justify-between mb-3">
-                                <div class="flex items-center">
-                                    <div class="w-10 h-10 rounded-lg {{ $statusConfig['icon_bg'] }} flex items-center justify-center mr-3 shadow-inner">
-                                        <i class="{{ $statusConfig['icon'] }} {{ $statusConfig['icon_text'] }} text-lg"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-sm font-bold text-gray-800 line-clamp-1 group-hover:text-indigo-600 transition-colors" title="{{ $cycle->name }}">
-                                            {{ $cycle->name }}
-                                        </h4>
-                                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ $statusConfig['badge_class'] }}">
-                                            {{ $statusConfig['status_text'] }}
+                            {{-- 1. Left: Avatar & Name --}}
+                            <div class="flex items-center w-full xl:w-4/12 mb-4 xl:mb-0">
+                                <div class="flex-shrink-0 flex items-center justify-center w-14 h-14 text-2xl font-bold text-white uppercase rounded-full shadow-md bg-gradient-to-br from-{{ $baseColor }}-400 to-{{ $baseColor }}-600 mr-4">
+                                    {{ $firstChar }}
+                                </div>
+                                <div class="min-w-0 flex-grow">
+                                    <h4 class="text-lg font-bold text-gray-800 truncate" title="{{ $cycle->name }}">
+                                        {{ $cycle->name }}
+                                    </h4>
+                                    <div class="flex items-center flex-wrap gap-2 mt-1">
+                                        <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-white border border-gray-200 text-gray-600 whitespace-nowrap">
+                                            <i class="fas fa-box-open mr-1"></i> {{ $cycle->item_count }} รายการ
+                                        </span>
+                                        <span class="px-2 py-0.5 text-xs font-bold rounded-md border {{ $statusBadge }} whitespace-nowrap">
+                                            {{ $statusText }}
                                         </span>
                                     </div>
                                 </div>
-                                <a href="{{ route('stock-checks.create') }}" class="text-gray-400 hover:text-indigo-600 transition-colors">
-                                    <i class="fas fa-edit"></i>
+                            </div>
+
+                            {{-- 2. Middle: Dates info --}}
+                            <div class="flex flex-row xl:flex-col 2xl:flex-row justify-between xl:justify-center w-full xl:w-5/12 text-sm text-gray-500 px-0 xl:px-4 space-y-0 xl:space-y-0 2xl:space-x-6 mb-4 xl:mb-0 border-t xl:border-t-0 border-b xl:border-b-0 border-gray-100 py-3 xl:py-0">
+                                <div class="flex flex-col">
+                                    <span class="text-xs text-gray-400 font-medium">ตรวจล่าสุด</span>
+                                    <span class="font-semibold text-gray-700">
+                                        <i class="far fa-clock mr-1"></i> {{ $cycle->formatted_date ?? '-' }}
+                                    </span>
+                                </div>
+                                <div class="flex flex-col text-right xl:text-left">
+                                    <span class="text-xs text-gray-400 font-medium">นัดถัดไป</span>
+                                    <span class="font-semibold text-indigo-600">
+                                        <i class="far fa-calendar-alt mr-1"></i> {{ isset($cycle->next_check_date) ? \Carbon\Carbon::parse($cycle->next_check_date)->format('d/m/Y') : '-' }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {{-- 3. Right: Countdown & Action --}}
+                            <div class="flex items-center justify-between w-full xl:w-3/12 justify-end space-x-4">
+                                <div class="text-right">
+                                    <span class="block text-xs text-gray-400">เหลือเวลา</span>
+                                    <span class="text-2xl font-black {{ $daysLeft < 0 ? 'text-red-600' : 'text-gray-800' }}">
+                                        {{ $daysLeft < 0 ? abs($daysLeft) : number_format($daysLeft) }}
+                                        <span class="text-sm font-medium text-gray-500">วัน</span>
+                                    </span>
+                                </div>
+                                <a href="{{ route('stock-checks.create', ['category_id' => $cycle->id]) }}" 
+                                   class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-400 hover:text-indigo-600 hover:border-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"
+                                   title="ตรวจนับสต๊อกรายการนี้">
+                                    <i class="fas fa-chevron-right"></i>
                                 </a>
                             </div>
 
-                            {{-- Progress Bar Container --}}
-                            <div class="space-y-1 mb-3">
-                                <div class="flex justify-between text-xs font-medium text-gray-500">
-                                    <span>ความคืบหน้า</span>
-                                    <span class="{{ $statusConfig['icon_text'] }}">{{ number_format($progressPercent, 0) }}%</span>
-                                </div>
-                                <div class="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
-                                    <div class="h-full rounded-full {{ $statusConfig['progress_gradient'] }} shadow-sm transition-all duration-1000 ease-out" 
-                                         style="width: {{ $progressPercent }}%"></div>
-                                </div>
-                            </div>
-
-                            {{-- Footer Info --}}
-                            <div class="flex justify-between items-center text-xs text-gray-500 border-t border-gray-50 pt-2 mt-2">
-                                <div class="flex items-center">
-                                    <i class="fas fa-cubes mr-1.5 opacity-50"></i> {{ $cycle->item_count }} รายการ
-                                </div>
-                                {{-- Countdown (Using JS Logic) --}}
-                                <div class="stock-countdown-display font-mono font-semibold {{ $statusConfig['icon_text'] }}" 
-                                     data-target="{{ isset($cycle->next_check_date) ? \Carbon\Carbon::parse($cycle->next_check_date)->timestamp * 1000 : 0 }}">
-                                     <i class="fas fa-clock mr-1"></i> {{ $progressText }}
-                                </div>
+                            {{-- Bottom Progress Bar --}}
+                            <div class="absolute bottom-0 left-0 w-full h-1 bg-gray-100 rounded-b-xl overflow-hidden">
+                                <div class="{{ $barColor }} h-full transition-all duration-1000" style="width: {{ $percent }}%"></div>
                             </div>
                         </div>
                     @empty
-                        <div class="flex flex-col items-center justify-center py-8 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                            <i class="fas fa-clipboard-check text-3xl mb-2 opacity-50"></i>
-                            <span class="text-sm">ข้อมูลครบถ้วน ไม่มีรอบตรวจนับคงค้าง</span>
+                        <div class="col-span-full py-12 text-center text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                            <i class="fas fa-check-circle text-5xl mb-3 text-green-200"></i>
+                            <p class="text-lg font-medium">ไม่มีรายการที่ต้องนับในเร็วๆ นี้</p>
+                            <p class="text-sm">ทุกหมวดหมู่ได้รับการตรวจสอบแล้ว</p>
                         </div>
                     @endforelse
                 </div>

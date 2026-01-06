@@ -136,10 +136,16 @@
             </div>
          </div>
          
-        <div class="p-5 overflow-x-auto">
+        {{-- Desktop Table Container --}}
+        <div class="hidden md:block p-5 overflow-x-auto">
             <table class="w-full text-sm text-left text-gray-500 align-middle" id="report-table">
                 {{-- Content from JS --}}
             </table>
+        </div>
+
+        {{-- Mobile Cards Container --}}
+        <div id="report-mobile-results" class="block md:hidden p-4 space-y-4 bg-gray-50 border-t border-gray-100 min-h-[200px]">
+            {{-- Content from JS --}}
         </div>
     </div>
 </div>

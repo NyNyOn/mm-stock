@@ -51,7 +51,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // ✅ 2. เพิ่ม Route รูปภาพไว้ในนี้ (คนที่จะดูต้องมี Token เท่านั้น)
     Route::get('/nas-images/{deptKey}/{filename}', [ImageController::class, 'show'])
         ->where('filename', '.*')
-        ->name('nas.image');
+        ->name('api.v1.nas.image');
 
 
 
