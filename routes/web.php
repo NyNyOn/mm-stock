@@ -166,6 +166,7 @@ Route::middleware('auth')->group(function () {
     Route::prefix('management')->name('management.')->group(function () {
         // === USER MANAGEMENT ===
         Route::get('/users', [UserManagementController::class, 'index'])->name('users.index')->middleware('can:user:manage');
+        Route::post('/users/bulk-update', [UserManagementController::class, 'bulkUpdate'])->name('users.bulkUpdate')->middleware('can:user:manage'); // ✅ Bulk Route
         Route::put('/users/{user}', [UserManagementController::class, 'update'])->name('users.update')->middleware('can:user:manage');
         Route::delete('/users/{user}/remove-group', [UserManagementController::class, 'removeGroup'])->name('users.removeGroup')->middleware('can:user:manage');
 

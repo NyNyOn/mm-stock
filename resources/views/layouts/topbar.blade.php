@@ -14,7 +14,7 @@
                 <div class="hidden sm:flex items-center ml-4 px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-bold rounded-full animate-pulse-soft"
                      title="โหมดข้ามการยืนยันทำงานอยู่: การเบิก/ยืมของคุณจะถูกยืนยันและตัดสต็อกทันที">
                     <i class="fas fa-magic mr-1"></i>
-                    <span>Auto-Confirm Active</span>
+                    <span>ระบบยืนยันอัตโนมัติ</span>
                 </div>
             @endcan
         </div>
@@ -48,14 +48,14 @@
                             <p class="text-sm font-bold text-gray-800 truncate sm:text-lg">{{ Auth::user()->fullname }}</p>
                             <p class="text-xs text-gray-600 sm:text-base">
                                 @if(Auth::user()->id === (int)config('auth.super_admin_id'))
-                                    Administrator
+                                    ผู้ดูแลระบบสูงสุด
                                 @else
-                                    {{ Auth::user()->serviceUserRole?->userGroup?->name ?? 'N/A' }}
+                                    {{ Auth::user()->serviceUserRole?->userGroup?->name ?? 'ไม่ระบุ' }}
                                 @endif
                             </p>
                         @else
-                            <p class="text-sm font-bold text-gray-800 truncate sm:text-lg">Guest User</p>
-                            <p class="text-xs text-gray-600 sm:text-base">Viewer</p>
+                            <p class="text-sm font-bold text-gray-800 truncate sm:text-lg">ผู้เยี่ยมชม</p>
+                            <p class="text-xs text-gray-600 sm:text-base">สิทธิ์การเข้าชม</p>
                         @endauth
                     </div>
                     <i class="hidden text-gray-400 fas fa-chevron-down sm:block"></i>
@@ -69,8 +69,8 @@
                                 <x-user-profile-picture :user="Auth::user()" size="lg" />
                             @endauth
                             <div class="min-w-0">
-                                <p class="font-bold text-gray-800 truncate">{{ Auth::user()->fullname ?? 'Guest User' }}</p>
-                                <p class="text-sm text-gray-500 truncate">{{ Auth::user()->username ?? 'N/A' }}</p>
+                                <p class="font-bold text-gray-800 truncate">{{ Auth::user()->fullname ?? 'ผู้เยี่ยมชม' }}</p>
+                                <p class="text-sm text-gray-500 truncate">{{ Auth::user()->username ?? 'ไม่มีชื่อผู้ใช้' }}</p>
                             </div>
                         </div>
 

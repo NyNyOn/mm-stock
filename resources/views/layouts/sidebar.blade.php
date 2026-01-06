@@ -5,7 +5,7 @@
             'dashboard' => [
                 'icon' => 'fa-tachometer-alt', 
                 'color' => 'blue', 
-                'title' => 'Dashboard', 
+                'title' => 'แดชบอร์ด', 
                 'subtitle' => 'ภาพรวมระบบ', 
                 'permission' => 'dashboard:view'
             ],
@@ -13,14 +13,14 @@
                 'icon' => 'fa-shopping-basket', 
                 'color' => 'orange', 
                 'title' => 'เบิก/ยืม อุปกรณ์', 
-                'subtitle' => 'Withdraw / Borrow', 
+                'subtitle' => 'ทำรายการเบิก-ยืม', 
                 'permission' => 'equipment:borrow'
             ],
             'transactions.index' => [
                 'icon' => 'fa-clock-rotate-left', 
                 'color' => 'purple', 
                 'title' => 'ประวัติธุรกรรม', 
-                'subtitle' => 'Transaction Logs', 
+                'subtitle' => 'บันทึกการใช้งาน', 
                 'permission' => 'transaction:view'
             ],
         ],
@@ -62,7 +62,7 @@
                 'icon' => 'fa-chart-line',
                 'color' => 'pink',       
                 'items' => [
-                    'deadstock.index' => ['icon' => 'fa-box-archive', 'title' => 'Deadstock', 'permission' => 'report:view'],
+                    'deadstock.index' => ['icon' => 'fa-box-archive', 'title' => 'สินค้าค้างสต็อก', 'permission' => 'report:view'],
                     'reports.index' => ['icon' => 'fa-file-csv', 'title' => 'รายงานสรุป', 'permission' => 'report:view'],
                 ]
             ],
@@ -76,7 +76,7 @@
                     'categories.index' => ['icon' => 'fa-tags', 'title' => 'ประเภทอุปกรณ์', 'permission' => 'master-data:manage'],
                     'locations.index' => ['icon' => 'fa-map-location-dot', 'title' => 'สถานที่จัดเก็บ', 'permission' => 'master-data:manage'],
                     'units.index' => ['icon' => 'fa-scale-balanced', 'title' => 'หน่วยนับ', 'permission' => 'master-data:manage'],
-                    'management.tokens.index' => ['icon' => 'fa-key', 'title' => 'API Tokens', 'permission' => 'token:manage'],
+                    'management.tokens.index' => ['icon' => 'fa-key', 'title' => 'จัดการ API', 'permission' => 'token:manage'],
                 ]
             ]
         ]
@@ -122,10 +122,10 @@
                     </div>
                 @endauth
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">{{ Auth::user()->fullname ?? 'Guest User' }}</p>
+                    <p class="text-sm font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">{{ Auth::user()->fullname ?? 'ผู้เยี่ยมชม' }}</p>
                     <p class="text-[11px] text-slate-400 truncate font-medium">
                         @auth
-                            {{ optional(optional(Auth::user()->serviceUserRole)->userGroup)->name ?? 'User' }}
+                            {{ optional(optional(Auth::user()->serviceUserRole)->userGroup)->name ?? 'ผู้ใช้งานทั่วไป' }}
                         @endauth
                     </p>
                 </div>

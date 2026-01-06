@@ -59,6 +59,68 @@ class UserManagementController extends Controller
         return back()->with('success', 'อัปเดตกลุ่มให้ ' . $targetUser->fullname . ' เรียบร้อยแล้ว');
     }
 
+    public function bulkUpdate(Request $request)
+    {
+        // DEBUG LOGGING
+        \Log::info('Bulk Update Request:', $request->all());
+
+        $this->authorize('user:manage');
+        $request->validate([
+            'user_ids' => 'required|array',
+            'user_ids.*' => 'integer', // Relaxed validation: check existence in loop
+            'group_id' => 'required|integer|exists:user_groups,id'
+        ]);
+
+        $actingUser = Auth::user();
+        $newGroup = UserGroup::find($request->input('group_id'));
+        $successCount = 0;
+        $failCount = 0;
+
+        // Check if acting user can assign to this group level
+        if ($actingUser->getRoleLevel() <= $newGroup->hierarchy_level) {
+             \Log::warning('Bulk Update Failed: Insufficient Role Level');
+            return back()->with('error', "คุณไม่มีสิทธิ์กำหนดกลุ่ม '{$newGroup->name}' (ระดับสิทธิ์ไม่เพียงพอ)");
+        }
+
+        foreach ($request->user_ids as $userId) {
+            \Log::info("Looping User ID: $userId");
+            $targetUser = User::find($userId);
+            if (!$targetUser) {
+                \Log::warning("User ID $userId not found in DB");
+                continue;
+            }
+
+            // Check if acting user can manage this specific target user
+            $canManage = $actingUser->can('manage-user-role', $targetUser);
+            \Log::info("Can Manage User $userId? : " . ($canManage ? 'YES' : 'NO'));
+
+            if ($canManage) {
+                // EXPLICIT SAVE LOGIC (Safer for non-incrementing PKs)
+                $role = ServiceUserRole::where('user_id', $targetUser->id)->first();
+                if (!$role) {
+                    $role = new ServiceUserRole();
+                    $role->user_id = $targetUser->id;
+                }
+                $role->group_id = $newGroup->id;
+                $role->save();
+                
+                \Log::info("Saved Role for User $userId -> Group {$newGroup->id}");
+                $successCount++;
+            } else {
+                \Log::warning("Bulk Update Failed for User ID $userId: Cannot manage target user");
+                $failCount++;
+            }
+        }
+        
+        \Log::info("Bulk Update Result: Success=$successCount, Fail=$failCount");
+
+        if ($failCount > 0) {
+            return back()->with('success', "อัปเดตสำเร็จ $successCount คน (ไม่สามารถอัปเดต $failCount คน เนื่องจากระดับสิทธิ์)");
+        }
+
+        return back()->with('success', "อัปเดตกลุ่มสำเร็จ $successCount คน");
+    }
+
     public function removeGroup(Request $request, $userId)
     {
         $targetUser = User::findOrFail($userId);

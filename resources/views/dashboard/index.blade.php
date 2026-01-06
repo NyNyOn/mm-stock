@@ -14,42 +14,103 @@
             $userGroupSlug = Auth::user()->serviceUserRole?->userGroup?->slug;
         @endphp
 
-        {{-- 1.1 Super Admin --}}
+        {{-- 1.1 Super Admin (Soft Luxury Theme - Thai) --}}
         @if(Auth::user()->id === $superAdminId)
-            <div class="flex items-center p-6 mb-6 space-x-6 bg-gradient-to-r from-blue-50 to-cyan-50 soft-card rounded-2xl gentle-shadow soft-hover animate-slide-up-soft">
-                <div class="text-5xl text-yellow-400">
-                    <i class="fas fa-crown"></i>
+            <div class="relative overflow-hidden mb-6 rounded-2xl shadow-sm gentle-shadow animate-slide-up-soft group border border-indigo-100">
+                {{-- Background with Soft Gradient --}}
+                <div class="absolute inset-0 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50"></div>
+                <div class="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-multiply"></div>
+                <div class="absolute top-0 right-0 p-8 opacity-10 transform translate-x-10 -translate-y-5">
+                    <i class="fas fa-crown text-8xl text-indigo-300"></i>
                 </div>
-                <div class="flex-grow">
-                    <h2 class="text-2xl font-bold gradient-text-soft">
-                        ยินดีต้อนรับกลับมา, {{ Auth::user()->fullname }}! (Super Admin)
-                    </h2>
-                    <p class="mt-1 text-gray-600">
-                        ท่านผู้สร้างระบบ! คุณมีสิทธิ์เข้าถึงทุกฟังก์ชัน
-                    </p>
+
+                <div class="relative p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                    <div class="flex items-center space-x-6 z-10">
+                        <div class="flex-shrink-0 w-20 h-20 flex items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-200 text-white">
+                            <i class="fas fa-user-astronaut text-4xl"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <span class="px-3 py-1 text-xs font-bold tracking-wider text-indigo-700 uppercase bg-indigo-100 border border-indigo-200 rounded-full">
+                                    <i class="fas fa-crown mr-1"></i> ผู้ดูแลระดับสูงสุด
+                                </span>
+                            </div>
+                            <h2 class="text-3xl font-bold text-gray-800 tracking-tight">
+                                ยินดีต้อนรับกลับ, <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">{{ Auth::user()->fullname }}</span>
+                            </h2>
+                            <p class="mt-2 text-gray-600 text-sm md:text-base max-w-xl">
+                                ศูนย์บัญชาการระบบ: ควบคุม ตรวจสอบ และจัดการการตั้งค่าทั้งหมดขององค์กรได้จากที่นี่
+                            </p>
+                        </div>
+                    </div>
+
+                    {{-- Quick Action HUD (Soft) --}}
+                    <div class="w-full md:w-auto grid grid-cols-2 md:grid-cols-4 gap-3 z-10">
+                        <a href="{{ route('management.users.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 hover:bg-white border border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all duration-300">
+                            <i class="fas fa-users-cog text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors"></i>
+                            <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700">จัดการผู้ใช้</span>
+                        </a>
+                         <a href="{{ route('maintenance.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 hover:bg-white border border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all duration-300">
+                            <i class="fas fa-tools text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors"></i>
+                            <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700">แจ้งซ่อม</span>
+                        </a>
+                         <a href="{{ route('settings.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 hover:bg-white border border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all duration-300">
+                            <i class="fas fa-cogs text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors"></i>
+                             <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700">ตั้งค่าระบบ</span>
+                        </a>
+                         <a href="{{ route('changelog.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 hover:bg-white border border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all duration-300">
+                            <i class="fas fa-history text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors"></i>
+                             <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700">ประวัติ</span>
+                        </a>
+                    </div>
                 </div>
             </div>
 
-        {{-- 1.2 IT & Admin (แก้ไขเพิ่ม 'itsupport' และรูปแบบอื่นๆ) --}}
+        {{-- 1.2 IT & Admin (Soft Tech Theme - Thai) --}}
         @elseif($userGroupSlug && in_array(strtolower(str_replace(' ', '', $userGroupSlug)), ['it', 'admin', 'administrator', 'administartor', 'itsupport', 'it-support']))
-            <div class="flex items-center p-6 mb-6 space-x-6 bg-gradient-to-r from-green-50 to-emerald-50 soft-card rounded-2xl gentle-shadow soft-hover animate-slide-up-soft">
-                <div class="text-5xl text-green-400">
-                    <i class="fas fa-user-shield"></i>
+             <div class="relative overflow-hidden mb-6 rounded-2xl shadow-sm gentle-shadow animate-slide-up-soft group border border-blue-100">
+                {{-- Background with Soft Tech Gradient --}}
+                <div class="absolute inset-0 bg-gradient-to-r from-sky-50 to-blue-50"></div>
+                <div class="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] mix-blend-multiply"></div>
+                 <div class="absolute -right-10 -bottom-10 opacity-10 transform rotate-12">
+                    <i class="fas fa-shield-alt text-9xl text-blue-400"></i>
                 </div>
-                <div class="flex-grow">
-                    <h2 class="text-2xl font-bold gradient-text-soft">
-                        ยินดีต้อนรับ, {{ Auth::user()->fullname }}!
-                    </h2>
-                    <p class="mt-1 text-gray-600">
-                        คุณอยู่ในกลุ่มผู้ดูแลระบบ ขอให้เป็นวันที่ดีกับการทำงาน!
-                    </p>
-                </div>
-                <div>
-                    <a href="{{ route('management.users.index') }}"
-                       class="px-5 py-3 text-sm font-medium text-blue-700 whitespace-nowrap bg-gradient-to-br from-blue-100 to-blue-200 transition-all rounded-xl hover:shadow-lg button-soft gentle-shadow">
-                        <i class="mr-2 fas fa-users-cog"></i>
-                        <span>จัดการผู้ใช้</span>
-                    </a>
+
+                <div class="relative p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div class="flex items-center space-x-5 z-10 w-full md:w-auto">
+                        <div class="flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-blue-200 text-white">
+                            <i class="fas fa-user-shield text-3xl"></i>
+                        </div>
+                        <div>
+                             <div class="flex items-center gap-3 mb-1">
+                                <span class="px-2 py-0.5 text-[10px] font-bold tracking-wider text-blue-700 uppercase bg-blue-100 border border-blue-200 rounded-md">
+                                    <i class="fas fa-check-circle mr-1"></i> ผู้ดูแลระบบ
+                                </span>
+                            </div>
+                            <h2 class="text-2xl font-bold text-gray-800">
+                                สวัสดี, {{ Auth::user()->fullname }}
+                            </h2>
+                            <p class="mt-1 text-gray-600 text-sm">
+                                สถานะระบบปกติ พร้อมสำหรับการจัดการข้อมูลวันนี้
+                            </p>
+                        </div>
+                    </div>
+
+                     {{-- Admin Quick Links (Soft) --}}
+                     <div class="flex items-center gap-3 z-10 w-full md:w-auto justify-start md:justify-end overflow-x-auto pb-2 md:pb-0">
+                        <a href="{{ route('management.users.index') }}" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg bg-white/70 hover:bg-white border border-blue-200 hover:border-blue-400 transition-all text-blue-700 text-sm font-bold whitespace-nowrap shadow-sm hover:shadow-md">
+                            <i class="fas fa-users"></i>
+                            <span>ผู้ใช้งาน</span>
+                        </a>
+                        <a href="{{ route('management.groups.index') }}" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg bg-white/70 hover:bg-white border border-blue-200 hover:border-blue-400 transition-all text-blue-700 text-sm font-bold whitespace-nowrap shadow-sm hover:shadow-md">
+                            <i class="fas fa-key"></i>
+                            <span>สิทธิ์</span>
+                        </a>
+                        <a href="{{ route('settings.index') }}" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg bg-white/70 hover:bg-white border border-blue-200 hover:border-blue-400 transition-all text-blue-700 text-sm font-bold whitespace-nowrap shadow-sm hover:shadow-md">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>ตั้งค่า</span>
+                        </a>
+                     </div>
                 </div>
             </div>
 
