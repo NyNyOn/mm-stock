@@ -306,7 +306,15 @@
                     <label for="modal_purpose" class="block mb-1 font-medium text-gray-700 dark:text-gray-300">วัตถุประสงค์</label>
                     <select id="modal_purpose" class="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200" required>
                         <option value="">-- กรุณาเลือก --</option>
-                        <option value="general_use">เบิกใช้งานทั่วไป</option>
+                        
+                        @if(isset($customObjectives) && $customObjectives->isNotEmpty())
+                            <optgroup label="วัตถุประสงค์อื่นๆ (เบิกใช้งานทั่วไป)">
+                                @foreach($customObjectives as $obj)
+                                    <option value="{{ $obj->name }}">{{ $obj->name }}</option>
+                                @endforeach
+                            </optgroup>
+                        @endif
+
                         @if(isset($allOpenTickets) && $allOpenTickets->isNotEmpty()) 
                             <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI - IT)" class="dark:bg-gray-600"> 
                                 @forelse ($allOpenTickets->where('source', 'it') as $ticket) 

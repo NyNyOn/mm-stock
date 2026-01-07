@@ -280,19 +280,41 @@
                 document.getElementById('modalEquipment').innerText = txn.equipment?.name || '-';
                 document.getElementById('modalSerial').innerText = txn.equipment?.serial_number || '-';
                 document.getElementById('modalUser').innerText = txn.user?.fullname || '-';
-                document.getElementById('modalType').innerText = (txn.type || '').toUpperCase(); 
-                
+
+                // Type Mapping
+                const typeMap = {
+                    'withdraw': 'เบิกของ',
+                    'borrow': 'ยืมใช้',
+                    'return': 'คืนของ',
+                    'consumable': 'เบิกสิ้นเปลือง',
+                    'returnable': 'ยืมคืน',
+                    'partial_return': 'เบิก(คืนได้)',
+                    'add': 'รับเข้า',
+                    'receive': 'รับเข้า',
+                    'adjust': 'ปรับปรุง'
+                };
+                document.getElementById('modalType').innerText = typeMap[txn.type] || (txn.type || '').toUpperCase();
+
                 // Date
                 const d = new Date(txn.transaction_date);
                 document.getElementById('modalTxDate').innerText = d.toLocaleDateString('th-TH') + ' ' + d.toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'}) + ' น.';
 
-                // Status Styling
+                // Status Styling & Mapping
                 const statusEl = document.getElementById('modalStatus');
                 const iconBg = document.getElementById('modalStatusIconBg');
                 const icon = document.getElementById('modalStatusIcon');
                 const status = txn.status;
 
-                statusEl.innerText = status.toUpperCase();
+                const statusMap = {
+                    'pending': 'รออนุมัติ',
+                    'approved': 'อนุมัติแล้ว',
+                    'shipped': 'จัดส่งแล้ว',
+                    'user_confirm_pending': 'รอรับของ',
+                    'completed': 'สำเร็จ',
+                    'cancelled': 'ยกเลิก',
+                    'rejected': 'ปฏิเสธ'
+                };
+                statusEl.innerText = statusMap[status] || status.toUpperCase();
                 
                 // Reset classes first
                 iconBg.className = 'w-10 h-10 rounded-full flex items-center justify-center transition-colors';
@@ -323,15 +345,35 @@
                     let pText = txn.purpose;
                     if (pText === 'general_use') pText = 'เบิกใช้งานทั่วไป';
                     else if (pText && pText.startsWith('glpi-')) {
-                        pText = txn.glpi_ticket_id ? 'GLPI Ticket #' + txn.glpi_ticket_id : 'อ้างอิง Ticket';
+                        const ticketId = txn.glpi_ticket_id || pText.split('-')[2] || '?';
+                        let ticketName = '';
+                        
+                        // Try to get name from relation or appended attribute
+                        if (txn.glpi_ticket && txn.glpi_ticket.name) {
+                            ticketName = txn.glpi_ticket.name;
+                        } else if (txn.glpi_ticket_relation && txn.glpi_ticket_relation.name) {
+                            ticketName = txn.glpi_ticket_relation.name;
+                        }
+
+                        pText = 'GLPI Ticket #' + ticketId;
+                        if (ticketName) {
+                            pText += ': ' + ticketName;
+                        }
                     }
                     // แสดงวัตถุประสงค์อย่างเดียว ไม่ต้องมี prefix เพราะหัวข้อ Modal บอกแล้ว
                     displayText = pText;
                 }
 
                 if(txn.notes) {
-                    if(displayText) displayText += '\n'; // ขึ้นบรรทัดใหม่ถ้ามีวัตถุประสงค์ก่อนหน้า
-                    displayText += txn.notes;
+                    let cleanNotes = txn.notes;
+                    // Remove auto-generated GLPI reference from notes to avoid duplication with the header
+                    // Matches "อ้างอิงใบงาน GLPI #123" or "อ้างอิง GLPI #123" at start of string
+                    cleanNotes = cleanNotes.replace(/^อ้างอิง(ใบงาน)?\s*GLPI\s*#\d+\s*/i, '').trim();
+
+                    if(cleanNotes) {
+                        if(displayText) displayText += '\n';
+                        displayText += cleanNotes;
+                    }
                 }
                 
                 document.getElementById('modalNotes').innerText = displayText || '-';

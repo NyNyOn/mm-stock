@@ -76,6 +76,7 @@
                     'categories.index' => ['icon' => 'fa-tags', 'title' => 'ประเภทอุปกรณ์', 'permission' => 'master-data:manage'],
                     'locations.index' => ['icon' => 'fa-map-location-dot', 'title' => 'สถานที่จัดเก็บ', 'permission' => 'master-data:manage'],
                     'units.index' => ['icon' => 'fa-scale-balanced', 'title' => 'หน่วยนับ', 'permission' => 'master-data:manage'],
+                    'custom-objectives.index' => ['icon' => 'fa-list-check', 'title' => 'วัตถุประสงค์', 'permission' => 'master-data:manage'],
                     'management.tokens.index' => ['icon' => 'fa-key', 'title' => 'จัดการ API', 'permission' => 'token:manage'],
                 ]
             ]

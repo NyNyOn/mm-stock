@@ -192,6 +192,10 @@ Route::middleware('auth')->group(function () {
         Route::resource('categories', CategoryController::class)->except(['create', 'edit']);
         Route::resource('locations', LocationController::class)->except(['create', 'edit']);
         Route::resource('units', UnitController::class)->except(['create', 'edit']);
+        
+        // Custom Objectives
+        Route::resource('custom-objectives', \App\Http\Controllers\CustomObjectiveController::class)->except(['create', 'show', 'edit']);
+        Route::patch('/custom-objectives/{customObjective}/toggle', [\App\Http\Controllers\CustomObjectiveController::class, 'toggleStatus'])->name('custom-objectives.toggle');
     });
 
     Route::middleware('can:po:create')->group(function () {

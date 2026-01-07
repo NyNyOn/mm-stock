@@ -76,8 +76,15 @@
     {{-- ✅ เพิ่ม Template สำหรับ Purpose (ซ่อนอยู่) เพื่อให้ Javascript ดึงไปใช้ --}}
     <div id="purpose-options-template" class="hidden">
         <option value="">-- กรุณาเลือก --</option>
-        <option value="general_use">เบิกใช้งานทั่วไป</option>
         
+        @if(isset($customObjectives) && $customObjectives->isNotEmpty())
+            <optgroup label="วัตถุประสงค์อื่นๆ (เบิกใช้งานทั่วไป)">
+                @foreach($customObjectives as $obj)
+                    <option value="{{ $obj->name }}">{{ $obj->name }}</option>
+                @endforeach
+            </optgroup>
+        @endif
+
         @if(isset($allOpenTickets) && $allOpenTickets->isNotEmpty()) 
             <optgroup label="อ้างอิงใบแจ้งซ่อม (GLPI - IT)"> 
                 @foreach ($allOpenTickets->where('source', 'it') as $ticket) 

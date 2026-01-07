@@ -16,19 +16,19 @@
     <div class="relative w-full max-w-5xl max-h-[90vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden transform transition-all scale-100 mx-4 dark:bg-gray-800 animate-slide-up-soft border border-gray-200 dark:border-gray-700">
 
         {{-- Header --}}
-        <div class="flex items-center justify-between px-8 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-600 text-white flex-shrink-0 z-10 shadow-lg">
+        <div class="flex items-center justify-between px-8 py-5 bg-white text-gray-800 flex-shrink-0 z-10 shadow-[0_0_25px_rgba(6,182,212,0.25)] border-b-4 border-cyan-50">
             <div class="flex items-center gap-4">
-                <div class="p-3 bg-white/20 rounded-2xl backdrop-blur-md border border-white/10 shadow-inner">
-                    <i class="fas fa-cube text-2xl text-white drop-shadow-md"></i>
+                <div class="p-3 bg-cyan-50 rounded-2xl border border-cyan-100 shadow-sm">
+                    <i class="fas fa-cube text-2xl text-cyan-500 drop-shadow-sm"></i>
                 </div>
                 <div>
-                    <h3 class="text-2xl font-extrabold tracking-wide leading-none text-white drop-shadow-sm">รายละเอียดอุปกรณ์</h3>
+                    <h3 class="text-2xl font-extrabold tracking-wide leading-none text-gray-800 drop-shadow-sm">รายละเอียดอุปกรณ์</h3>
                     <p class="text-xs text-indigo-100 font-light mt-1 opacity-90 tracking-wider uppercase">Equipment Details & Information</p>
                 </div>
             </div>
             {{-- Close Button --}}
-            <button onclick="forceCloseDetails()" class="group bg-white/10 hover:bg-white/20 p-2.5 rounded-full transition-all duration-200 focus:outline-none border border-transparent hover:border-white/30">
-                <i class="fas fa-times text-lg text-white/80 group-hover:text-white group-hover:rotate-90 transition-transform duration-300"></i>
+            <button onclick="forceCloseDetails()" class="group bg-gray-50 hover:bg-red-50 p-2.5 rounded-full transition-all duration-200 focus:outline-none border border-gray-100 hover:border-red-100">
+                <i class="fas fa-times text-lg text-gray-400 group-hover:text-red-500 group-hover:rotate-90 transition-transform duration-300"></i>
             </button>
         </div>
 
@@ -39,9 +39,9 @@
             <div id="details-loading" class="flex flex-col items-center justify-center py-24">
                 <div class="relative">
                     <div class="w-20 h-20 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-                    <div class="absolute top-0 left-0 w-20 h-20 border-4 border-transparent border-b-purple-500 rounded-full animate-spin-reverse"></div>
+                    <div class="absolute top-0 left-0 w-20 h-20 border-4 border-transparent border-b-cyan-400 rounded-full animate-spin-reverse"></div>
                 </div>
-                <p class="text-indigo-500 dark:text-indigo-400 mt-6 font-bold animate-pulse tracking-wide">กำลังโหลดข้อมูล...</p>
+                <p class="text-cyan-500 dark:text-cyan-400 mt-6 font-bold animate-pulse tracking-wide">กำลังโหลดข้อมูล...</p>
             </div>
             
             {{-- Error --}}
@@ -201,7 +201,7 @@
                     id="details-edit-btn" 
                     type="button" 
                     style="display: none;" {{-- ซ่อนปุ่มโดยค่าเริ่มต้น, JS (equipment.js) จะควบคุมการแสดงผลตามสิทธิ์และสถานะ Frozen --}}
-                    class="flex items-center px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 border border-transparent rounded-xl text-sm font-bold text-white shadow-md hover:shadow-lg hover:scale-105 hover:from-indigo-500 hover:to-purple-500 transition-all duration-200"
+                    class="flex items-center px-6 py-2.5 bg-white hover:bg-cyan-50 border border-cyan-200 rounded-xl text-sm font-bold text-cyan-600 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200"
                 >
                     <i class="fas fa-edit mr-2"></i> แก้ไขข้อมูล
                 </button>

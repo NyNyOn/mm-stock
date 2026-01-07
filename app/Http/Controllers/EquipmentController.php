@@ -280,11 +280,15 @@ class EquipmentController extends Controller
             $allOpenTickets = $allOpenTickets->sortByDesc('id');
 
             $unconfirmedCount = Transaction::where('user_id', Auth::id())->where('status', 'shipped')->count();
+            
+            // ✅ Fetch Custom Objectives
+            $customObjectives = \App\Models\CustomObjective::where('is_active', true)->orderBy('created_at', 'desc')->get();
+
 
             return view('user.equipment.index', compact(
                 'equipments', 'aggregatedResults', 'categories', 'unconfirmedCount',
                 'allOpenTickets', 'showGlpiSection', 'departments', 'currentDeptKey',
-                'defaultDeptKey', 'currentView', 'myEquipment'
+                'defaultDeptKey', 'currentView', 'myEquipment', 'customObjectives'
             ));
 
         } catch (\Exception $e) {

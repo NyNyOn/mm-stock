@@ -218,12 +218,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function itemHasLink(i) { return !!i.id; }
 
     function renderTransactionHistory(data) {
-        let table = `<thead class="bg-gray-50 text-xs text-gray-700 uppercase"><tr><th class="px-4 py-3">วันที่</th><th class="px-4 py-3 text-center">รูป</th><th>อุปกรณ์</th><th>รายการ</th><th class="text-right">จำนวน</th><th>ผู้ทำ</th><th>หมายเหตุ</th></tr></thead><tbody>`;
+        let table = `<thead class="bg-gray-50 text-xs text-gray-700 uppercase"><tr><th class="px-4 py-3">วันที่</th><th class="px-4 py-3 text-center">รูป</th><th>อุปกรณ์</th><th>รายการ</th><th class="text-right">จำนวน</th><th>ผู้ทำ</th><th>วัตถุประสงค์</th><th>หมายเหตุ</th></tr></thead><tbody>`;
         let mobile = '';
 
         if (!data.length) {
             return {
-                table: table + '<tr><td colspan="7" class="p-8 text-center">ไม่พบข้อมูล</td></tr></tbody>',
+                table: table + '<tr><td colspan="8" class="p-8 text-center text-gray-500">ไม่พบข้อมูล</td></tr></tbody>',
                 mobile: '<div class="p-8 text-center text-gray-500 bg-white rounded-xl">ไม่พบข้อมูล</div>'
             };
         }
@@ -233,8 +233,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const typeClass = tx.quantity_change >= 0 ? 'text-green-600' : 'text-red-600';
             const changeSymbol = tx.quantity_change >= 0 ? '+' : '';
 
+            // Purpose Translation Logic
+            let purposeText = '-';
+            if (tx.purpose === 'general_use') purposeText = '<span class="text-gray-500 italic">เบิกใช้งานทั่วไป</span>';
+            else if (tx.purpose === 'glpi_ticket') purposeText = '<span class="text-blue-600">GLPI #' + (tx.glpi_ticket_id || '?') + '</span>';
+            else if (tx.purpose && tx.purpose.startsWith('glpi-')) purposeText = '<span class="text-blue-600">GLPI Ticket</span>';
+            else if (tx.purpose) purposeText = `<span class="font-medium text-gray-700">${tx.purpose}</span>`;
+
             // Table
-            table += `<tr class="border-b hover:bg-gray-50"><td class="px-4 py-3 text-xs">${formatDate(tx.transaction_date)}</td><td class="px-4 py-3 flex justify-center">${renderImageCell(eq)}</td><td class="px-4 py-3 font-medium">${eq.id ? renderClickableName(eq) : eq.name}</td><td class="px-4 py-3 font-bold uppercase">${tx.type}</td><td class="px-4 py-3 text-right font-mono font-bold ${typeClass}">${Math.abs(tx.quantity_change)}</td><td class="px-4 py-3">${get(tx, 'user.fullname')}</td><td class="px-4 py-3 text-sm">${tx.notes || '-'}</td></tr>`;
+            table += `<tr class="border-b hover:bg-gray-50"><td class="px-4 py-3 text-xs whitespace-nowrap">${formatDate(tx.transaction_date)}</td><td class="px-4 py-3 flex justify-center">${renderImageCell(eq)}</td><td class="px-4 py-3 font-medium">${eq.id ? renderClickableName(eq) : eq.name}</td><td class="px-4 py-3 font-bold uppercase text-xs">${getBadge(tx.type)}</td><td class="px-4 py-3 text-right font-mono font-bold ${typeClass}">${Math.abs(tx.quantity_change)}</td><td class="px-4 py-3 text-xs">${get(tx, 'user.fullname')}</td><td class="px-4 py-3 text-xs">${purposeText}</td><td class="px-4 py-3 text-xs text-gray-500">${tx.notes || '-'}</td></tr>`;
 
             // Mobile
             mobile += `
@@ -246,11 +253,15 @@ document.addEventListener('DOMContentLoaded', function () {
                              <div class="text-xs font-bold ${typeClass}">${changeSymbol}${tx.quantity_change}</div>
                          </div>
                          <h4 class="font-bold text-gray-800 text-sm mb-1 truncate">${eq.id ? renderClickableName(eq) : eq.name}</h4>
-                         <div class="flex justify-between items-center text-xs">
-                             <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded uppercase font-bold tracking-wider text-[10px]">${tx.type}</span>
-                             <span class="text-gray-500 truncate max-w-[100px]"><i class="far fa-user mr-1"></i> ${get(tx, 'user.fullname')}</span>
+                         <div class="flex flex-wrap gap-2 mb-2">
+                             ${getBadge(tx.type)}
+                             <span class="text-xs text-gray-500 flex items-center"><i class="far fa-user mr-1"></i> ${get(tx, 'user.fullname')}</span>
                          </div>
-                         ${tx.notes ? `<div class="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">${tx.notes}</div>` : ''}
+                         
+                         <div class="bg-gray-50 rounded p-2 space-y-1">
+                            <div class="text-xs"><span class="font-bold text-gray-600">วัตถุประสงค์:</span> ${purposeText}</div>
+                            ${tx.notes ? `<div class="text-xs text-gray-500"><span class="font-bold text-gray-600">Note:</span> ${tx.notes}</div>` : ''}
+                         </div>
                     </div>
                 </div>
             `;

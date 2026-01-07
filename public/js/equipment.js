@@ -56,11 +56,15 @@ if (typeof window.getTransactionTypeText === 'undefined') {
     window.getTransactionTypeText = function (type) {
         const types = {
             receive: 'รับเข้า',
-            withdraw: 'เบิก',
+            withdraw: 'เบิก (Admin)',
             adjust: 'ปรับสต็อก',
-            borrow: 'ยืม',
+            borrow: 'ยืม (Admin)',
             return: 'คืน',
-            stock_check: 'ตรวจนับ'
+            partial_return: 'เหลือแบบคืนได้',
+            stock_check: 'ตรวจนับ',
+            consumable: 'เบิก (สิ้นเปลือง)',
+            returnable: 'ยืม (ต้องคืน)',
+            add: 'เพิ่มจำนวน'
         };
         return types[type] || type;
     }
@@ -844,28 +848,76 @@ function populateDetails(item) {
     const firstTab = document.querySelector("[onclick*='details-tab-main']");
     if (firstTab) switchDetailsTab(firstTab, 'details-tab-main');
 
+    // Helper: Transaction Icon
+    const getTransactionIcon = (type) => {
+        const icons = {
+            receive: '<i class="fas fa-truck-loading"></i>',       // รับเข้า (รถขนของ)
+            withdraw: '<i class="fas fa-dolly"></i>',              // เบิก (รถเข็นของออก)
+            adjust: '<i class="fas fa-wrench"></i>',               // ปรับสต็อก (เครื่องมือ)
+            borrow: '<i class="fas fa-hand-holding-heart"></i>',   // ยืม (มือถือหัวใจ/ของ)
+            return: '<i class="fas fa-check-circle"></i>',         // คืน (เช็คถูก/เสร็จสิ้น)
+            partial_return: '<i class="fas fa-hourglass-half"></i>', // คืนบางส่วน (นาฬิกาทราย/ยังไม่จบ)
+            stock_check: '<i class="fas fa-tasks"></i>',           // ตรวจนับ (รายการงาน)
+            consumable: '<i class="fas fa-box-open"></i>',         // เบิกสิ้นเปลือง (กล่องเปิดใช้งาน)
+            returnable: '<i class="fas fa-retweet"></i>',          // ยืมคืน (ลูกศรหมุนวน)
+            add: '<i class="fas fa-plus-square"></i>'              // เพิ่ม (บวก)
+        };
+        return icons[type] || '<i class="fas fa-circle"></i>';
+    };
+
+    // Helper: Transaction Color
+    const getTransactionColor = (type) => {
+        const colors = {
+            receive: 'emerald',      // Green
+            return: 'emerald',
+            add: 'emerald',
+
+            withdraw: 'rose',        // Red
+            consumable: 'rose',
+
+            borrow: 'amber',         // Orange (Temporary)
+            returnable: 'amber',
+            partial_return: 'amber',
+
+            adjust: 'indigo',        // Blue/Purple (System)
+            stock_check: 'blue'
+        };
+        return colors[type] || 'gray';
+    };
+
     const historyBox = document.getElementById('details-transactions');
     if (historyBox) {
         historyBox.innerHTML = '';
         if (item.transactions && item.transactions.length > 0) {
             item.transactions.forEach(t => {
                 const isPlus = t.quantity_change >= 0;
+                const icon = getTransactionIcon(t.type);
+                const color = getTransactionColor(t.type);
                 const div = document.createElement('div');
-                div.className = `p-2.5 border-b text-xs mb-1 last:border-0`;
+                div.className = `p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors rounded-lg`;
                 div.innerHTML = `
-                    <div class="flex justify-between font-bold text-gray-700">
-                        <span>${window.getTransactionTypeText(t.type)}</span>
-                        <span class="font-mono text-gray-400">${window.formatDateTime(t.transaction_date)}</span>
-                    </div>
-                    <div class="flex justify-between text-gray-500 mt-0.5">
-                        <span>${t.user?.fullname || 'System'}</span>
-                        <span class="${isPlus ? 'text-green-600' : 'text-red-600'} font-bold">(${isPlus ? '+' : ''}${t.quantity_change})</span>
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-${color}-50 text-${color}-500 flex items-center justify-center shadow-sm text-sm border border-${color}-100">
+                                ${icon}
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-700 leading-tight">${window.getTransactionTypeText(t.type)}</p>
+                                <p class="text-[10px] text-gray-400 font-medium">${t.user?.fullname || 'System'}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                             <span class="font-mono text-[10px] text-gray-400 block mb-0.5">${window.formatDateTime(t.transaction_date)}</span>
+                             <span class="${isPlus ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-red-500 bg-red-50 border-red-100'} text-xs font-bold px-2 py-0.5 rounded-md border inline-block">
+                                ${isPlus ? '+' : ''}${t.quantity_change}
+                             </span>
+                        </div>
                     </div>
                 `;
                 historyBox.appendChild(div);
             });
         } else {
-            historyBox.innerHTML = '<div class="text-center text-gray-400 text-xs py-4">ไม่มีประวัติ</div>';
+            historyBox.innerHTML = '<div class="flex flex-col items-center justify-center py-8 text-gray-400 opacity-60"><i class="fas fa-history text-3xl mb-2"></i><span class="text-xs">ไม่มีประวัติการเคลื่อนไหว</span></div>';
         }
     }
 
