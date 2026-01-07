@@ -57,6 +57,20 @@ class TransactionController extends Controller
         }
     }
 
+    private function checkPendingConfirmations($userId)
+    {
+        $hasPending = Transaction::where('user_id', $userId)
+            ->whereIn('status', ['shipped', 'user_confirm_pending'])
+            ->exists();
+
+        if ($hasPending) {
+            $user = User::select('fullname')->find($userId);
+            $name = $user ? $user->fullname : "ผู้ใช้";
+            return "ไม่สามารถทำรายการได้: คุณ {$name} ยังมีรายการค้างรับของ (Shipped) \nกรุณากดรับของ (Confirm Receipt) ในระบบก่อนทำรายการใหม่";
+        }
+        return null;
+    }
+
     // =========================================================================
     // 1. LIST & SHOW
     // =========================================================================
@@ -367,6 +381,11 @@ class TransactionController extends Controller
             }
         }
 
+        // ✅ CHECK: ตรวจสอบรายการค้างรับ (Shipped)
+        if ($pendingError = $this->checkPendingConfirmations($targetUserId)) {
+            return response()->json(['success' => false, 'message' => $pendingError], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'equipment_id'   => 'required|integer|exists:equipments,id',
             'type'           => ['required', Rule::in(['consumable', 'returnable', 'partial_return'])],
@@ -492,6 +511,17 @@ class TransactionController extends Controller
                     'message' => "คุณมีรายการอุปกรณ์ที่ยังไม่ได้ให้คะแนน",
                     'unrated_items' => $unratedTransactions->values()
                 ], 403);
+            }
+        }
+
+        // ✅ CHECK: ตรวจสอบรายการค้างรับ (Shipped) สำหรับผู้รับทุกคนในรายการ
+        $allReceivers = collect($request->items)->map(function($item) use ($loggedInUser) {
+            return $item['receiver_id'] ?? $loggedInUser->id;
+        })->unique();
+
+        foreach ($allReceivers as $uid) {
+            if ($pendingError = $this->checkPendingConfirmations($uid)) {
+                return response()->json(['message' => $pendingError], 403);
             }
         }
 
