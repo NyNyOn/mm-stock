@@ -67,9 +67,14 @@ class DashboardController extends Controller
             })
             ->filter()
             ->sortBy('days_left')
-            ->values()
-            ->values()
-            ->take(20);
+            ->values();
+
+        // --- 1.2 Summary for Notifications (Count ALL, no limit) ---
+        $lockedStockCount = $stockCycles->where('status', 'locked')->count();
+        $warningStockCount = $stockCycles->where('status', 'warning')->count();
+
+        // Limit for Display List
+        $stockCycles = $stockCycles->take(20);
 
         // --- 2. รายการนัดหมาย (Scheduled) ---
         $scheduledStockChecks = StockCheck::with(['items.equipment.category'])
@@ -104,7 +109,8 @@ class DashboardController extends Controller
             'job_order_count',
             'available_years', 'categories',
             'on_order_items', 'out_of_stock_items', 'low_stock_items', 'recent_activities',
-            'scheduledStockChecks', 'stockCycles'
+            'scheduledStockChecks', 'stockCycles',
+            'lockedStockCount', 'warningStockCount'
         ));
     }
 

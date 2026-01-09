@@ -312,14 +312,16 @@
                     'user_confirm_pending': 'รอรับของ',
                     'completed': 'สำเร็จ',
                     'cancelled': 'ยกเลิก',
-                    'rejected': 'ปฏิเสธ'
+                    'rejected': 'ปฏิเสธ',
+                    'returned': 'คืนของแล้ว',
+                    'borrowed': 'ยืมอยู่',
                 };
                 statusEl.innerText = statusMap[status] || status.toUpperCase();
                 
                 // Reset classes first
                 iconBg.className = 'w-10 h-10 rounded-full flex items-center justify-center transition-colors';
                 
-                if(status === 'completed') {
+                if(status === 'completed' || status === 'returned') {
                     statusEl.className = 'text-sm font-bold text-emerald-600';
                     iconBg.classList.add('bg-emerald-100', 'text-emerald-600');
                     icon.className = 'fas fa-check';

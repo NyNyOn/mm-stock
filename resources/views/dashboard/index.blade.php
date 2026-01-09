@@ -534,8 +534,18 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <script>
-        window.lockedStockCount = {{ $stockCycles->where('status', 'locked')->count() }};
-        window.warningStockCount = {{ $stockCycles->where('status', 'warning')->count() }};
+        // ✅ Updated: รับค่าจาก Controller โดยตรง (แม่นยำกว่า)
+        window.lockedStockCount = {{ $lockedStockCount ?? 0 }};
+        window.warningStockCount = {{ $warningStockCount ?? 0 }};
+        
+        // ✅ Check Permissions for Notification
+        @php
+             $isSuperAdmin = Auth::user()->id === (int)config('app.super_admin_id', 9);
+             $userGroupSlug = Auth::user()->serviceUserRole?->userGroup?->slug;
+             $slugLower = $userGroupSlug ? strtolower($userGroupSlug) : '';
+             $isAdminOrIT = in_array($slugLower, ['it', 'admin', 'administrator', 'itsupport', 'it-support']);
+        @endphp
+        window.canNotifyStock = {{ ($isSuperAdmin || $isAdminOrIT) ? 'true' : 'false' }};
 
         // ========================================================
         // 🎨 CHART COLORS CONFIGURATION (ค่าเริ่มต้นที่ใช้ถ้าไม่มีใน localStorage)

@@ -119,6 +119,8 @@
                     // สองสถานะนี้จะถูกจัดการเป็นพิเศษด้านล่าง (Red Strikethrough)
                     'cancelled' => ['label' => 'ยกเลิก'], 
                     'rejected' => ['label' => 'ปฏิเสธ'],
+                    'returned' => ['bg' => 'bg-green-100', 'text' => 'text-green-800', 'label' => 'คืนของแล้ว', 'icon' => 'fa-check'], // ✅ Added
+                    'borrowed' => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-800', 'label' => 'ยืมอยู่', 'icon' => 'fa-clock'], // ✅ Added
                 ];
                 
                 $sc = $statusMap[$txn->status] ?? ['bg' => 'bg-gray-100', 'text' => 'text-gray-600', 'label' => $txn->status, 'icon' => 'fa-circle'];

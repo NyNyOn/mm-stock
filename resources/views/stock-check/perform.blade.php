@@ -173,6 +173,13 @@
                             class="px-4 py-2 text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
                         <i class="fas fa-undo mr-1"></i> เริ่มนับใหม่
                     </button>
+
+                    {{-- ✅ [NEW] ปุ่มกดครบทั้งหมด --}}
+                    <button type="button" 
+                            onclick="markAllAsComplete()"
+                            class="px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors">
+                        <i class="fas fa-check-double mr-1"></i> ครบทั้งหมด
+                    </button>
                 </div>
 
                 <div class="flex items-center gap-3 ml-auto">
@@ -292,6 +299,32 @@
         document.getElementById('stock-check-form').submit();
     }
 
+    // ✅ ฟังก์ชันกดครบทั้งหมด
+    function markAllAsComplete() {
+        // เลือกทุกปุ่ม "ครบ" ที่ยังแสดงอยู่ (ยังไม่ได้กด)
+        const buttons = document.querySelectorAll('div[id^="actions-"]:not(.hidden) button[onclick^="markAsCorrect"]');
+        
+        if (buttons.length === 0) {
+            Swal.fire('Info', 'คุณได้นับครบทุกรายการแล้ว', 'info');
+            return;
+        }
+
+        Swal.fire({
+            title: 'ยืนยันการนับทั้งหมด?',
+            text: `กำลังจะทำเครื่องหมายว่า "ครบ" สำหรับ ${buttons.length} รายการที่เหลือ`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'ยืนยัน, เหมาหมด!',
+            cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#4f46e5'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                buttons.forEach(btn => btn.click());
+                Swal.fire('เรียบร้อย!', 'บันทึกรายการทั้งหมดว่า "ครบ" แล้ว', 'success');
+            }
+        });
+    }
+
     // --- Stock Check Functions (Logic เดิม) ---
     function markAsCorrect(id, expectedQty) {
         document.getElementById(`input-qty-${id}`).value = expectedQty;
@@ -300,6 +333,7 @@
         highlightRow(id, true);
         updateProgress();
     }
+
 
     function showManualInput(id) {
         toggleState(id, 'manual');
