@@ -90,6 +90,11 @@
                     'adjust' => ['bg' => 'bg-gray-100', 'text' => 'text-gray-800', 'label' => 'ปรับปรุง', 'icon' => 'fa-sliders-h'],
                 ];
                 $tc = $typeMap[$txn->type] ?? ['bg' => 'bg-gray-100', 'text' => 'text-gray-600', 'label' => ucfirst($txn->type), 'icon' => 'fa-circle'];
+
+                // ✅ Override for Write-off (Consumed)
+                if ($txn->type === 'adjust' && $txn->quantity_change == 0) {
+                    $tc = ['bg' => 'bg-gray-50', 'text' => 'text-gray-500', 'label' => 'ใช้หมดแล้ว', 'icon' => 'fa-check-double'];
+                }
             @endphp
             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold {{ $tc['bg'] }} {{ $tc['text'] }}">
                 <i class="fas {{ $tc['icon'] }} mr-1.5"></i> {{ $tc['label'] }}

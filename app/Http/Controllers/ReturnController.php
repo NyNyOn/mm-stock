@@ -113,14 +113,23 @@ class ReturnController extends Controller
                 $maintenanceEquipment->notes = "Split from stock for repair from original equipment ID: " . $equipment->id . ". Ref TXN-{$newReturnTransaction->id}";
                 $maintenanceEquipment->save();
 
+                $maintenanceEquipment->save();
+
                 // สร้าง Log การส่งซ่อม
-                MaintenanceLog::create([
+                $log = MaintenanceLog::create([
                     'equipment_id' => $maintenanceEquipment->id,
                     'transaction_id' => $newReturnTransaction->id,
                     'reported_by_user_id' => Auth::id(), // ผู้ดำเนินการ (handler) เป็นคนแจ้ง
                     'problem_description' => $request->input('problem_description', 'Not specified'),
                     'status' => 'pending', // สถานะ "รอซ่อม"
                 ]);
+
+                // ✅ แจ้งเตือน Send for Repair
+                try {
+                     (new \App\Services\SynologyService())->notify(
+                        new \App\Notifications\EquipmentSentForRepair($maintenanceEquipment, $log)
+                     );
+                } catch (\Exception $e) { Log::error("Notify Repair Sent Error: " . $e->getMessage()); }
 
             } else {
                 // Logic สำหรับของสภาพดี
@@ -130,6 +139,13 @@ class ReturnController extends Controller
 
             // บันทึกการเปลี่ยนแปลงของ Equipment (ถ้ามี เช่นการ increment)
             $equipment->save();
+
+            // ✅ แจ้งเตือน Item Returned (เฉพาะกรณีคืนปกติ หรือคืนแล้วเสียก็แจ้งว่าได้รับคืนแล้ว)
+            try {
+                 (new \App\Services\SynologyService())->notify(
+                    new \App\Notifications\ItemReturned($newReturnTransaction->load('equipment', 'user'))
+                 );
+            } catch (\Exception $e) { Log::error("Notify Return Error: " . $e->getMessage()); }
 
             DB::commit();
             return back()->with('success', 'ดำเนินการรับคืนอุปกรณ์เรียบร้อยแล้ว!');

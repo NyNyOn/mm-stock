@@ -59,9 +59,16 @@ class RequestApproved extends Notification
 
             $equipmentName = $this->transaction->equipment->name ?? 'N/A'; // Use null coalescing
             $transactionUrl = route('user.equipment.index'); // Link to user's equipment page
+            
+            // ✅ เพิ่มข้อมูลจำนวนคงเหลือ
+            $quantity = abs($this->transaction->quantity_change);
+            $remaining = $this->transaction->equipment->quantity; // ค่าปัจจุบันหลังจากตัดแล้ว
+            $unit = $this->transaction->equipment->unit->name ?? 'ชิ้น';
+
             $message = "👍 **คำขออนุมัติแล้ว (ถึง @{$requesterName})**\n" .
                        "📝 **อุปกรณ์:** {$equipmentName}\n" .
-                       "🚚 **สถานะ:** กำลังจัดส่ง\n" .
+                       "📉 **เบิก:** {$quantity} {$unit} | 📦 **คงเหลือ:** {$remaining} {$unit}\n" .
+                       "🚚 **สถานะ:** อนุมัติแล้ว (เตรียมจัดส่ง/รับของ)\n" .
                        "*กรุณากดยืนยันในระบบเมื่อได้รับของ*\n" .
                        "📌 **URL:** {$transactionUrl}";
 

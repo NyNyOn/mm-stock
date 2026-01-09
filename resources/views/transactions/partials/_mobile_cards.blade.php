@@ -31,6 +31,11 @@
         ];
         $tc = $typeMap[$txn->type] ?? ['bg' => 'bg-gray-100', 'text' => 'text-gray-600', 'label' => ucfirst($txn->type), 'icon' => 'fa-circle'];
 
+        // ✅ Override for Write-off (Consumed)
+        if ($txn->type === 'adjust' && $txn->quantity_change == 0) {
+            $tc = ['bg' => 'bg-gray-50', 'text' => 'text-gray-500', 'label' => 'ใช้หมดแล้ว', 'icon' => 'fa-check-double'];
+        }
+
         // Status Logic
         $statusMap = [
             'pending' => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-800', 'label' => 'รออนุมัติ', 'icon' => 'fa-hourglass-start'],
@@ -134,13 +139,21 @@
 
             {{-- Action Buttons (Right) --}}
             <div class="flex items-center gap-2">
-                 {{-- 1. Rating --}}
+                {{-- 1. Rating --}}
                  @if($txn->status === 'completed' && in_array($txn->type, ['consumable', 'returnable', 'partial_return', 'borrow', 'withdraw']))
                     @if($txn->rating)
-                         <div class="flex text-yellow-400 space-x-0.5 text-xs" title="ให้คะแนนแล้ว">
-                            <i class="fas fa-star"></i>
-                            <span class="text-gray-500 font-bold ml-1">{{ number_format($txn->rating->rating_score, 1) }}</span>
-                         </div>
+                         @if(is_null($txn->rating->rating_score))
+                             {{-- Not Used / N/A --}}
+                             <div class="flex items-center space-x-1 text-xs" title="ประเมินแล้ว: ยังไม่เคยใช้งาน">
+                                <span class="text-gray-400 font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">📦 ยังไม่ใช้</span>
+                             </div>
+                         @else
+                             {{-- Rated --}}
+                             <div class="flex text-yellow-400 space-x-0.5 text-xs" title="ให้คะแนนแล้ว">
+                                <i class="fas fa-star"></i>
+                                <span class="text-gray-500 font-bold ml-1">{{ number_format($txn->rating->rating_score, 1) }}</span>
+                             </div>
+                         @endif
                     @elseif(Auth::id() === $txn->user_id)
                         <button onclick="openRatingModal('{{ route('transactions.rate', $txn->id) }}', '{{ $txn->type == 'borrow' ? 'borrow' : ($txn->equipment->is_consumable ? 'one_way' : 'return_consumable') }}')" 
                                 class="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded text-xs font-bold transition-colors">

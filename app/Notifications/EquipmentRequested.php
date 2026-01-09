@@ -50,6 +50,7 @@ class EquipmentRequested extends Notification
             $dateOpened = $this->transaction->transaction_date->format('d-m-Y H:i');
             $transactionUrl = route('transactions.index');
             $quantity = abs($this->transaction->quantity_change);
+            $remaining = $this->transaction->equipment->quantity;
             $unit = $this->transaction->equipment->unit->name ?? 'ชิ้น';
 
             // ✅✅✅ 4. แก้ไข Logic การสร้างข้อความ (ใช้ $submitter) ✅✅✅
@@ -60,25 +61,42 @@ class EquipmentRequested extends Notification
 
             $message = "";
 
+            // ตรวจสอบสถานะรายการ
+            $statusLabel = "🟠 รออนุมัติ (Pending)";
+            $headerText = "📢 **มีคำขอใหม่ใน WH Stock Pro**";
+
+            if ($this->transaction->status === 'completed') {
+                $statusLabel = "🟢 อนุมัติแล้ว (Auto-Approved)";
+                $headerText = "✅ **เบิกสำเร็จ (Auto-Approved)**";
+            }
+
+            // ✅ Prepare Stock Info String (Show logic: only if completed)
+            $stockInfo = "📉 **เบิก:** {$quantity} {$unit}";
+            if ($this->transaction->status === 'completed') {
+                 $stockInfo .= " | 📦 **คงเหลือ:** {$remaining} {$unit}";
+            }
+
             // ตรวจสอบว่าผู้กด กับ ผู้รับ เป็นคนเดียวกันหรือไม่
             if ($this->submitter->id === $this->transaction->user_id) {
                 // --- กรณีที่ 1: เบิกให้ตัวเอง ---
-                $message = "📢 **มีคำขอใหม่ใน WH Stock Pro**\n" .
-                           "🎫 **Transaction ID:** {$transactionId}\n" .
-                           "📝 **อุปกรณ์:** {$equipmentName} (จำนวน: {$quantity} {$unit})\n" .
-                           "👤 **ผู้ขอ:** {$recipientName}\n" .
-                           "📅 **วันที่ขอ:** {$dateOpened}\n" .
-                           "📊 **สถานะ:** 🟠 Pending\n" .
+                $message = "{$headerText}\n" .
+                           "🎫 **รหัสรายการ:** {$transactionId}\n" .
+                           "📝 **อุปกรณ์:** {$equipmentName}\n" .
+                           "{$stockInfo}\n" .
+                           "👤 **ผู้เบิก:** {$recipientName}\n" .
+                           "📅 **วันที่:** {$dateOpened}\n" .
+                           "📊 **สถานะ:** {$statusLabel}\n" .
                            "📌 **URL:** {$transactionUrl}";
             } else {
-                // --- กรณีที่ 2: เบิกให้คนอื่น (ตามที่คุณต้องการ) ---
-                $message = "📢 **มีคำขอใหม่ (เบิกให้ผู้อื่น)**\n" .
-                           "🎫 **Transaction ID:** {$transactionId}\n" .
-                           "👤 **ผู้เบิก (ผู้กด):** {$submitterName}\n" .
-                           "👤 **เบิกให้กับ:** {$recipientName}\n" .
-                           "📝 **อุปกรณ์:** {$equipmentName} (จำนวน: {$quantity} {$unit})\n" .
-                           "📅 **วันที่ขอ:** {$dateOpened}\n" .
-                           "📊 **สถานะ:** 🟠 Pending\n" .
+                // --- กรณีที่ 2: เบิกให้คนอื่น ---
+                $message = "{$headerText} (เบิกแทน)\n" .
+                           "🎫 **รหัสรายการ:** {$transactionId}\n" .
+                           "👤 **ผู้ทำรายการ:** {$submitterName}\n" .
+                           "👤 **ผู้รับของ:** {$recipientName}\n" .
+                           "📝 **อุปกรณ์:** {$equipmentName}\n" .
+                           "{$stockInfo}\n" .
+                           "📅 **วันที่:** {$dateOpened}\n" .
+                           "📊 **สถานะ:** {$statusLabel}\n" .
                            "📌 **URL:** {$transactionUrl}";
             }
             // ✅✅✅ END: 4. แก้ไข Logic การสร้างข้อความ ✅✅✅

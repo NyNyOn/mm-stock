@@ -186,13 +186,6 @@ class TransactionController extends Controller
         $query = Equipment::where('quantity', '>', 0)
                           ->whereNotIn('status', ['sold', 'disposed']); 
         
-        try { 
-            if (method_exists(Equipment::class, 'ratings')) {
-                $query->withAvg('ratings', 'rating_score');
-                $query->withCount('ratings');
-            }
-        } catch (\Throwable $e) { }
-
         if ($term) {
             $query->where(function($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
@@ -200,7 +193,9 @@ class TransactionController extends Controller
                     ->orWhere('part_no', 'like', "%{$term}%");
             });
         }
-        $items = $query->with('images', 'unit')->orderBy('name')->paginate(10);
+        
+        // ✅ Eager load ratings to ensure accurate calculation (avoiding withAvg null issues)
+        $items = $query->with('images', 'unit', 'ratings')->orderBy('name')->paginate(10);
         $defaultDeptKey = config('department_stocks.default_nas_dept_key', 'mm');
 
         $items->getCollection()->transform(function ($item) use ($defaultDeptKey) {
@@ -220,13 +215,20 @@ class TransactionController extends Controller
             }
             $item->unit_name = $item->unit->name ?? 'N/A';
             
-            $item->avg_rating = $item->ratings_avg_rating_score ? (float)$item->ratings_avg_rating_score : 0;
-            $item->rating_count = $item->ratings_count ?? 0;
+            // ✅ Calculate Ratings Manually
+            $ratedItems = $item->ratings->whereNotNull('rating_score');
+            $item->avg_rating = $ratedItems->count() > 0 ? (float)round($ratedItems->avg('rating_score'), 2) : 0;
+            $item->rating_count = $item->ratings->count(); // Count all ratings including 'Not Used'
+            
             $item->is_frozen = $item->status === 'frozen';
             $item->dept_key = $deptKey;
+            
+            // Cleanup to reduce payload
+            unset($item->ratings);
 
             return $item;
         });
+
         return response()->json($items);
     }
 
@@ -339,12 +341,12 @@ class TransactionController extends Controller
 
             DB::commit();
 
-            if ((!$isSelfWithdrawal || !$canAutoConfirm) && $firstTransactionData) {
-                if ($firstTransactionData->user) {
-                    try {
-                        (new SynologyService())->notify(new EquipmentRequested($firstTransactionData->load('equipment', 'user')));
-                    } catch (\Exception $e) { Log::error("Notification Error: " . $e->getMessage()); }
-                }
+            // ✅ ส่งแจ้งเตือนเสมอ
+            if ($firstTransactionData && $firstTransactionData->user) {
+                try {
+                    Log::info("Sending EquipmentRequested notification (storeWithdrawal).");
+                    (new SynologyService())->notify(new EquipmentRequested($firstTransactionData->load('equipment', 'user'), $loggedInUser));
+                } catch (\Exception $e) { Log::error("Notification Error: " . $e->getMessage()); }
             }
 
             return response()->json(['success' => true, 'message' => ($canAutoConfirm && $isSelfWithdrawal) ? 'บันทึกสำเร็จ' : 'สร้างรายการสำเร็จ']);
@@ -466,11 +468,11 @@ class TransactionController extends Controller
 
             DB::commit();
 
-            if ($requestorType === 'other' || !$canAutoConfirm) {
-                try {
-                    (new SynologyService())->notify(new EquipmentRequested($transaction->load('equipment', 'user'), $loggedInUser));
-                } catch (\Exception $e) { Log::error("Notify Error: " . $e->getMessage()); }
-            }
+            // ✅ ส่งแจ้งเตือนเสมอ (ไม่ว่าจะเบิกให้ตัวเองหรือคนอื่น)
+            try {
+                Log::info("Sending EquipmentRequested notification. Requestor: {$requestorType}, AutoConfirm: " . ($canAutoConfirm ? 'Yes' : 'No'));
+                (new SynologyService())->notify(new EquipmentRequested($transaction->load('equipment', 'user'), $loggedInUser));
+            } catch (\Exception $e) { Log::error("Notify Error: " . $e->getMessage()); }
 
             if ($bypassed) {
                 $successMessage .= " (⚠️ Warning: Frozen Item Bypassed)";

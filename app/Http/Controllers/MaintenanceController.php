@@ -109,6 +109,14 @@ class MaintenanceController extends Controller
 
                 $message = 'อุปกรณ์ ' . ($mainStock->name ?? $maintenanceEquipment->name) . ' ซ่อมเสร็จและกลับเข้าสต็อกแล้ว';
 
+                // ✅ แจ้งเตือน Repair Completed
+                try {
+                     $restoredQty = $maintenanceEquipment->quantity; // จำนวนที่ซ่อมเสร็จ
+                     (new \App\Services\SynologyService())->notify(
+                        new \App\Notifications\EquipmentRepairCompleted($mainStock ?? $maintenanceEquipment, $restoredQty)
+                     );
+                } catch (\Exception $e) { Log::error("Notify Repair Error: " . $e->getMessage()); }
+
             } elseif ($action === 'write_off') {
                 // เปลี่ยนสถานะของชิ้นที่แยกมาเป็น 'disposed'
                 $maintenanceEquipment->status = 'disposed';

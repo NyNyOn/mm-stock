@@ -38,7 +38,7 @@ class ConsumableReturnRejected extends Notification
         $approverName = $this->consumableReturn->approver->fullname ?? 'N/A';
         $message = "❌ **คำขอคืนพัสดุถูกปฏิเสธ (ถึง @{$notifiable->username})**\n" .
                    "📝 **อุปกรณ์:** {$equipmentName}\n" .
-                   "🔢 **จำนวน:** {$quantity} {$unit}\n" .
+                   "🔢 **จำนวนที่ขอคืน:** {$quantity} {$unit}\n" .
                    "👤 **ผู้ตรวจสอบ:** {$approverName}\n";
         $payload = ['text' => $message];
         Http::withoutVerifying()->asForm()->post($webhookUrl, ['payload' => json_encode($payload)]);

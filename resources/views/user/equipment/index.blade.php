@@ -548,13 +548,18 @@
                                 
                                 let avgRating = parseFloat(item.avg_rating) || 0;
                                 let ratingCount = item.rating_count || 0;
-                                let starsHtml = '<div class="flex items-center mt-2 space-x-0.5" title="คะแนนเฉลี่ย: '+avgRating.toFixed(1)+'">';
-                                for (let i = 1; i <= 5; i++) {
-                                    if (i <= avgRating) starsHtml += '<i class="fas fa-star text-yellow-400 text-xs"></i>';
-                                    else if (i - 0.5 <= avgRating) starsHtml += '<i class="fas fa-star-half-alt text-yellow-400 text-xs"></i>';
-                                    else starsHtml += '<i class="fas fa-star text-gray-300 dark:text-gray-600 text-xs"></i>';
+                                let starsHtml = '';
+                                if (avgRating === 0 && ratingCount > 0) {
+                                    starsHtml = '<div class="flex items-center mt-2 space-x-1" title="ประเมินแล้ว: ยังไม่เคยใช้งาน"><span class="text-[10px] text-gray-500 font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">📦 ยังไม่ใช้</span><span class="text-xs text-gray-400">('+ratingCount+')</span></div>';
+                                } else {
+                                    starsHtml = '<div class="flex items-center mt-2 space-x-0.5" title="คะแนนเฉลี่ย: '+avgRating.toFixed(1)+'">';
+                                    for (let i = 1; i <= 5; i++) {
+                                        if (i <= avgRating) starsHtml += '<i class="fas fa-star text-yellow-400 text-xs"></i>';
+                                        else if (i - 0.5 <= avgRating) starsHtml += '<i class="fas fa-star-half-alt text-yellow-400 text-xs"></i>';
+                                        else starsHtml += '<i class="fas fa-star text-gray-300 dark:text-gray-600 text-xs"></i>';
+                                    }
+                                    starsHtml += `<span class="text-xs text-gray-400 ml-1">(${ratingCount})</span></div>`;
                                 }
-                                starsHtml += `<span class="text-xs text-gray-400 ml-1">(${ratingCount})</span></div>`;
 
                                 const btnStates = { 'consumable': { 'text': 'เบิก', 'icon': 'fas fa-box-open', 'class': 'bg-indigo-600 hover:bg-indigo-700', 'type': 'consumable', }, 'returnable': { 'text': 'ยืม', 'icon': 'fas fa-hand-holding', 'class': 'bg-purple-600 hover:bg-purple-700', 'type': 'returnable', }, 'partial_return': { 'text': 'เบิก', 'icon': 'fas fa-box-open', 'class': 'bg-blue-600 hover:bg-blue-700', 'type': 'partial_return', }, 'unset': { 'text': 'รอระบุ', 'icon': 'fas fa-clock', 'class': 'bg-gray-400 cursor-not-allowed', 'type': null, } };
                                 const itemType = item.withdrawal_type; const btnData = btnStates[itemType] || btnStates['unset'];

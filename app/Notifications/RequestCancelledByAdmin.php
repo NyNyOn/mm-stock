@@ -2,54 +2,60 @@
 
 namespace App\Notifications;
 
-// (ไม่มี use Illuminate\Bus\Queueable;)
-// (ไม่มี implements ShouldQueue)
+use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\Channels\SynologyChannel;
 
 class RequestCancelledByAdmin extends Notification
 {
-    // (ไม่มี use Queueable;)
+    use Queueable;
 
     protected $transaction;
-    protected $canceller; // คือ Admin ที่กดยกเลิก
+    protected $canceller;
 
-    /**
-     * Create a new notification instance.
-     */
     public function __construct(Transaction $transaction, User $canceller)
     {
         $this->transaction = $transaction;
-        $this->canceller = $canceller; // Admin ที่กดยกเลิก
+        $this->canceller = $canceller;
     }
 
-    /**
-     * Get the notification's delivery channels.
-     */
-    public function via(object $notifiable): array
+    public function via($notifiable)
     {
         return [SynologyChannel::class];
     }
 
-    /**
-     * Get the Synology Chat representation of the notification.
-     */
-    public function toSynology(object $notifiable): string
+    public function toSynology(object $notifiable): void
     {
-        $equipmentName = $this->transaction->equipment->name ?? 'N/A';
-        $txId = $this->transaction->id;
-        $adminName = $this->canceller->fullname ?? 'N/A';
-        $url = route('transactions.index', ['status' => 'my_history']);
+        $webhookUrl = config('services.synology.chat_webhook_url');
+        if (!$webhookUrl) { return; }
 
-        // (ข้อความนี้จะถูกส่งไปหา User เจ้าของรายการ)
-        $message  = "*❌ รายการเบิกของคุณถูกยกเลิก (Pending)*\n";
-        $message .= "Admin: `{$adminName}` ได้ยกเลิกคำขอของคุณ\n";
-        $message .= "อุปกรณ์: `{$equipmentName}`\n";
-        $message .= "TXN ID: `#{$txId}`\n";
-        $message .= "<{$url}|ดูประวัติของฉัน>";
+        try {
+            $equipmentName = $this->transaction->equipment->name ?? 'N/A';
+            $txId = $this->transaction->id;
+            $adminName = $this->canceller->fullname ?? 'N/A';
+            $url = route('transactions.index', ['status' => 'my_history']);
+            
+            // ข้อมูลสต็อกปัจจุบัน (เพื่อความอุ่นใจ)
+            $currentStock = $this->transaction->equipment->quantity;
+            $unit = $this->transaction->equipment->unit->name ?? 'ชิ้น';
 
-        return $message;
+            // (ข้อความนี้จะถูกส่งไปหา User เจ้าของรายการ)
+            $message  = "❌ **คำขอเบิกถูกปฏิเสธ (Cancelled)**\n" .
+                        "🎫 **รหัสรายการ:** `#{$txId}`\n" .
+                        "📝 **อุปกรณ์:** `{$equipmentName}`\n" .
+                        "📦 **คงเหลือปัจจุบัน:** {$currentStock} {$unit}\n" .
+                        "👤 **ดำเนินการโดย:** `{$adminName}` (Admin)\n" .
+                        "📌 <{$url}|ดูประวัติของฉัน>";
+
+             $payload = ['text' => $message];
+             Http::withoutVerifying()->asForm()->post($webhookUrl, ['payload' => json_encode($payload)]);
+
+        } catch (\Exception $e) {
+            Log::error("Failed to send RequestCancelledByAdmin notification: " . $e->getMessage());
+        }
     }
 }

@@ -36,9 +36,14 @@ class ConsumableReturnApproved extends Notification
         $approverName = $this->consumableReturn->approver->fullname ?? 'N/A';
 
         // ✅✅✅ แก้ไข $notifiable->fullname เป็น $notifiable->username ตรงนี้ ✅✅✅
-        $message = "👍 **คำขอคืนพัสดุอนุมัติแล้ว (ถึง @{$notifiable->username})**\n" .
+        $header = "👍 **คำขอคืนพัสดุอนุมัติแล้ว (ถึง @{$notifiable->username})**";
+        if ($this->consumableReturn->action_type === 'write_off') {
+            $header = "✅ **อนุมัติการแจ้งใช้หมด (Write-off) (ถึง @{$notifiable->username})**";
+        }
+
+        $message = "{$header}\n" .
                    "📝 **อุปกรณ์:** {$equipmentName}\n" .
-                   "🔢 **จำนวน:** {$quantity} {$unit}\n" .
+                   "➕ **คืนสต็อก:** {$quantity} {$unit}\n" .
                    "👤 **ผู้อนุมัติ:** {$approverName}\n";
         
         $payload = ['text' => $message];
