@@ -84,7 +84,7 @@ class DashboardController extends Controller
 
         // --- Stat Cards Data ---
         $total_equipment = Cache::remember('dashboard_total_equipment', $statCacheTime, function () { return Equipment::sum('quantity'); });
-        $low_stock_count = Cache::remember('dashboard_low_stock_count', $statCacheTime, function () { return Equipment::where('min_stock', '>', 0)->whereColumn('quantity', '<=', 'min_stock')->count(); });
+        $low_stock_count = Cache::remember('dashboard_low_stock_count', $statCacheTime, function () { return Equipment::where('min_stock', '>', 0)->whereColumn('quantity', '<=', 'min_stock')->where('quantity', '>', 0)->count(); });
         $on_order_count = Cache::remember('dashboard_on_order_count', $statCacheTime, function () { return Equipment::where('status', 'on-order')->count(); });
         $warranty_count = Cache::remember('dashboard_warranty_count', $statCacheTime, function () { return Equipment::whereNotNull('warranty_date')->whereBetween('warranty_date', [now(), now()->addDays(30)])->count(); });
         $urgent_order_count = Cache::remember('dashboard_urgent_order_count', $statCacheTime, function () { return PurchaseOrder::where('type', 'urgent')->count(); });
@@ -95,7 +95,7 @@ class DashboardController extends Controller
         // --- List Data ---
         $on_order_items = Cache::remember('dashboard_on_order_items', $listCacheTime, function () { return Equipment::where('status', 'on-order')->orderBy('name')->limit(5)->get(); });
         $out_of_stock_items = Cache::remember('dashboard_out_of_stock_items', $listCacheTime, function () { return Equipment::where('quantity', '<=', 0)->orderBy('name')->limit(5)->get(); });
-        $low_stock_items = Cache::remember('dashboard_low_stock_items', $listCacheTime, function () { return Equipment::where('min_stock', '>', 0)->whereColumn('quantity', '<=', 'min_stock')->orderBy('quantity')->limit(5)->get(); });
+        $low_stock_items = Cache::remember('dashboard_low_stock_items', $listCacheTime, function () { return Equipment::where('min_stock', '>', 0)->whereColumn('quantity', '<=', 'min_stock')->where('quantity', '>', 0)->orderBy('quantity')->limit(5)->get(); });
 
         $recent_activities = Transaction::with(['equipment', 'user'])->latest('transaction_date')->paginate(10);
 

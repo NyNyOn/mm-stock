@@ -136,6 +136,43 @@ window.closeModal = function (modalId) {
     }
 };
 
+// Helper: Update Primary Visual (Client-Side)
+window.updatePrimaryVisual = function (radio) {
+    const container = radio.closest('.grid');
+    if (!container) return;
+
+    // Reset all
+    container.querySelectorAll('.group').forEach(el => {
+        el.classList.remove('border-yellow-400', 'shadow-md', 'ring-2', 'ring-yellow-100');
+        el.classList.add('border-transparent');
+        const badge = el.querySelector('span.absolute.top-0.left-0');
+        if (badge && badge.innerText === 'MASTER') badge.remove();
+
+        const label = el.querySelector('label');
+        if (label) {
+            label.className = "w-6 h-6 rounded-full flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 focus-within:opacity-100 transform hover:scale-110 transition-all bg-gray-200 text-gray-500 hover:bg-yellow-400 hover:text-white";
+        }
+    });
+
+    // Set Active
+    const wrapper = radio.closest('.group');
+    if (wrapper) {
+        wrapper.classList.remove('border-transparent');
+        wrapper.classList.add('border-yellow-400', 'shadow-md', 'ring-2', 'ring-yellow-100');
+
+        // Add Badge
+        const badge = document.createElement('span');
+        badge.className = "absolute top-0 left-0 bg-yellow-400 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-br z-10 shadow-sm";
+        badge.innerText = "MASTER";
+        wrapper.appendChild(badge);
+
+        const label = wrapper.querySelector('label');
+        if (label) {
+            label.className = "w-6 h-6 rounded-full flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 focus-within:opacity-100 transform hover:scale-110 transition-all bg-yellow-400 text-white";
+        }
+    }
+};
+
 // ==========================================================================
 // 2. IMAGE MANAGEMENT (Set Cover Image - FIXED LOGIC)
 // ==========================================================================
@@ -516,21 +553,27 @@ function setupImagePreviews(form) {
 
         const files = Array.from(input.files);
 
+        // ✅ Add Guidance Text
+        const guidance = document.createElement('div');
+        guidance.className = 'col-span-3 text-xs text-blue-600 mb-2 font-medium flex items-center';
+        guidance.innerHTML = '<i class="fas fa-info-circle mr-1"></i> รูปแรกสุดจะถูกตั้งเป็นรูปภาพหลัก (Master) โดยอัตโนมัติ';
+        container.appendChild(guidance);
+
         files.forEach((file, index) => {
             const div = document.createElement('div');
-            div.className = 'relative w-20 h-20 group';
-            container.appendChild(div); // Append placeholder first to keep order
+            div.className = `relative w-20 h-20 group rounded-lg overflow-hidden border ${index === 0 ? 'border-2 border-yellow-400 shadow-md ring-2 ring-yellow-100' : 'border-gray-200'}`;
+            container.appendChild(div);
 
             const reader = new FileReader();
             reader.onload = (ev) => {
                 const img = document.createElement('img');
                 img.src = ev.target.result;
-                img.className = "w-full h-full object-cover rounded border";
+                img.className = "w-full h-full object-cover";
 
                 const btn = document.createElement('button');
                 btn.type = "button";
                 btn.innerHTML = "&times;";
-                btn.className = "absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow opacity-0 group-hover:opacity-100 transition";
+                btn.className = "absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow opacity-0 group-hover:opacity-100 transition z-20";
 
                 // ✅ แก้ไข: เมื่อกดลบ ให้สร้าง FileList ใหม่ที่ตัดไฟล์นั้นออกแล้วใส่กลับ input
                 btn.onclick = () => {
@@ -547,6 +590,14 @@ function setupImagePreviews(form) {
 
                 div.appendChild(img);
                 div.appendChild(btn);
+
+                // ✅ Add MASTER Badge for First Image
+                if (index === 0) {
+                    const badge = document.createElement('span');
+                    badge.className = "absolute top-0 left-0 bg-yellow-400 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-br z-10 shadow-sm";
+                    badge.innerText = "MASTER";
+                    div.appendChild(badge);
+                }
             };
             reader.readAsDataURL(file);
         });

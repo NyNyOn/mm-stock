@@ -257,18 +257,25 @@
                             <div id="existing-images-container-{{ $uniqueSuffix }}" class="grid grid-cols-3 gap-3">
                                 @foreach($equipment->images as $image)
                                     @if($image->file_name)
-                                    <div id="image-{{ $image->id }}-wrapper" class="relative group">
+                                    <div id="image-{{ $image->id }}-wrapper" class="relative group rounded-lg overflow-hidden border-2 transition-all duration-300 {{ $image->is_primary ? 'border-yellow-400 shadow-md ring-2 ring-yellow-100' : 'border-transparent hover:border-gray-200' }}">
+                                        
+                                        @if($image->is_primary)
+                                            <span class="absolute top-0 left-0 bg-yellow-400 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-br z-10 shadow-sm">MASTER</span>
+                                        @endif
+
                                         <img src="{{ route('nas.image', ['deptKey' => $deptKeyForImages, 'filename' => $image->file_name]) }}"
-                                             alt="Existing Image {{ $image->id }}" class="object-cover w-full h-24 rounded-lg"
+                                             alt="Existing Image {{ $image->id }}" class="object-cover w-full h-24"
                                              onerror="this.onerror=null; this.src='https://placehold.co/100x100/e2e8f0/64748b?text=Error';">
                                         <div class="absolute inset-0 flex items-center justify-center space-x-1 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity">
                                             <button type="button" data-image-id="{{ $image->id }}" title="Mark for Deletion"
-                                                    class="delete-existing-image-btn w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100">
+                                                    class="delete-existing-image-btn w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transform hover:scale-110 transition-all">
                                                 <i class="fas fa-times text-xs"></i>
                                             </button>
                                             <input type="hidden" id="delete_image_{{ $image->id }}" name="delete_images[]" value="{{ $image->id }}" disabled>
-                                            <label title="Set as Primary" class="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                                <input type="radio" name="primary_image" value="{{ $image->id }}" class="primary-image-radio sr-only" @checked($image->is_primary)>
+                                            
+                                            {{-- Radio for Primary Selection (Hidden logic, visual only) --}}
+                                            <label title="Set as Primary" class="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 focus-within:opacity-100 transform hover:scale-110 transition-all {{ $image->is_primary ? 'bg-yellow-400 text-white' : 'bg-gray-200 text-gray-500 hover:bg-yellow-400 hover:text-white' }}">
+                                                <input type="radio" name="primary_image" value="{{ $image->id }}" class="primary-image-radio sr-only" @checked($image->is_primary) onchange="updatePrimaryVisual(this)">
                                                 <i class="fas fa-star text-xs"></i>
                                             </label>
                                         </div>
@@ -276,7 +283,7 @@
                                     @endif
                                 @endforeach
                             </div>
-                            <small class="block mt-3 text-xs text-gray-500">คลิก <i class="fas fa-star"></i> เลือกรูปหลัก, คลิก <i class="fas fa-times"></i> เพื่อลบ</small>
+                            <small class="block mt-3 text-xs text-gray-500">คลิก <i class="fas fa-star text-yellow-400"></i> เพื่อเลือกรูปหลัก, รูปแรกสุดจะแสดงเป็นปก</small>
                         </div>
                         @endif
                     </div>
