@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\HomeController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EquipmentController;
@@ -36,7 +37,8 @@ require __DIR__ . '/auth.php';
 // --- Main Application Routes (Must be logged in) ---
 Route::middleware('auth')->group(function () {
 
-    Route::get('/', fn() => redirect()->route('dashboard'));
+    Route::get('/', [HomeController::class, 'index']);
+    Route::get('/home', [HomeController::class, 'index'])->name('home');
 
     // --- User-facing Routes ---
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard')->middleware('can:dashboard:view');
