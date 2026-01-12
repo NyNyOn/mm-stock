@@ -71,6 +71,30 @@ class TransactionController extends Controller
         return null;
     }
 
+    // ✅ Helper Function for Stock Calculation (Returns Qty + Names)
+    private function getPendingStockDetails($equipmentId)
+    {
+        $transactions = Transaction::where('equipment_id', $equipmentId)
+            ->whereIn('status', ['pending', 'pending_approval'])
+            ->with(['user']) // Eager load user
+            ->get();
+
+        $quantity = $transactions->sum(function ($tx) { 
+            return abs($tx->quantity_change); 
+        });
+
+        $names = $transactions->pluck('user.fullname')->unique()->filter()->values()->toArray();
+        
+        $earliestTime = $transactions->min('transaction_date');
+        $timeStr = $earliestTime ? \Carbon\Carbon::parse($earliestTime)->format('H:i') : null;
+
+        return [
+            'quantity' => $quantity,
+            'names' => $names,
+            'time' => $timeStr
+        ];
+    }
+
     // =========================================================================
     // 1. LIST & SHOW
     // =========================================================================
@@ -275,9 +299,35 @@ class TransactionController extends Controller
                 $equipment = Equipment::lockForUpdate()->find($itemData['id']);
                 $quantityToWithdraw = (int)$itemData['quantity'];
 
-                if (!$equipment || $equipment->quantity < $quantityToWithdraw) {
+                // ✅✅✅ Stock Check with Pending Calculation ✅✅✅
+                $pendingInfo = $this->getPendingStockDetails($equipment->id);
+                $pendingQty = $pendingInfo['quantity'];
+                $availableQty = $equipment->quantity - $pendingQty;
+
+                if ($equipment->quantity < $quantityToWithdraw) {
+                     DB::rollBack();
+                     return response()->json(['success' => false, 'message' => "❌ สต็อกไม่พอ: {$equipment->name} (มี: {$equipment->quantity}, ขอ: {$quantityToWithdraw})"], 400); 
+                }
+
+                if ($quantityToWithdraw > $availableQty) {
                     DB::rollBack();
-                    return response()->json(['success' => false, 'message' => "สต็อกของ " . ($equipment->name ?? "ID: {$itemData['id']}") . " ไม่เพียงพอ"], 400);
+                    
+                    $namesHtml = collect($pendingInfo['names'])->map(fn($n) => "<span style='color:#4f46e5; font-weight:bold;'>$n</span>")->take(3)->implode(', ');
+                    if (count($pendingInfo['names']) > 3) $namesHtml .= " และคนอื่นๆ";
+                    
+                    $time = $pendingInfo['time'] ?? now()->format('H:i');
+                    $msg = "<div class='text-left text-sm'>" .
+                           "<b>⚠️ แจ้งเตือน: สต็อกไม่เพียงพอ</b> <span class='text-gray-500 text-xs'>({$time} น.)</span><br><br>" .
+                           "📦 <b>รายการ:</b> " . ($equipment->name ?? 'N/A') . "<br>" .
+                           "🛑 <b>ถูกจองแล้ว:</b> {$pendingQty} ชิ้น<br>" .
+                           "👤 <b>โดย:</b> {$namesHtml}<br>" .
+                           "📉 <b>คงเหลือเบิกได้จริง:</b> <span class='text-red-600 font-bold'>{$availableQty} ชิ้น</span>" .
+                           "</div>";
+
+                    return response()->json([
+                        'success' => false, 
+                        'message' => $msg
+                    ], 400);
                 }
 
                 $this->checkAndEnforceFrozenState($equipment);
@@ -414,6 +464,32 @@ class TransactionController extends Controller
                 return response()->json(['success' => false, 'message' => "สต็อกไม่เพียงพอ"], 400);
             }
 
+            // ✅✅✅ Stock Check with Pending Calculation ✅✅✅
+            $pendingInfo = $this->getPendingStockDetails($equipment->id);
+            $pendingQty = $pendingInfo['quantity'];
+            $availableQty = $equipment->quantity - $pendingQty;
+
+            if ($quantityToTransact > $availableQty) {
+                DB::rollBack();
+
+                $namesHtml = collect($pendingInfo['names'])->map(fn($n) => "<span style='color:#4f46e5; font-weight:bold;'>$n</span>")->take(3)->implode(', ');
+                if (count($pendingInfo['names']) > 3) $namesHtml .= " และคนอื่นๆ";
+
+                $time = $pendingInfo['time'] ?? now()->format('H:i');
+                $msg = "<div class='text-left text-sm'>" .
+                       "<b>⚠️ แจ้งเตือน: สต็อกไม่เพียงพอ</b> <span class='text-gray-500 text-xs'>({$time} น.)</span><br><br>" .
+                       "📦 <b>รายการ:</b> " . ($equipment->name ?? 'N/A') . "<br>" .
+                       "🛑 <b>ถูกจองแล้ว:</b> {$pendingQty} ชิ้น<br>" .
+                       "👤 <b>โดย:</b> {$namesHtml}<br>" .
+                       "📉 <b>คงเหลือเบิกได้จริง:</b> <span class='text-red-600 font-bold'>{$availableQty} ชิ้น</span>" .
+                       "</div>";
+
+                return response()->json([
+                    'success' => false, 
+                    'message' => $msg
+                ], 400);
+            }
+
             $this->checkAndEnforceFrozenState($equipment);
 
             $bypassed = false;
@@ -537,6 +613,36 @@ class TransactionController extends Controller
                     throw new \Exception("สินค้า {$equipment->name} มีไม่พอ (คงเหลือ: {$equipment->quantity})");
                 }
 
+                // ✅✅✅ Stock Check with Pending Calculation ✅✅✅
+                $pendingInfo = $this->getPendingStockDetails($equipment->id);
+                $pendingQty = $pendingInfo['quantity'];
+                $availableQty = $equipment->quantity - $pendingQty;
+
+                if ($availableQty < $itemData['quantity']) {
+                    $namesHtml = collect($pendingInfo['names'])->map(fn($n) => "<span style='color:#4f46e5; font-weight:bold;'>$n</span>")->take(3)->implode(', ');
+                    if (count($pendingInfo['names']) > 3) $namesHtml .= " และคนอื่นๆ";
+
+                    $time = $pendingInfo['time'] ?? now()->format('H:i');
+                    $msg = "<div class='text-left text-sm'>" .
+                           "<b>⚠️ แจ้งเตือน: สต็อกไม่เพียงพอ</b> <span class='text-gray-500 text-xs'>({$time} น.)</span><br><br>" .
+                           "📦 <b>รายการ:</b> " . ($equipment->name ?? 'N/A') . "<br>" .
+                           "🛑 <b>ถูกจองแล้ว:</b> {$pendingQty} ชิ้น<br>" .
+                           "👤 <b>โดย:</b> {$namesHtml}<br>" .
+                           "📉 <b>คงเหลือเบิกได้จริง:</b> <span class='text-red-600 font-bold'>{$availableQty} ชิ้น</span>" .
+                           "</div>";
+
+                    // Throw structured error for frontend to handle
+                    throw new \Exception(json_encode([
+                        'html' => $msg,
+                        'failed_item' => [
+                            'id' => $equipment->id,
+                            'name' => $equipment->name,
+                            'available_qty' => $availableQty,
+                            'requested_qty' => $itemData['quantity']
+                        ]
+                    ]));
+                }
+
                 if ($request->filled('dept_key')) {
                     $currentDeptKey = $request->input('dept_key');
                     if ($equipment->dept_key && $equipment->dept_key !== $currentDeptKey) {
@@ -598,13 +704,18 @@ class TransactionController extends Controller
             DB::commit();
             
             if (count($results) > 0) {
-                foreach ($results as $tx) {
-                    if ($tx->status === 'pending') {
-                        try {
-                            (new SynologyService())->notify(new EquipmentRequested($tx->load('equipment', 'user'), $loggedInUser));
-                        } catch (\Exception $e) { 
-                            Log::error("Notification Error for Tx #{$tx->id}: " . $e->getMessage());
-                        }
+                // ✅ Group ALL Transactions for Notification (Pending + Completed)
+                $transactionsToNotify = collect($results);
+
+                if ($transactionsToNotify->isNotEmpty()) {
+                    try {
+                        // Load relations for all transactions
+                        $transactionsToNotify->load('equipment.unit', 'user'); // Eager load unit as well
+                        
+                        // Send Single Bulk Notification
+                        (new SynologyService())->notify(new \App\Notifications\BulkEquipmentRequested($transactionsToNotify, $loggedInUser));
+                    } catch (\Exception $e) { 
+                        Log::error("Bulk Notification Error: " . $e->getMessage());
                     }
                 }
             }
@@ -700,6 +811,9 @@ class TransactionController extends Controller
                 'notes' => "ตัดยอดสูญหาย จาก #{$transaction->id}",
                 'transaction_date' => now(), 'status' => 'completed', 'confirmed_at' => now()
             ]);
+
+            try { (new SynologyService())->notify(new \App\Notifications\ItemWriteOffNotification($transaction->load('equipment', 'user'), Auth::user())); } catch(\Exception $e) {}
+
             DB::commit();
             return back()->with('success', 'ตัดยอดสำเร็จ');
         } catch(\Exception $e) { DB::rollBack(); return back()->with('error', 'Error'); }

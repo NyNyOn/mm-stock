@@ -5,19 +5,22 @@ namespace App\Notifications;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Notifications\Channels\SynologyChannel;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class UserConfirmedReceipt extends Notification
+class ItemWriteOffNotification extends Notification
 {
     use Queueable;
 
     protected $transaction;
+    protected $handler;
 
-    public function __construct(Transaction $transaction)
+    public function __construct(Transaction $transaction, User $handler)
     {
         $this->transaction = $transaction;
+        $this->handler = $handler;
     }
 
     public function via(object $notifiable): array
@@ -25,15 +28,14 @@ class UserConfirmedReceipt extends Notification
         return ['database', SynologyChannel::class]; // ✅ Added Database
     }
 
-    // ✅ Database Notification Structure
     public function toArray($notifiable)
     {
         return [
-            'title' => 'ยืนยันรับของแล้ว',
-            'body' => "ผู้ใช้ยืนยันการรับอุปกรณ์ '{$this->transaction->equipment->name}' เรียบร้อยแล้ว",
+            'title' => 'ตัดยอดสูญหาย (Write-Off)',
+            'body' => "อุปกรณ์ '{$this->transaction->equipment->name}' ถูกตัดยอดโดย Admin",
             'action_url' => route('transactions.index'),
-            'type' => 'success',
-            'icon' => 'fas fa-box-open'
+            'type' => 'error', // Use error type for red color/alert
+            'icon' => 'fas fa-trash-alt'
         ];
     }
 
@@ -43,25 +45,22 @@ class UserConfirmedReceipt extends Notification
         if (!$webhookUrl) { return; }
 
         try {
-            $recipientName = $this->transaction->user?->fullname ?? 'N/A';
             $equipmentName = $this->transaction->equipment?->name ?? 'N/A';
-            $transactionType = $this->transaction->type === 'withdraw' ? 'เบิก' : 'ยืม';
+            $sender = $this->handler->fullname ?? 'Admin';
             $transactionUrl = route('transactions.index');
+            $originalUser = $this->transaction->user?->fullname ?? 'N/A';
             
-            $message = "✅ **ปิดเคส: ผู้ใช้ยืนยันรับของแล้ว**\n" .
+            $message = "🚫 **แจ้งเตือน: ตัดยอดสูญหาย (Write-Off)**\n" .
                        "📝 **อุปกรณ์:** {$equipmentName}\n" .
-                       "👤 **ผู้รับ:** {$recipientName}\n" .
-                       "📋 **ประเภท:** {$transactionType}\n" .
-                       "📊 **สถานะ:** เสร็จสมบูรณ์ (Completed)\n" .
+                       "👤 **ผู้ดำเนินการ:** {$sender}\n" .
+                       "📉 **จากรายการของ:** {$originalUser}\n" .
+                       "📋 **รายละเอียด:** มีการตัดยอดสินค้าสูญหาย/ชำรุด โดย Admin\n" .
                        "📌 **URL:** {$transactionUrl}";
             
             $payload = ['text' => $message];
             Http::withoutVerifying()->asForm()->post($webhookUrl, ['payload' => json_encode($payload)]);
         } catch (\Exception $e) {
-            Log::error(
-                'FATAL ERROR during UserConfirmedReceipt notification for transaction ID ' . 
-                $this->transaction->id . ': ' . $e->getMessage()
-            );
+            Log::error('WriteOff Notification Error: ' . $e->getMessage());
         }
     }
 }

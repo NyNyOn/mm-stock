@@ -435,7 +435,12 @@
                 <div class="space-y-3 overflow-y-auto max-h-72 scrollbar-soft">
                     @forelse($on_order_items as $item)
                         <div class="p-3 border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl">
-                            <p class="text-sm font-bold text-blue-600 truncate">{{ $item->name }}</p>
+                            <p class="text-sm font-bold text-blue-600 truncate">
+                                {{ optional($item->equipment)->name ?? ($item->name ?? $item->item_description) }}
+                            </p>
+                            @if(isset($item->quantity_ordered))
+                                <span class="text-xs text-blue-400">จำนวน: {{ $item->quantity_ordered }}</span>
+                            @endif
                         </div>
                     @empty
                         <div class="p-4 text-sm text-center text-gray-500"><i class="mr-2 text-green-500 fas fa-check-circle"></i>ไม่มีรายการที่กำลังสั่งซื้อ</div>
@@ -502,15 +507,15 @@
                     <div class="grid grid-cols-3 gap-2">
                         <div>
                             <label for="{{ $key }}-start" class="block text-xs font-medium text-gray-500">สีอ่อน (Start)</label>
-                            <input type="color" id="{{ $key }}-start" name="{{ $key }}-start" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer transition-shadow hover:shadow-md" value="">
+                            <input type="color" id="{{ $key }}-start" name="{{ $key }}-start" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer transition-shadow hover:shadow-md" value="#ffffff">
                         </div>
                         <div>
                             <label for="{{ $key }}-end" class="block text-xs font-medium text-gray-500">สีเข้ม (End)</label>
-                            <input type="color" id="{{ $key }}-end" name="{{ $key }}-end" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer transition-shadow hover:shadow-md" value="">
+                            <input type="color" id="{{ $key }}-end" name="{{ $key }}-end" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer transition-shadow hover:shadow-md" value="#000000">
                         </div>
                          <div>
                             <label for="{{ $key }}-border" class="block text-xs font-medium text-gray-500">สีขอบ/ตัวเลข (Border)</label>
-                            <input type="color" id="{{ $key }}-border" name="{{ $key }}-border" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer transition-shadow hover:shadow-md" value="">
+                            <input type="color" id="{{ $key }}-border" name="{{ $key }}-border" class="w-full h-10 p-1 border border-gray-300 rounded-lg cursor-pointer transition-shadow hover:shadow-md" value="#000000">
                         </div>
                     </div>
                 </div>

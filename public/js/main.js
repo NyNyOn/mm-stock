@@ -6,17 +6,18 @@
  * Corrected version: Replaced `window.onload` with `addEventListener` to prevent script conflicts.
  */
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // This part is correct and remains unchanged.
     setupEventListeners();
     updateNotifications();
+    initPopularTicker(); // Start Ticker
 });
 
 
 // ✅✅✅ START: CORRECTED SECTION ✅✅✅
 // We now use addEventListener('load', ...) which is the correct and safe way
 // to handle the window load event without overwriting other scripts.
-window.addEventListener('load', function() {
+window.addEventListener('load', function () {
     handleLoadingScreen();
 });
 // ✅✅✅ END: CORRECTED SECTION ✅✅✅
@@ -138,7 +139,7 @@ function setupCollapsibleSettingsMenu() {
 }
 
 function setupDropdownToggles() {
-    document.addEventListener('click', function(event) {
+    document.addEventListener('click', function (event) {
         const isNotificationsButton = document.getElementById('notifications-button-wrapper')?.contains(event.target);
         const isProfileButton = document.getElementById('profile-button-wrapper')?.contains(event.target);
 
@@ -298,19 +299,100 @@ async function updateNotifications() {
         countEl.textContent = data.count;
         countEl.classList.remove('hidden');
         listEl.innerHTML = '';
+
+
+        // Add Click Listener to Mark Read
+        const btnWrapper = document.getElementById('notifications-button-wrapper');
+        const btn = btnWrapper ? btnWrapper.querySelector('button') : null;
+        if (btn && !btn.hasAttribute('data-read-listener')) {
+            btn.setAttribute('data-read-listener', 'true');
+            btn.addEventListener('click', () => {
+                countEl.classList.add('hidden'); // Immediate UI update
+                apiRequest('mark_notifications_read');
+            });
+        }
+
+        // Add Clear All Listener
+        const clearBtn = document.getElementById('clear-notifs-btn');
+        if (clearBtn && !clearBtn.hasAttribute('data-clear-listener')) {
+            clearBtn.setAttribute('data-clear-listener', 'true');
+            clearBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                // No confirm needed for better UX, or maybe yes? User asked to clear.
+                // Let's just do it.
+                await apiRequest('clear_notifications');
+                // Refresh immediately
+                updateNotifications();
+            });
+        }
+
         data.notifications.forEach(notif => {
-            const icon = notif.type === 'low_stock' ? 'fa-exclamation-triangle text-orange-500' : 'fa-calendar-times text-purple-500';
+            let icon = 'fa-info-circle text-gray-400';
+            let bgClass = 'bg-gray-100';
+
+            if (notif.type === 'low_stock') {
+                icon = 'fa-exclamation-triangle text-orange-500';
+                bgClass = 'bg-orange-50';
+            } else if (notif.type === 'out_of_stock') {
+                icon = 'fa-times-circle text-red-500';
+                bgClass = 'bg-red-50';
+            } else if (notif.type === 'pending_approval') {
+                icon = 'fa-clock text-blue-500';
+                bgClass = 'bg-blue-50';
+            }
+
             const item = document.createElement('a');
-            item.href = `/equipment?search=${notif.id}`;
-            item.className = 'flex items-start p-4 space-x-4 transition-colors hover:bg-gray-50';
+            item.href = notif.url || '#';
+            item.className = 'flex items-start p-3 mx-2 my-1 rounded-xl transition-all hover:bg-gray-50 group border border-transparent hover:border-blue-50';
             item.innerHTML = `
-                <div class="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center"><i class="fas ${icon}"></i></div>
-                <div class="flex-1"><p class="font-medium text-sm text-gray-800">${notif.message}</p></div>
+                <div class="w-10 h-10 ${bgClass} rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="flex-1 ml-3 min-w-0">
+                    <p class="font-medium text-sm text-gray-700 group-hover:text-blue-600 transition-colors line-clamp-2">
+                        ${notif.message}
+                        ${!notif.is_read ? '<span class="inline-block w-2 h-2 ml-1 bg-red-500 rounded-full"></span>' : ''}
+                    </p>
+                    <p class="text-[10px] text-gray-400 mt-0.5">แจ้งเตือนระบบ</p>
+                </div>
             `;
             listEl.appendChild(item);
         });
     } else {
         countEl.classList.add('hidden');
         listEl.innerHTML = '<p class="text-center text-gray-500 p-8">ไม่มีการแจ้งเตือนใหม่</p>';
+    }
+}
+
+
+async function initPopularTicker() {
+    const el = document.getElementById('ticker-content');
+    if (!el) return;
+
+    try {
+        const res = await apiRequest('get_popular_items');
+        if (res.success && res.items.length > 0) {
+            let index = 0;
+            const updateText = () => {
+                const item = res.items[index];
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(10px)';
+
+                setTimeout(() => {
+                    el.innerHTML = `<span class="font-bold text-gray-700">${item.name}</span> <span class="text-xs text-gray-400 ml-1">(${item.count} ครั้ง)</span>`;
+                    el.style.opacity = '1';
+                    el.style.transform = 'translateY(0)';
+                    index = (index + 1) % res.items.length;
+                }, 300);
+            };
+
+            updateText(); // Initial run
+            setInterval(updateText, 4000); // Change every 4 seconds
+        } else {
+            el.innerText = 'ระบบพร้อมใช้งาน';
+        }
+    } catch (e) {
+        console.error('Ticker Error:', e);
+        el.innerText = 'MM Stock Pro';
     }
 }

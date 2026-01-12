@@ -1052,7 +1052,15 @@ function setupDetailButtons(item) {
             // ผูก Event Handler
             newEdit.addEventListener('click', () => {
                 window.closeDetailsModal();
-                if (typeof window.showEditModal === 'function') window.showEditModal(item.id);
+
+                // ตรวจสอบว่าหน้าเว็บปัจจุบันมี Modal แก้ไขอยู่จริงหรือไม่
+                const editModal = document.getElementById('edit-equipment-modal');
+                if (editModal && typeof window.showEditModal === 'function') {
+                    window.showEditModal(item.id);
+                } else {
+                    // Fallback: Redirect to Equipment Page with Edit Action (for Reports page)
+                    window.location.href = `/equipment?action=edit&id=${item.id}`;
+                }
             });
         }
 
@@ -1289,4 +1297,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // ✅ AUTO-OPEN MODAL Logic (Handle Redirects from Reports or other pages)
+    const urlParams = new URLSearchParams(window.location.search);
+    const action = urlParams.get('action');
+    const id = urlParams.get('id');
+
+    if (action === 'edit' && id) {
+        // Wait a bit for other scripts to initialize
+        setTimeout(() => {
+            if (typeof window.showEditModal === 'function') {
+                window.showEditModal(id);
+                // Optional: Clean URL
+                // window.history.replaceState({}, document.title, window.location.pathname);
+            } else {
+                console.warn('showEditModal function not found. Ensure equipment.js is loaded properly.');
+            }
+        }, 500);
+    }
 });

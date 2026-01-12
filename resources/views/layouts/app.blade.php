@@ -10,6 +10,16 @@
         <meta name="can-bypass-frozen" content="{{ Auth::user()->canBypassFrozenState() ? 'true' : 'false' }}">
         <title>{{ config('app.name', 'Laravel') }}</title>
 
+        {{-- Hide Tailwind CDN Warning --}}
+        <script>
+            (function() {
+                const originalWarn = console.warn;
+                console.warn = function(...args) {
+                    if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+                    originalWarn.apply(console, args);
+                };
+            })();
+        </script>
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
             tailwind.config = {
@@ -82,7 +92,8 @@
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
         <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+        {{-- Tone.js Removed to prevent AudioContext warnings --}}
+        {{-- <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script> --}}
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
@@ -149,12 +160,9 @@
                     $isAdminOrIT = $userGroupSlug && in_array($slugLower, ['it', 'admin', 'administrator', 'administartor', 'itsupport', 'it-support']);
                 @endphp
 
-                {{-- 1. Pop-up สำหรับ Super Admin (ID 9) --}}
                 @if($isSuperAdmin)
                     document.addEventListener('DOMContentLoaded', function() {
-                        console.log('[DEBUG] Checking Super Admin (ID 9) Welcome');
                         if (!sessionStorage.getItem('creator_welcomed')) {
-                            console.log('[DEBUG] Showing Super Admin Welcome Popup');
                             Swal.fire({
                                 position: 'center',
                                 showConfirmButton: false,
@@ -169,18 +177,14 @@
                                 hideClass: { popup: 'animate__animated animate__fadeOutUp' }
                             });
                             sessionStorage.setItem('creator_welcomed', 'true');
-                        } else {
-                            console.log('[DEBUG] Super Admin already welcomed this session.');
                         }
                     });
 
                 {{-- 2. (ใหม่) Pop-up สำหรับ Admin/IT (ที่ไม่ใช่ Super Admin) --}}
                 @elseif($isAdminOrIT)
                     document.addEventListener('DOMContentLoaded', function() {
-                        console.log('[DEBUG] Checking Admin/IT (Slug: {{ $userGroupSlug }}) Welcome');
                         // ใช้ session key คนละตัวกับ Super Admin
                         if (!sessionStorage.getItem('admin_welcomed')) { 
-                            console.log('[DEBUG] Showing Admin/IT Welcome Popup');
                             Swal.fire({
                                 position: 'center',
                                 showConfirmButton: false,
@@ -197,8 +201,6 @@
                             });
                             // ตั้งค่า session key ของ Admin
                             sessionStorage.setItem('admin_welcomed', 'true'); 
-                        } else {
-                            console.log('[DEBUG] Admin/IT already welcomed this session.');
                         }
                     });
                 @endif
@@ -207,7 +209,6 @@
                 const logoutButton = document.querySelector('form[action="{{ route('logout') }}"] button');
                 if(logoutButton) {
                     logoutButton.addEventListener('click', function() {
-                        console.log('[DEBUG] Logout clicked, removing welcome flags.');
                         sessionStorage.removeItem('creator_welcomed'); // เคลียร์ของ Super Admin
                         sessionStorage.removeItem('admin_welcomed');   // เคลียร์ของ Admin
                     });
@@ -218,11 +219,8 @@
 
              {{-- โค้ดแจ้งเตือนสถานะจาก Session (Success/Error) (เหมือนเดิม) --}}
             document.addEventListener('DOMContentLoaded', function () {
-                console.log('[DEBUG] Session Message Check Script Loaded'); 
-
                 @if (session('success'))
                     var successMessage = {!! json_encode(session('success')) !!};
-                    console.log('[DEBUG] Session Success:', successMessage); 
                     Swal.fire({
                         icon: 'success',
                         title: 'สำเร็จ!',
@@ -234,7 +232,6 @@
 
                 @if (session('error'))
                     var errorMessage = {!! json_encode(session('error')) !!};
-                    console.log('[DEBUG] Session Error:', errorMessage); 
                     Swal.fire({
                         icon: 'error',
                         title: 'เกิดข้อผิดพลาด!',
@@ -245,7 +242,6 @@
 
                 @if (session('warning'))
                     var warningMessage = {!! json_encode(session('warning')) !!};
-                    console.log('[DEBUG] Session Warning:', warningMessage);
                     Swal.fire({
                         icon: 'warning',
                         title: 'คำเตือน',
@@ -256,7 +252,6 @@
 
                 @if (session('info'))
                     var infoMessage = {!! json_encode(session('info')) !!};
-                    console.log('[DEBUG] Session Info:', infoMessage);
                     Swal.fire({
                         icon: 'info',
                         title: 'แจ้งเพื่อทราบ',

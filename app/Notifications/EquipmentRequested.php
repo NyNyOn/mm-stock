@@ -35,7 +35,30 @@ class EquipmentRequested extends Notification
 
     public function via(object $notifiable): array
     {
-        return [SynologyChannel::class];
+        return ['database', SynologyChannel::class]; // ✅ Added Database
+    }
+
+    // ✅ Database Notification Structure
+    public function toArray($notifiable)
+    {
+        $equipmentName = $this->transaction->equipment->name ?? 'N/A';
+        $quantity = abs($this->transaction->quantity_change);
+        
+        $title = "มีคำขอเบิกใหม่";
+        $body = "คุณ {$this->submitter->fullname} ขอเบิก '{$equipmentName}' จำนวน {$quantity} ชิ้น";
+
+        if ($this->transaction->status === 'completed') {
+            $title = "เบิกสำเร็จ (Auto-Approved)";
+            $body = "คุณ {$this->submitter->fullname} เบิก '{$equipmentName}' สำเร็จ (อนุมัติอัตโนมัติ)";
+        }
+
+        return [
+            'title' => $title,
+            'body' => $body,
+            'action_url' => route('transactions.index'),
+            'type' => 'info',
+            'icon' => 'fas fa-clipboard-list'
+        ];
     }
 
     public function toSynology(object $notifiable): void

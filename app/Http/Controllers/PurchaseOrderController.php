@@ -69,13 +69,19 @@ class PurchaseOrderController extends Controller
 
             $defaultDeptKey = config('department_stocks.default_key', 'mm');
 
-            return view('purchase-orders.index', compact(
-                'scheduledOrder',
-                'urgentOrders',
-                'jobOrders',
-                'glpiOrders',
-                'defaultDeptKey'
-            ));
+        // ✅ Get Auto PO Schedule Settings
+        $autoPoScheduleDay = \App\Models\Setting::where('key', 'auto_po_schedule_day')->value('value') ?? 24;
+        $autoPoScheduleTime = \App\Models\Setting::where('key', 'auto_po_schedule_time')->value('value') ?? '23:50';
+
+        return view('purchase-orders.index', compact(
+            'scheduledOrder',
+            'urgentOrders',
+            'jobOrders',
+            'glpiOrders',
+            'defaultDeptKey',
+            'autoPoScheduleDay',
+            'autoPoScheduleTime'
+        ));
         } catch (\Exception $e) {
             Log::error('Error loading Purchase Orders index page: ' . $e->getMessage());
             return redirect()->route('dashboard')->with('error', 'ไม่สามารถโหลดข้อมูลใบสั่งซื้อได้ กรุณาตรวจสอบ Log File');
@@ -295,6 +301,13 @@ class PurchaseOrderController extends Controller
         // No explicit wipe of po_number here to be safe, as we are relying on what keys are present.
 
         $order->save();
+
+        // 🔔 Notification: PU Received & PR/PO Assigned (Sync)
+        try {
+            (new \App\Services\SynologyService())->notify(
+                new \App\Notifications\PurchaseOrderUpdatedNotification($order, 'ordered')
+            );
+        } catch (\Exception $e) { Log::error("Notify PU Sync Error: " . $e->getMessage()); }
 
         return $response->json();
     }
@@ -634,6 +647,13 @@ class PurchaseOrderController extends Controller
             $po->status = 'shipped_from_supplier';
             $po->save();
 
+            // 🔔 Notification: PU Hub Callback (Async) mechanism
+            try {
+                (new \App\Services\SynologyService())->notify(
+                    new \App\Notifications\PurchaseOrderUpdatedNotification($po, 'shipped_from_supplier')
+                );
+            } catch (\Exception $e) { Log::error("Notify PU Async Error: " . $e->getMessage()); }
+
             // ✅ Update all items to 'shipped' as well
             foreach($po->items as $item) {
                 if ($item->status === 'pending' || $item->status === 'ordered') {
@@ -643,8 +663,56 @@ class PurchaseOrderController extends Controller
             }
 
             return response()->json(['success' => true, 'message' => 'PO status updated to shipped_from_supplier']);
-        }
+        } else {
+            // ✅✅✅ Floating PO Logic (Create New PO) ✅✅✅
+            try {
+                // Determine PO Code
+                $finalPoCode = $request->po_code ?? $request->pr_code ?? 'UNKNOWN-' . time();
 
-        return response()->json(['success' => false, 'message' => 'PO Not Found'], 404);
+                // Create Floating PO
+                $newPo = PurchaseOrder::create([
+                    'po_number' => $finalPoCode,
+                    'pr_number' => $request->pr_code,
+                    'type'      => 'general', // General/Floating
+                    'status'    => 'shipped_from_supplier', // Assume shipped if coming from this webhook
+                    'ordered_at'=> now(),
+                    'ordered_by_user_id' => Setting::where('key', 'automation_requester_id')->value('value') ?? Auth::id(), // Use System User if possible
+                    'notes'     => 'Unsolicited PO from PU Hub (Floating PO)',
+                    'pu_data'   => $request->all()
+                ]);
+
+                // Try to parse items from payload if available
+                if ($request->has('items') && is_array($request->items)) {
+                   foreach ($request->items as $itemData) {
+                       // Try to find equipment by name or create placeholder?
+                       // Ideally PU sends equipment_id or code. If not, we might strictly need it.
+                       // For now, let's assume they might send 'equipment_id' OR we just store description.
+                       $eqId = $itemData['equipment_id'] ?? null;
+                       $desc = $itemData['item_description'] ?? $itemData['name'] ?? 'Unknown Item';
+                       $qty  = $itemData['quantity'] ?? 1;
+
+                       $newPo->items()->create([
+                           'equipment_id' => $eqId, // Nullable if not found? Schema check needed.
+                           'item_description' => $desc,
+                           'quantity_ordered' => $qty,
+                           'status' => 'shipped_from_supplier'
+                       ]);
+                   }
+                }
+
+                // 🔔 Notify: New Floating PO
+                try {
+                    (new \App\Services\SynologyService())->notify(
+                        new \App\Notifications\PurchaseOrderUpdatedNotification($newPo, 'shipped_from_supplier')
+                    );
+                } catch (\Exception $e) { Log::error("Notify Floating PO Error: " . $e->getMessage()); }
+
+                return response()->json(['success' => true, 'message' => 'New Floating PO Created', 'po_id' => $newPo->id]);
+
+            } catch (\Exception $e) {
+                Log::error("Failed to create Floating PO: " . $e->getMessage());
+                return response()->json(['success' => false, 'message' => 'Failed to create Floating PO: ' . $e->getMessage()], 500);
+            }
+        }
     }
 }

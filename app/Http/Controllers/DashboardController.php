@@ -85,7 +85,7 @@ class DashboardController extends Controller
         // --- Stat Cards Data ---
         $total_equipment = Cache::remember('dashboard_total_equipment', $statCacheTime, function () { return Equipment::sum('quantity'); });
         $low_stock_count = Cache::remember('dashboard_low_stock_count', $statCacheTime, function () { return Equipment::where('min_stock', '>', 0)->whereColumn('quantity', '<=', 'min_stock')->where('quantity', '>', 0)->count(); });
-        $on_order_count = Cache::remember('dashboard_on_order_count', $statCacheTime, function () { return Equipment::where('status', 'on-order')->count(); });
+        $on_order_count = Cache::remember('dashboard_on_order_count', $statCacheTime, function () { return PurchaseOrder::whereIn('status', ['ordered', 'approved', 'shipped_from_supplier', 'partial_receive'])->count(); });
         $warranty_count = Cache::remember('dashboard_warranty_count', $statCacheTime, function () { return Equipment::whereNotNull('warranty_date')->whereBetween('warranty_date', [now(), now()->addDays(30)])->count(); });
         $urgent_order_count = Cache::remember('dashboard_urgent_order_count', $statCacheTime, function () { return PurchaseOrder::where('type', 'urgent')->count(); });
         $scheduled_order_count = Cache::remember('dashboard_scheduled_order_count', $statCacheTime, function () { return PurchaseOrder::where('type', 'scheduled')->count(); });
@@ -93,7 +93,11 @@ class DashboardController extends Controller
         $job_order_count = Cache::remember('dashboard_job_order_count', $statCacheTime, function () { return PurchaseOrder::where('type', 'job_order')->count(); });
 
         // --- List Data ---
-        $on_order_items = Cache::remember('dashboard_on_order_items', $listCacheTime, function () { return Equipment::where('status', 'on-order')->orderBy('name')->limit(5)->get(); });
+        $on_order_items = Cache::remember('dashboard_on_order_items', $listCacheTime, function () { 
+            return \App\Models\PurchaseOrderItem::whereHas('purchaseOrder', function($q) {
+                $q->whereIn('status', ['ordered', 'approved', 'shipped_from_supplier', 'partial_receive']);
+            })->with('equipment')->latest()->limit(5)->get(); 
+        });
         $out_of_stock_items = Cache::remember('dashboard_out_of_stock_items', $listCacheTime, function () { return Equipment::where('quantity', '<=', 0)->orderBy('name')->limit(5)->get(); });
         $low_stock_items = Cache::remember('dashboard_low_stock_items', $listCacheTime, function () { return Equipment::where('min_stock', '>', 0)->whereColumn('quantity', '<=', 'min_stock')->where('quantity', '>', 0)->orderBy('quantity')->limit(5)->get(); });
 

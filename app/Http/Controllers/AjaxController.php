@@ -86,6 +86,15 @@ class AjaxController extends Controller
             case 'search_equipment_for_chart':
                 return $this->searchEquipmentForChart($request);
 
+            case 'get_notifications':
+                return $this->getNotifications();
+            case 'mark_notifications_read':
+                return $this->markNotificationsRead();
+            case 'clear_notifications':
+                return $this->clearNotifications();
+            case 'get_popular_items':
+                return $this->getPopularItems();
+
             default:
                 return response()->json(['success' => false, 'message' => 'Invalid action specified.']);
         }
@@ -618,6 +627,157 @@ class AjaxController extends Controller
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
+        }
+    }
+
+
+
+    private function getNotifications()
+    {
+        try {
+            $user = Auth::user();
+            // ✅ Use local user_meta table instead of touching sync_ldap
+            $meta = DB::table('user_meta')->where('user_id', $user->id)->first();
+            $lastCheck = $meta ? $meta->last_notification_check : null;
+            $lastCleared = $meta ? $meta->last_cleared_at : null;
+            
+            $notifications = [];
+            $unreadCount = 0;
+            
+            // 1. Low Stock Notifications
+            $lowStockQuery = Equipment::where(function($q) {
+                    $q->where('status', 'low_stock')
+                      ->orWhere(function($sub) {
+                          $sub->whereColumn('quantity', '<=', 'min_stock')->where('min_stock', '>', 0);
+                      });
+                })
+                ->limit(10); // Check more items since we might filter some out
+            
+            // Filter by cleared time if exists
+            if ($lastCleared) {
+                // Only show items updated AFTER the clear time
+                $lowStockQuery->where('updated_at', '>', $lastCleared);
+            }
+            
+            $lowStockItems = $lowStockQuery->get();
+
+            foreach ($lowStockItems as $item) {
+                // If item updated AFTER last check, it's unread.
+                $isUnread = !$lastCheck || ($item->updated_at && $item->updated_at->gt($lastCheck));
+                if ($isUnread) $unreadCount++;
+
+                if ($item->quantity <= 0) {
+                    $type = 'out_of_stock';
+                    $message = "สินค้าหมด: {$item->name}";
+                } else {
+                    $type = 'low_stock';
+                    $message = "สินค้าใกล้หมด: {$item->name} (เหลือ {$item->quantity})";
+                }
+
+                $notifications[] = [
+                    'id' => $item->id,
+                    'type' => $type,
+                    'message' => $message,
+                    'url' => route('equipment.index', ['search' => $item->name]),
+                    'is_read' => !$isUnread
+                ];
+            }
+
+            // 2. Pending Approval Notifications (For Approvers)
+            if ($user && $user->can('transaction:approve')) {
+                $pendingQuery = Transaction::where('status', 'pending_approval');
+                
+                if ($lastCleared) {
+                    $pendingQuery->where('created_at', '>', $lastCleared);
+                }
+                
+                $pendingTxs = $pendingQuery->get();
+                $pendingCount = $pendingTxs->count();
+                
+                if ($pendingCount > 0) {
+                     // Check if ANY pending tx is newer than last check
+                     $latestPending = $pendingTxs->max('created_at');
+                     $isUnread = !$lastCheck || ($latestPending && $latestPending->gt($lastCheck));
+                     if ($isUnread) $unreadCount++;
+
+                     $notifications[] = [
+                        'id' => 'pending-tx',
+                        'type' => 'pending_approval',
+                        'message' => "มีรายการรออนุมัติ {$pendingCount} รายการ",
+                        'url' => route('transactions.index', ['status' => 'pending_approval']),
+                        'is_read' => !$isUnread
+                    ];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'count' => $unreadCount, // Badge shows unread only
+                'total' => count($notifications),
+                'notifications' => $notifications
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    private function markNotificationsRead()
+    {
+        try {
+            $user = Auth::user();
+            if ($user) {
+                // ✅ Update local user_meta table
+                DB::table('user_meta')->updateOrInsert(
+                    ['user_id' => $user->id],
+                    ['last_notification_check' => now(), 'updated_at' => now()]
+                );
+            }
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+
+    private function clearNotifications()
+    {
+        try {
+            $user = Auth::user();
+            if ($user) {
+                 DB::table('user_meta')->updateOrInsert(
+                    ['user_id' => $user->id],
+                    ['last_cleared_at' => now(), 'last_notification_check' => now(), 'updated_at' => now()]
+                );
+            }
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+    private function getPopularItems()
+    {
+        try {
+            // Get top 5 most frequently withdrawn items
+            $popular = Transaction::whereIn('type', ['withdraw', 'borrow', 'consumable']) // Include all usage types
+                ->select('equipment_id', DB::raw('count(*) as total_usage'))
+                ->groupBy('equipment_id')
+                ->orderByDesc('total_usage')
+                ->limit(5)
+                ->with('equipment:id,name,unit_id') // Eager load equipment
+                ->get();
+            
+            $results = $popular->map(function($tx) {
+                 if(!$tx->equipment) return null;
+                 return [
+                     'name' => $tx->equipment->name,
+                     'count' => $tx->total_usage
+                 ];
+            })->filter()->values();
+
+            return response()->json(['success' => true, 'items' => $results]);
+        } catch (\Exception $e) {
+             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
     }
 }

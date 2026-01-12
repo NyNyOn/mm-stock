@@ -18,21 +18,43 @@
                 </div>
             @endcan
         </div>
+        
+        {{-- Popular Items Ticker (Center) --}}
+        <div class="hidden lg:flex flex-1 justify-center items-center px-4 overflow-hidden mx-4">
+            <div id="popular-ticker" class="group flex items-center space-x-2 bg-white/50 backdrop-blur-sm border border-gray-100 px-4 py-1.5 rounded-full shadow-sm hover:shadow-md hover:border-blue-100 transition-all cursor-default select-none">
+                 <div class="relative w-5 h-5 flex items-center justify-center bg-orange-100 text-orange-500 rounded-full">
+                     <i class="fas fa-fire text-[10px] animate-pulse"></i>
+                 </div>
+                 <div class="flex flex-col h-5 overflow-hidden justify-center">
+                      <span id="ticker-content" class="text-xs font-medium text-gray-600 whitespace-nowrap transition-transform duration-500 transform translate-y-0">
+                          กำลังโหลดข้อมูล...
+                      </span>
+                 </div>
+            </div>
+        </div>
 
         <div class="flex items-center space-x-2 sm:space-x-6">
-            {{-- (โค้ดเดิมของคุณ: ปุ่ม Export) --}}
-            <div class="items-center hidden space-x-3 sm:flex">
-                <button onclick="alert('ฟังก์ชัน Export ยังไม่ถูกสร้าง');"
-                        class="p-3 text-blue-600 transition-all rounded-2xl bg-gradient-to-br from-blue-100 to-blue-200 hover:shadow-lg button-soft gentle-shadow"
-                        title="ส่งออกข้อมูล">
-                    <i class="text-sm fas fa-download"></i>
-                </button>
-            </div>
-            {{-- (โค้ดเดิมของคุณ: ปุ่ม Notifications) --}}
+            {{-- (โค้ดเดิมของคุณ: ปุ่ม Notifications + Dropdown) --}}
             <div class="relative" id="notifications-button-wrapper">
-                <button onclick="toggleDropdown('notifications-dropdown')" class="relative p-3 transition-all rounded-2xl hover:bg-gray-100 button-soft">
-                    <i class="text-sm text-gray-600 fas fa-bell"></i>
+                <button onclick="toggleDropdown('notifications-dropdown')" class="relative p-3 transition-all rounded-2xl hover:bg-gray-100 button-soft group">
+                    <i class="text-lg text-gray-500 group-hover:text-blue-600 transition-colors fas fa-inbox"></i>
+                    {{-- Badge Count --}}
+                    <span id="notification-count" class="absolute top-2 right-2 flex px-1.5 py-0.5 text-[10px] font-bold text-white bg-red-500 rounded-full shadow-sm hidden">0</span>
                 </button>
+
+                {{-- Notification Dropdown --}}
+                <div id="notifications-dropdown" class="absolute right-0 z-50 hidden mt-2 origin-top-right w-80 rounded-2xl bg-white shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 animate-fade-in-down overflow-hidden">
+                    <div class="p-3 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
+                        <h3 class="font-bold text-sm text-gray-700">การแจ้งเตือน</h3>
+                        <button id="clear-notifs-btn" class="text-[10px] text-gray-500 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg transition-all" title="ล้างการแจ้งเตือนทั้งหมด">
+                            <i class="fas fa-trash-alt mr-1"></i>ล้างทั้งหมด
+                        </button>
+                    </div>
+                    <div id="notifications-list" class="max-h-80 overflow-y-auto scrollbar-thin">
+                        {{-- JS will render items here --}}
+                        <div class="p-8 text-center text-gray-400 text-sm">ไม่มีการแจ้งเตือน</div>
+                    </div>
+                </div>
             </div>
 
             {{-- (โค้ดเดิมของคุณ: Dropdown โปรไฟล์) --}}

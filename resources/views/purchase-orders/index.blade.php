@@ -27,6 +27,12 @@
                         class="flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 rounded-xl hover:shadow-lg button-soft">
                         <i class="mr-2 fas fa-user-cog"></i> ตั้งค่าผู้สั่งอัตโนมัติ
                     </button>
+                    {{-- ✅ START: ปุ่มตั้งค่าตารางเวลา Auto PO --}}
+                    <button type="button" onclick="openAutoPoScheduleModal()"
+                        class="flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-br from-orange-100 to-orange-200 text-orange-700 rounded-xl hover:shadow-lg button-soft">
+                        <i class="mr-2 fas fa-clock"></i> ตั้งเวลารอบอัตโนมัติ
+                    </button>
+                    {{-- ✅ END: ปุ่มตั้งค่าตารางเวลา Auto PO --}}
                     @endcan
                     @can('po:manage')
                     <form id="submit-scheduled-form" action="{{ route('purchase-orders.submitScheduled') }}" method="POST"
@@ -219,9 +225,138 @@
         </div>
     </div>
 
+
+    <!-- Modal ตั้งค่ารอบอัตโนมัติ -->
+    <div id="autoPoScheduleModal" class="fixed inset-0 z-50 items-center justify-center hidden p-4 modal-backdrop-soft">
+        <div class="w-full max-w-lg soft-card rounded-2xl modal-content-wrapper animate-slide-up-soft">
+            <div class="flex items-center justify-between p-5 border-b">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold text-gray-900" id="modal-title">ตั้งเวลาตรวจสอบสต็อกอัตโนมัติ</h3>
+                    <button type="button" class="text-gray-400 hover:text-gray-500" onclick="closeModal('autoPoScheduleModal')">
+                        <span class="sr-only">Close</span>
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-600 mb-4">
+                    ระบบจะทำการตรวจสอบสต็อกสินค้าและสร้างใบสั่งซื้อ (PO) ตามวันและเวลาที่กำหนดนี้
+                </p>
+                <form id="auto-po-schedule-form" action="{{ route('settings.update.auto-po-schedule') }}" method="POST" class="mt-4 space-y-4" novalidate>
+                    @csrf
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {{-- Day Selection --}}
+                        <div>
+                            <label for="auto_po_day" class="block text-sm font-medium text-gray-700 mb-1">วันที่ของเดือน</label>
+                            <select id="auto_po_day" name="day" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                @for ($i = 1; $i <= 28; $i++)
+                                    <option value="{{ $i }}" {{ (isset($autoPoScheduleDay) && $autoPoScheduleDay == $i) ? 'selected' : '' }}>{{ $i }}</option>
+                                @endfor
+                            </select>
+                        </div>
+
+                        {{-- Time Selection --}}
+                        <div>
+                            <label for="auto_po_time" class="block text-sm font-medium text-gray-700 mb-1">เวลา (24 ชม.)</label>
+                            <div class="relative">
+                                <input type="text" id="auto_po_time" name="time" value="{{ $autoPoScheduleTime ?? '23:50' }}" 
+                                    class="block w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm pl-10 cursor-pointer bg-white" readonly>
+                                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-4 space-x-2 border-t mt-4">
+                         <button type="button" class="px-4 py-2 font-medium text-gray-800 bg-gray-200 rounded-lg hover:bg-gray-300" onclick="closeModal('autoPoScheduleModal')">ปิด</button>
+                        <button type="submit" class="px-6 py-2 font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-save mr-2"></i> บันทึก
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
 @endsection
 
 @push('scripts')
+{{-- JavaScript สำหรับ Auto PO Schedule Modal --}}
+<script>
+    function openAutoPoScheduleModal() {
+        if (typeof showModal === 'function') {
+            showModal('autoPoScheduleModal');
+        } else {
+            document.getElementById('autoPoScheduleModal').classList.remove('hidden');
+            document.getElementById('autoPoScheduleModal').classList.add('flex');
+        }
+        
+        // Initialize Flatpickr if not already initialized
+        if (!document.getElementById('auto_po_time')._flatpickr) {
+            flatpickr("#auto_po_time", {
+                enableTime: true,
+                noCalendar: true,
+                dateFormat: "H:i",
+                time_24hr: true,
+                disableMobile: "true", // Force custom UI even on mobile for better experience
+                static: true // Allow positioning inside modal
+            });
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const autoPoForm = document.getElementById('auto-po-schedule-form');
+        if (autoPoForm) {
+            autoPoForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const btn = autoPoForm.querySelector('button[type="submit"]');
+                const originalText = btn.innerHTML;
+                
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> กำลังบันทึก...';
+
+                fetch(autoPoForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json'
+                    },
+                    body: new FormData(autoPoForm)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'บันทึกสำเร็จ',
+                            text: data.message,
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                        if (typeof closeModal === 'function') {
+                            closeModal('autoPoScheduleModal');
+                        } else {
+                            document.getElementById('autoPoScheduleModal').classList.add('hidden');
+                        }
+                    } else {
+                        Swal.fire('ผิดพลาด', 'เกิดข้อผิดพลาดที่ไม่รู้จัก', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('ผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้', 'error');
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                });
+            });
+        }
+    });
+</script>
+
 {{-- JavaScript เดิมสำหรับ Modal เพิ่ม Item และอื่นๆ --}}
 <script>
     document.addEventListener('DOMContentLoaded', function () {

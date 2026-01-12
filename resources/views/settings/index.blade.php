@@ -13,6 +13,51 @@
         {{-- คุณสามารถเพิ่มฟอร์มการตั้งค่าต่างๆ ได้ที่นี่ --}}
     </div>
 
+
+    {{-- ✅✅✅ START: Automated Stock Check Schedule ✅✅✅ --}}
+    <div class="max-w-2xl p-6 mx-auto soft-card rounded-2xl gentle-shadow">
+        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <i class="fas fa-robot text-blue-500"></i> ตรวจสอบสต็อกอัตโนมัติ
+        </h3>
+        <p class="mt-2 text-sm text-gray-600">
+            ตั้งค่าวันและเวลาที่ต้องการให้ระบบตรวจสอบสินค้าใกล้หมดสต็อก และสร้างใบสั่งซื้อ (PO) โดยอัตโนมัติ พร้อมส่งแจ้งเตือนผ่าน Synology Chat
+        </p>
+
+        @php
+            $currentDay = \App\Models\Setting::where('key', 'auto_po_schedule_day')->value('value') ?? 24;
+            $currentTime = \App\Models\Setting::where('key', 'auto_po_schedule_time')->value('value') ?? '23:50';
+        @endphp
+
+        <form id="auto-po-schedule-form" action="{{ route('settings.update.auto-po-schedule') }}" method="POST" class="mt-4 space-y-4">
+            @csrf
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {{-- Day Selection --}}
+                <div>
+                    <label for="auto_po_day" class="block text-sm font-medium text-gray-700 mb-1">วันที่ของเดือน</label>
+                    <select id="auto_po_day" name="day" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                        @for ($i = 1; $i <= 28; $i++)
+                            <option value="{{ $i }}" @selected($currentDay == $i)>{{ $i }}</option>
+                        @endfor
+                    </select>
+                </div>
+
+                {{-- Time Selection --}}
+                <div>
+                    <label for="auto_po_time" class="block text-sm font-medium text-gray-700 mb-1">เวลา (24 ชม.)</label>
+                    <input type="time" id="auto_po_time" name="time" value="{{ $currentTime }}" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <i class="fas fa-save mr-2"></i> บันทึกการตั้งค่า
+                </button>
+            </div>
+        </form>
+    </div>
+    {{-- ✅✅✅ END: Automated Stock Check Schedule ✅✅✅ --}}
+
     {{-- ✅✅✅ START: Add Maintenance Mode Section ✅✅✅ --}}
     @can('maintenance:mode') {{-- Check for the new permission --}}
     <div class="max-w-2xl p-6 mx-auto soft-card rounded-2xl gentle-shadow">
@@ -139,6 +184,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+
 
         // 2. ตัวจัดการปุ่ม "เปิดโหมดปรับปรุง" (Logic ใหม่)
         const enableBtn = document.getElementById('enable-maintenance-button');

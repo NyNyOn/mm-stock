@@ -76,6 +76,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::post('/settings/automation-requester', [SettingsController::class, 'updateAutomationRequester'])->name('settings.update.automation-requester');
     Route::post('/settings/automation-job-requester', [SettingsController::class, 'updateAutomationJobRequester'])->name('settings.update.automation-job-requester');
+    Route::post('/settings/auto-po-schedule', [SettingsController::class, 'updateAutoPoSchedule'])->name('settings.update.auto-po-schedule');
 
     // ✅✅✅ START: Add Maintenance Mode Routes ✅✅✅
     // (ใช้ MaintenanceController ตัวเดิมที่ใช้ร่วมกัน)

@@ -274,7 +274,11 @@ async function submitCart() {
 
         if (res.ok) {
             await Swal.fire({ icon: 'success', title: 'สำเร็จ!', text: 'บันทึกรายการเบิกเรียบร้อยแล้ว', timer: 2000, showConfirmButton: false });
-            cart = []; saveCart(); closeCartModal(); window.location.reload();
+            cart = [];
+            localStorage.removeItem('mm_stock_cart'); // Force clear
+            updateCartCount();
+            closeCartModal();
+            window.location.reload();
         } else {
             // ✅ INCREASED UX: ถ้าติดเรื่องประเมิน ให้เด้งไปหน้าประเมินเลย
             if (res.status === 403 && data.unrated_items) {
@@ -288,7 +292,41 @@ async function submitCart() {
                 return;
             }
 
-            Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: data.message || 'Unknown Error', confirmButtonText: 'ปิด' });
+            // ⚠️ Handle Structured Error (Insufficient Stock)
+            let errorJson = null;
+            try { errorJson = JSON.parse(data.message); } catch (e) { }
+
+            if (errorJson && errorJson.failed_item) {
+                const failedItem = errorJson.failed_item;
+                const { isConfirmed, isDenied } = await Swal.fire({
+                    icon: 'error',
+                    title: 'สินค้าไม่พอ!',
+                    html: errorJson.html,
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: 'รับทราบ',
+                    denyButtonText: 'ลบรายการนี้ออกจากตะกร้า',
+                    denyButtonColor: '#d33',
+                    cancelButtonText: 'ยกเลิก',
+                    customClass: { popup: 'w-full max-w-lg' }
+                });
+
+                if (isDenied) {
+                    cart = cart.filter(i => i.id !== failedItem.id);
+                    saveCart();
+                    renderCartItems();
+                    Swal.fire('ลบเรียบร้อย', `ลบ ${failedItem.name} ออกจากตะกร้าแล้ว`, 'success');
+                }
+                return;
+            }
+
+            Swal.fire({
+                icon: 'error',
+                title: null,
+                html: data.message || 'Unknown Error',
+                confirmButtonText: 'ปิด',
+                customClass: { popup: 'w-full max-w-lg' }
+            });
         }
     } catch (e) {
         console.error(e);

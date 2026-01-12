@@ -22,7 +22,19 @@ class ItemReturned extends Notification
 
     public function via($notifiable)
     {
-        return [SynologyChannel::class];
+        return ['database', SynologyChannel::class]; // ✅ Added Database
+    }
+
+    // ✅ Database Notification Structure
+    public function toArray($notifiable)
+    {
+        return [
+            'title' => 'มีการคืนอุปกรณ์',
+            'body' => "ผู้ใช้คืนอุปกรณ์ '{$this->transaction->equipment->name}' เรียบร้อยแล้ว",
+            'action_url' => route('transactions.index'),
+            'type' => 'info',
+            'icon' => 'fas fa-undo'
+        ];
     }
 
     public function toSynology($notifiable)

@@ -650,12 +650,30 @@ class EquipmentController extends Controller
     {
         $this->authorize('equipment:manage');
         $this->switchToDefaultDb();
-        $superAdminId = config('app.super_admin_id');
-        if ($equipment->transactions()->exists() && Auth::id() != $superAdminId) {
-            $message = 'ไม่สามารถลบได้ เนื่องจากมีประวัติการทำธุรกรรม (เฉพาะ Super Admin ที่ลบได้)';
-            if (request()->wantsJson()) { return response()->json(['success' => false, 'message' => $message], 422); }
-            return back()->with('error', $message);
+        $superAdminId = (int)config('app.super_admin_id');
+        
+        $userGroupSlug = Auth::user()->serviceUserRole?->userGroup?->slug;
+        $slugLower = $userGroupSlug ? strtolower(str_replace(' ', '', $userGroupSlug)) : '';
+        $isIT = in_array($slugLower, ['it', 'admin', 'administrator', 'itsupport', 'it-support']);
+        $isSuperAdmin = (Auth::id() === $superAdminId);
+
+        // ✅ POLICY:
+        // 1. Transactions Exist -> Only SuperAdmin/IT can delete (Force Delete). Others are BLOCKED.
+        // 2. No Transactions -> Anyone with 'equipment:manage' can delete.
+        if ($equipment->transactions()->exists() && !$isSuperAdmin && !$isIT) {
+             $message = 'ไม่สามารถลบได้ เนื่องจากมีประวัติการทำธุรกรรม (สงวนสิทธิ์เฉพาะ ID 9 และกลุ่ม IT เท่านั้น)';
+             if (request()->wantsJson()) { return response()->json(['success' => false, 'message' => $message], 403); }
+             return back()->with('error', $message);
         }
+
+        // Note: Transactions check is no longer needed to block deletion IF we allow IT/ID9 to force delete anyway.
+        // But if there is any other constraint, we might keep it.
+        // User said: "ID9 / IT will be able to delete... by not caring if it's attached".
+        // So we proceed to allow deletion for these users.
+        
+        // However, if we wanted to prevent ACCIDENTAL deletion of populated items by IT, we might want a confirmation?
+        // But the user said "Can delete immediately by not caring". So we allow it.
+
         DB::transaction(function () use ($equipment) {
             $equipment->loadMissing('images');
             foreach ($equipment->images as $image) {

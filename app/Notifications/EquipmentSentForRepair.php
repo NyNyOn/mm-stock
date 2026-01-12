@@ -26,7 +26,19 @@ class EquipmentSentForRepair extends Notification
 
     public function via($notifiable)
     {
-        return [SynologyChannel::class];
+        return ['database', SynologyChannel::class]; // ✅ Added Database
+    }
+
+    // ✅ Database Notification Structure
+    public function toArray($notifiable)
+    {
+        return [
+            'title' => 'อุปกรณ์ส่งซ่อม',
+            'body' => "อุปกรณ์ '{$this->equipment->name}' ถูกส่งซ่อม (อาการ: {$this->log->problem_description})",
+            'action_url' => route('equipment.index'),
+            'type' => 'warning',
+            'icon' => 'fas fa-tools'
+        ];
     }
 
     public function toSynology($notifiable)

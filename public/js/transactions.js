@@ -40,19 +40,19 @@ function showWithdrawalModal(type = 'withdraw') {
     }
 
     const form = document.getElementById('withdrawal-form');
-    if(form) form.reset();
+    if (form) form.reset();
     updateWithdrawalUI();
     showModal('withdrawal-modal');
 }
 
 function openSelectItemModal() {
     const searchInput = document.getElementById('select-item-search');
-    if(searchInput) searchInput.value = '';
+    if (searchInput) searchInput.value = '';
 
     searchEquipmentForSelection(1);
     showModal('select-item-modal');
 
-    if(searchInput) {
+    if (searchInput) {
         searchInput.removeEventListener('keyup', handleSearchInput);
         searchInput.addEventListener('keyup', handleSearchInput);
     }
@@ -68,7 +68,7 @@ function handleSearchInput() {
 async function searchEquipmentForSelection(page = 1) {
     const listContainer = document.getElementById('select-item-list');
     const term = document.getElementById('select-item-search')?.value || '';
-    if(listContainer) listContainer.innerHTML = '<div class="text-center p-8"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+    if (listContainer) listContainer.innerHTML = '<div class="text-center p-8"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
 
     try {
         const response = await fetch(`/ajax/items?q=${encodeURIComponent(term)}&page=${page}`, {
@@ -80,11 +80,11 @@ async function searchEquipmentForSelection(page = 1) {
         });
         const result = await response.json();
 
-        if(listContainer) listContainer.innerHTML = '';
+        if (listContainer) listContainer.innerHTML = '';
         if (result.data && result.data.length > 0) {
             result.data.forEach(item => {
                 const isAdded = withdrawalItems.some(reqItem => reqItem.id === item.id);
-                
+
                 // 🌟 ADD: Star Rating Display 🌟
                 let starHtml = '';
                 if (item.avg_rating) {
@@ -118,11 +118,11 @@ async function searchEquipmentForSelection(page = 1) {
                 listContainer.appendChild(card);
             });
         } else {
-            if(listContainer) listContainer.innerHTML = '<p class="text-center text-gray-500 p-8">ไม่พบอุปกรณ์ที่ตรงตามเงื่อนไข</p>';
+            if (listContainer) listContainer.innerHTML = '<p class="text-center text-gray-500 p-8">ไม่พบอุปกรณ์ที่ตรงตามเงื่อนไข</p>';
         }
     } catch (error) {
         console.error('Search error:', error);
-        if(listContainer) listContainer.innerHTML = '<p class="text-center text-red-500 p-8">เกิดข้อผิดพลาดในการค้นหา</p>';
+        if (listContainer) listContainer.innerHTML = '<p class="text-center text-red-500 p-8">เกิดข้อผิดพลาดในการค้นหา</p>';
     }
 }
 
@@ -148,10 +148,10 @@ function addItemToWithdrawalList(item) {
 function updateWithdrawalUI() {
     const container = document.getElementById('withdrawal-items-container');
     const placeholder = document.getElementById('no-withdrawal-items-placeholder');
-    if(!container) return;
+    if (!container) return;
     container.innerHTML = '';
     if (withdrawalItems.length > 0) {
-        if(placeholder) placeholder.style.display = 'none';
+        if (placeholder) placeholder.style.display = 'none';
         withdrawalItems.forEach((item, index) => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'flex items-center p-2 bg-white border rounded-lg';
@@ -172,7 +172,7 @@ function updateWithdrawalUI() {
             container.appendChild(itemDiv);
         });
     } else {
-         if(placeholder) placeholder.style.display = 'block';
+        if (placeholder) placeholder.style.display = 'block';
     }
 }
 
@@ -212,15 +212,15 @@ async function submitWithdrawal() {
     const itemsToSubmit = withdrawalItems.map(item => ({ id: item.id, quantity: item.withdraw_quantity }));
 
     // ✅ เปลี่ยน Route เป็น /ajax/user/transact เพื่อใช้ Rating Block Logic
-    const apiEndpoint = '/ajax/user/transact'; 
+    const apiEndpoint = '/ajax/user/transact';
 
     const payload = {
         // Field สำหรับ handleUserTransaction
-        equipment_id: itemsToSubmit[0].id,   
-        quantity: itemsToSubmit[0].quantity, 
+        equipment_id: itemsToSubmit[0].id,
+        quantity: itemsToSubmit[0].quantity,
         type: transactionType === 'borrow' ? 'returnable' : 'consumable',
         requestor_type: 'self', // สมมติเบิกให้ตัวเอง
-        
+
         // Field เดิม
         requestor_name: requestorName,
         purpose: purpose,
@@ -255,7 +255,7 @@ async function submitWithdrawal() {
             // ⛔ ดักจับ Rating Block (Error 403)
             if (response.status === 403 && data.error_code === 'UNRATED_TRANSACTIONS') {
                 closeModal('withdrawal-modal');
-                
+
                 if (typeof openRatingModal === 'function') {
                     openRatingModal(data.unrated_items);
                     Swal.fire({
@@ -270,7 +270,14 @@ async function submitWithdrawal() {
                 return;
             }
 
-            showToast(data.message || 'เกิดข้อผิดพลาด', 'error');
+            // showToast(data.message || 'เกิดข้อผิดพลาด', 'error');
+            Swal.fire({
+                icon: 'error',
+                title: null,
+                html: data.message || 'เกิดข้อผิดพลาด',
+                confirmButtonText: 'ปิด',
+                customClass: { popup: 'w-full max-w-lg' }
+            });
         }
     } catch (error) {
         console.error('Submission error:', error);

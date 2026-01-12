@@ -60,6 +60,27 @@ class SettingsController extends Controller
     }
 
     /**
+     * (Method ใหม่) บันทึกตารางเวลาตรวจสอบสต็อกอัตโนมัติ
+     */
+    public function updateAutoPoSchedule(Request $request)
+    {
+        $request->validate([
+            'day' => 'required|integer|min:1|max:31',
+            'time' => 'required|date_format:H:i',
+        ]);
+
+        try {
+            Setting::updateOrCreate(['key' => 'auto_po_schedule_day'], ['value' => $request->day]);
+            Setting::updateOrCreate(['key' => 'auto_po_schedule_time'], ['value' => $request->time]);
+
+            return response()->json(['message' => 'บันทึกตารางเวลาตรวจสอบสต็อกเรียบร้อยแล้ว']);
+        } catch (\Exception $e) {
+            Log::error('Error saving auto po schedule: ' . $e->getMessage());
+            return response()->json(['message' => 'เกิดข้อผิดพลาดในการบันทึก'], 500);
+        }
+    }
+
+    /**
      * (Method ใหม่สำหรับ AJAX) ดึงรายชื่อ User พร้อมกับค่าที่ตั้งไว้ปัจจุบัน
      */
     public function getLdapUsersWithSetting(Request $request, $settingKey)

@@ -35,7 +35,6 @@
                     'equipment.index' => ['icon' => 'fa-laptop', 'title' => 'จัดการอุปกรณ์', 'permission' => 'equipment:view'],
                     'receive.index' => ['icon' => 'fa-download', 'title' => 'รับเข้าอุปกรณ์', 'permission' => 'receive:view'],
                     'stock-checks.index' => ['icon' => 'fa-clipboard-list', 'title' => 'ตรวจนับสต็อก', 'permission' => 'stock-check:manage'],
-                    'disposal.index' => ['icon' => 'fa-trash-can', 'title' => 'ตัดจำหน่าย', 'permission' => 'disposal:view'],
                 ]
             ],
             'purchasing' => [
@@ -55,6 +54,7 @@
                     'returns.index' => ['icon' => 'fa-rotate-left', 'title' => 'รับคืน / แจ้งเสีย', 'permission' => 'return:view'],
                     'consumable-returns.index' => ['icon' => 'fa-box-open', 'title' => 'คืนวัสดุสิ้นเปลือง', 'permission' => 'consumable:return'],
                     'maintenance.index' => ['icon' => 'fa-hammer', 'title' => 'รายการซ่อมบำรุง', 'permission' => 'maintenance:view'],
+                    'disposal.index' => ['icon' => 'fa-trash-can', 'title' => 'ตัดจำหน่าย', 'permission' => 'disposal:view'],
                 ]
             ],
             'analytics' => [
@@ -97,38 +97,48 @@
     {{-- Header Section --}}
     <div class="p-6"> 
         {{-- Logo Area --}}
-        <div class="flex items-center mb-8 space-x-3 animate-fade-in group cursor-default">
-            <div class="relative transition-transform duration-500 group-hover:rotate-12">
-                <div class="absolute inset-0 bg-blue-500 blur-xl opacity-20 rounded-full"></div>
-                <div class="relative flex items-center justify-center w-12 h-12 bg-white rounded-2xl shadow-[0_4px_15px_rgba(0,0,0,0.05)] border border-blue-50">
-                    <i class="text-xl text-transparent bg-clip-text bg-gradient-to-br from-blue-500 to-indigo-600 fas fa-cube"></i>
+        {{-- Logo Area --}}
+        <div class="flex items-center mb-6 space-x-3 px-1 animate-fade-in group cursor-default">
+            <div class="relative group-hover:scale-105 transition-transform duration-500">
+                <div class="absolute inset-0 bg-indigo-500 blur-xl opacity-25 rounded-full group-hover:opacity-40 transition-opacity"></div>
+                <div class="relative flex items-center justify-center w-11 h-11 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-xl shadow-lg shadow-indigo-500/30 text-white border border-white/20">
+                    <i class="fas fa-cube text-lg drop-shadow-md"></i>
                 </div>
             </div>
             <div>
-                <h1 class="text-xl font-black text-slate-800 tracking-tight">{{ config('app.name', 'MM Stock') }}</h1>
-                <div class="flex items-center space-x-1">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System</span>
+                <h1 class="text-xl font-black text-slate-800 tracking-tight leading-tight">{{ config('app.name', 'MM Stock') }}</h1>
+                <div class="flex items-center space-x-1.5 mt-0.5">
+                    <div class="flex h-2 w-2 relative">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-1.5 py-0.5 rounded-md">Pro System</span>
                 </div>
             </div>
         </div>
 
         {{-- User Profile Card --}}
-        <div class="p-3 mb-2 bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-blue-50/50 transition-all duration-300 hover:shadow-md hover:border-blue-100 group">
-            <div class="flex items-center space-x-3">
+        <div class="p-3 mb-2 mx-1 mt-2 bg-gradient-to-br from-white to-blue-50/30 rounded-2xl border border-white/60 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] relative group overflow-hidden">
+            {{-- Decorative Background --}}
+            <div class="absolute top-0 right-0 w-20 h-20 bg-blue-400/10 blur-2xl rounded-full -mr-10 -mt-10"></div>
+            
+            <div class="flex items-center space-x-3.5 relative z-10">
                 @auth
-                    <div class="relative">
-                         <x-user-profile-picture :user="Auth::user()" size="md" class="ring-2 ring-white shadow-sm" />
-                         <div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                    <div class="flex-shrink-0">
+                         <div class="p-0.5 bg-gradient-to-tr from-blue-100 to-white rounded-full shadow-sm">
+                            <x-user-profile-picture :user="Auth::user()" size="md" class="border-2 border-white rounded-full object-cover w-10 h-10" />
+                         </div>
                     </div>
                 @endauth
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">{{ Auth::user()->fullname ?? 'ผู้เยี่ยมชม' }}</p>
-                    <p class="text-[11px] text-slate-400 truncate font-medium">
-                        @auth
-                            {{ optional(optional(Auth::user()->serviceUserRole)->userGroup)->name ?? 'ผู้ใช้งานทั่วไป' }}
-                        @endauth
+                <div class="flex-1 min-w-0 flex flex-col justify-center">
+                    <p class="text-[13px] font-bold text-slate-800 break-words leading-tight group-hover:text-blue-600 transition-colors">
+                        {{ Auth::user()->fullname ?? 'ผู้เยี่ยมชม' }}
                     </p>
+                    <div class="flex items-center mt-1">
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100/50">
+                            {{ optional(optional(Auth::user()->serviceUserRole)->userGroup)->name ?? 'User' }}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>

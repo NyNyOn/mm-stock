@@ -27,7 +27,19 @@ class RequestApproved extends Notification
         // The SynologyService usage bypasses the standard $notifiable->notify() flow slightly.
         // We still need to return the channel here for clarity, though it might not be strictly used
         // by the SynologyService->notify() call depending on its internal implementation.
-        return [SynologyChannel::class];
+        return ['database', SynologyChannel::class]; // ✅ Added Database
+    }
+
+    // ✅ Database Notification Structure
+    public function toArray($notifiable)
+    {
+        return [
+            'title' => 'คำขออนุมัติแล้ว',
+            'body' => "คำขอเบิกอุปกรณ์ '{$this->transaction->equipment->name}' ได้รับการอนุมัติแล้ว",
+            'action_url' => route('user.equipment.index'),
+            'type' => 'success', // success, error, info
+            'icon' => 'fas fa-check-circle'
+        ];
     }
 
     /**
