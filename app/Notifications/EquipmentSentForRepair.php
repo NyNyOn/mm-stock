@@ -26,7 +26,10 @@ class EquipmentSentForRepair extends Notification
 
     public function via($notifiable)
     {
-        return ['database', SynologyChannel::class]; // ✅ Added Database
+        if ($notifiable instanceof \App\Services\SynologyService) {
+            return [SynologyChannel::class];
+        }
+        return ['database'];
     }
 
     // ✅ Database Notification Structure

@@ -31,9 +31,12 @@ class PurchaseOrderUpdatedNotification extends Notification
         $this->data = $data;
     }
 
-    public function via(object $notifiable): array
+    public function via($notifiable): array
     {
-        return ['database', SynologyChannel::class]; // ✅ Added Database, No Mail
+        if ($notifiable instanceof \App\Services\SynologyService) {
+            return [SynologyChannel::class];
+        }
+        return ['database']; 
     }
 
     // ✅ Database Notification Structure

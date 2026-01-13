@@ -10,30 +10,93 @@
             </div>
 
             {{-- (โค้ดเดิมของคุณ: Auto-Confirm) --}}
-            @can('transaction:auto_confirm')
-                <div class="hidden sm:flex items-center ml-4 px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-bold rounded-full animate-pulse-soft"
-                     title="โหมดข้ามการยืนยันทำงานอยู่: การเบิก/ยืมของคุณจะถูกยืนยันและตัดสต็อกทันที">
-                    <i class="fas fa-magic mr-1"></i>
-                    <span>ระบบยืนยันอัตโนมัติ</span>
-                </div>
-            @endcan
+            {{-- (Removed Auto-Confirm Badge from here) --}}
         </div>
         
         {{-- Popular Items Ticker (Center) --}}
         <div class="hidden lg:flex flex-1 justify-center items-center px-4 overflow-hidden mx-4">
-            <div id="popular-ticker" class="group flex items-center space-x-2 bg-white/50 backdrop-blur-sm border border-gray-100 px-4 py-1.5 rounded-full shadow-sm hover:shadow-md hover:border-blue-100 transition-all cursor-default select-none">
-                 <div class="relative w-5 h-5 flex items-center justify-center bg-orange-100 text-orange-500 rounded-full">
-                     <i class="fas fa-fire text-[10px] animate-pulse"></i>
+            <div id="popular-ticker" class="group flex items-center space-x-3 bg-white border border-indigo-100 px-6 py-2.5 rounded-2xl shadow-md hover:shadow-lg hover:border-indigo-200 transition-all cursor-default select-none min-w-[320px] max-w-2xl">
+                 <div class="relative w-8 h-8 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl shadow-sm ring-2 ring-indigo-50 group-hover:ring-indigo-100 transition-all">
+                     <i class="fas fa-bolt text-sm animate-pulse"></i>
                  </div>
-                 <div class="flex flex-col h-5 overflow-hidden justify-center">
-                      <span id="ticker-content" class="text-xs font-medium text-gray-600 whitespace-nowrap transition-transform duration-500 transform translate-y-0">
-                          กำลังโหลดข้อมูล...
+                 <div class="flex flex-col h-6 overflow-hidden justify-center flex-1">
+                      <span id="ticker-content" class="text-sm font-medium text-gray-700 whitespace-nowrap transition-transform duration-500 transform translate-y-0 text-center">
+                          <i class="fas fa-circle-notch fa-spin mr-2 text-indigo-400"></i>กำลังโหลดข้อมูลล่าสุด...
                       </span>
                  </div>
             </div>
         </div>
 
-        <div class="flex items-center space-x-2 sm:space-x-6">
+        <div class="flex items-center space-x-2 sm:space-x-4">
+            {{-- 🌟 Auto-Confirm Toggle (Interactive) 🌟 --}}
+            @php
+                $user = Auth::user();
+                $isAutoConfirmDisabled = \Illuminate\Support\Facades\DB::table('user_meta')
+                    ->where('user_id', $user->id)
+                    ->value('is_auto_confirm_disabled');
+                
+                // Show button if disabled explicitly OR if user has permission (when enabled)
+                // Note: Gate::allows will return false if disabled, so we rely on $isAutoConfirmDisabled check first.
+                $showAutoConfirmBtn = $isAutoConfirmDisabled || $user->can('transaction:auto_confirm');
+                
+                $isAutoConfirmOn = !$isAutoConfirmDisabled;
+                
+                // ✅✅✅ User Return Request Toggle Logic ✅✅✅
+                $isReturnEnabled = \App\Models\Setting::where('key', 'allow_user_return_request')->value('value') == '1';
+            @endphp
+
+            @if($user->can('permission:manage'))
+                <div class="relative group" title="{{ $isReturnEnabled ? 'คลิกเพื่อปิดระบบขอคืนอุปกรณ์' : 'คลิกเพื่อเปิดระบบขอคืนอุปกรณ์' }}">
+                    <button id="user-return-toggle-btn" onclick="toggleUserReturnSystem()" 
+                            class="relative p-3 transition-all rounded-2xl button-soft {{ $isReturnEnabled ? 'bg-purple-50 hover:bg-purple-100 text-purple-600' : 'bg-gray-100 hover:bg-gray-200 text-gray-400' }}">
+                        
+                        <i class="fas fa-undo text-lg {{ $isReturnEnabled ? '' : 'grayscale' }}"></i>
+                        
+                        {{-- Ping Animation (Only when ON) --}}
+                        <span id="user-return-ping" class="absolute top-2 right-2 flex h-2.5 w-2.5 {{ $isReturnEnabled ? '' : 'hidden' }}">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-500"></span>
+                        </span>
+
+                    </button>
+                    {{-- Tooltip --}}
+                    <div class="absolute right-0 mt-2 w-48 bg-white text-gray-700 text-xs rounded-xl shadow-xl border border-gray-100 p-3 hidden group-hover:block z-50 animate-fade-in-down">
+                        <p class="font-bold {{ $isReturnEnabled ? 'text-purple-700' : 'text-gray-500' }} mb-1">
+                            <i class="fas fa-undo mr-1"></i> ระบบขอคืนอุปกรณ์
+                        </p>
+                        <p id="user-return-status-text">
+                            {{ $isReturnEnabled ? 'เปิดใช้งานอยู่' : 'ปิดใช้งาน' }}
+                        </p>
+                    </div>
+                </div>
+            @endif
+
+            @if($showAutoConfirmBtn)
+                <div class="relative group" title="{{ $isAutoConfirmOn ? 'คลิกเพื่อปิดระบบอนุมัติอัตโนมัติ' : 'คลิกเพื่อเปิดระบบอนุมัติอัตโนมัติ' }}">
+                    <button id="auto-confirm-btn" onclick="toggleAutoConfirmSystem()" 
+                            class="relative p-3 transition-all rounded-2xl button-soft {{ $isAutoConfirmOn ? 'bg-yellow-50 hover:bg-yellow-100 text-yellow-600 animate-pulse-soft' : 'bg-gray-100 hover:bg-gray-200 text-gray-400' }}">
+                        
+                        <i class="fas fa-magic text-lg {{ $isAutoConfirmOn ? '' : 'grayscale' }}"></i>
+                        
+                        {{-- Ping Animation (Only when ON) --}}
+                        <span id="auto-confirm-ping" class="absolute top-2 right-2 flex h-2.5 w-2.5 {{ $isAutoConfirmOn ? '' : 'hidden' }}">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-yellow-500"></span>
+                        </span>
+
+                    </button>
+                    {{-- Tooltip --}}
+                    <div class="absolute right-0 mt-2 w-48 bg-white text-gray-700 text-xs rounded-xl shadow-xl border border-gray-100 p-3 hidden group-hover:block z-50 animate-fade-in-down">
+                        <p class="font-bold {{ $isAutoConfirmOn ? 'text-yellow-700' : 'text-gray-500' }} mb-1">
+                            <i class="fas fa-magic mr-1"></i> ระบบยืนยันอัตโนมัติ
+                        </p>
+                        <p id="auto-confirm-status-text">
+                            {{ $isAutoConfirmOn ? 'เปิดใช้งานอยู่ (อนุมัติทันที)' : 'ปิดใช้งาน (ต้องอนุมัติเอง)' }}
+                        </p>
+                    </div>
+                </div>
+            @endif
+
             {{-- (โค้ดเดิมของคุณ: ปุ่ม Notifications + Dropdown) --}}
             <div class="relative" id="notifications-button-wrapper">
                 <button onclick="toggleDropdown('notifications-dropdown')" class="relative p-3 transition-all rounded-2xl hover:bg-gray-100 button-soft group">

@@ -73,4 +73,25 @@ class CategoryController extends Controller
 
         return response()->json(['success' => true, 'serial_number' => $newSerialNumber]);
     }
+
+    // ✅ API: Get/Update Evaluation Config
+    public function getEvaluationConfig(Category $category)
+    {
+        return response()->json([
+            'success' => true,
+            'config' => $category->custom_questions ?? []
+        ]);
+    }
+
+    public function updateEvaluationConfig(Request $request, Category $category)
+    {
+         $request->validate([
+            'custom_questions' => 'nullable|array',
+        ]);
+
+        $category->custom_questions = $request->custom_questions;
+        $category->save();
+
+        return response()->json(['success' => true, 'message' => 'บันทึกแบบประเมินสำเร็จ']);
+    }
 }

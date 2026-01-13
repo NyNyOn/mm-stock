@@ -149,68 +149,106 @@
              {{-- ✅✅✅ START: แก้ไข Popup ต้อนรับ (เพิ่ม Admin/IT) ✅✅✅ --}}
              @auth
                 @php
-                    // ดึงข้อมูลที่จำเป็นใน PHP ก่อนส่งให้ JS
-                    $isSuperAdmin = Auth::user()->id === (int)config('app.super_admin_id');
-                    $userGroupSlug = Auth::user()->serviceUserRole?->userGroup?->slug;
-                    
-                    // แปลง $userGroupSlug เป็นตัวเล็ก
+                    $currentUser = Auth::user();
+                    $isSuperAdmin = $currentUser->id === (int)config('app.super_admin_id');
+                    $userGroupSlug = $currentUser->serviceUserRole?->userGroup?->slug;
                     $slugLower = $userGroupSlug ? strtolower($userGroupSlug) : null;
-                    
-                    // ตรวจสอบว่าเป็น Admin/IT (โดยอิงจาก slug ที่เราดีบักได้)
                     $isAdminOrIT = $userGroupSlug && in_array($slugLower, ['it', 'admin', 'administrator', 'administartor', 'itsupport', 'it-support']);
+
+                    // เตรียม URL รูปโปรไฟล์ (ใช้ Safe Accessor จาก User Model)
+                    $photoUrl = $currentUser->photo_url;
                 @endphp
 
-                @if($isSuperAdmin)
+                @if($isSuperAdmin || $isAdminOrIT)
                     document.addEventListener('DOMContentLoaded', function() {
-                        if (!sessionStorage.getItem('creator_welcomed')) {
-                            Swal.fire({
-                                position: 'center',
-                                showConfirmButton: false,
-                                timer: 3000,
-                                width: '480px',
-                                background: '#FFFFFF',
-                                backdrop: `rgba(0,0,0,0.4)`,
-                                iconHtml: '<i class="text-6xl text-yellow-400 fas fa-crown"></i>',
-                                title: '<span class="text-2xl font-bold text-gray-800">ยินดีต้อนรับกลับมา</span>',
-                                html: '<p class="text-4xl font-bold gradient-text-soft">{{ Auth::user()->fullname }}</p><p class="mt-2 text-gray-500">ท่านผู้สร้างระบบ</p>',
-                                showClass: { popup: 'animate__animated animate__fadeInDown' },
-                                hideClass: { popup: 'animate__animated animate__fadeOutUp' }
-                            });
-                            sessionStorage.setItem('creator_welcomed', 'true');
-                        }
-                    });
+                        const welcomeKey = 'welcome_session_' + {{ $currentUser->id }}; // Unique per user
+                        
+                        // เช็คว่าเคยแสดงไปหรือยังใน Session นี้
+                        if (!sessionStorage.getItem(welcomeKey)) {
+                            
+                            // 1. ตั้งค่าข้อความตามสิทธิ์
+                            let titleText = 'ยินดีต้อนรับกลับมา';
+                            let roleText = 'ผู้ดูแลระบบ';
+                            let roleColorClass = 'text-blue-500';
+                            let ringColor = 'border-blue-400';
+                            let gradientBg = 'background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);'; // ฟ้าอ่อน
 
-                {{-- 2. (ใหม่) Pop-up สำหรับ Admin/IT (ที่ไม่ใช่ Super Admin) --}}
-                @elseif($isAdminOrIT)
-                    document.addEventListener('DOMContentLoaded', function() {
-                        // ใช้ session key คนละตัวกับ Super Admin
-                        if (!sessionStorage.getItem('admin_welcomed')) { 
+                            @if($isSuperAdmin)
+                                titleText = 'ยินดีต้อนรับท่านผู้สร้าง';
+                                roleText = 'ผู้ดูแลระดับสูงสุด';
+                                roleColorClass = 'text-indigo-600';
+                                ringColor = 'border-indigo-500';
+                                gradientBg = 'background: linear-gradient(135deg, #eef2ff 0%, #ffffff 100%);'; // ม่วงอ่อน
+                            @endif
+
+                            // 2. เตรียม HTML สำหรับรูปภาพ (Avatar หรือ Icon)
+                            let imageHtml = '';
+                            @if($photoUrl)
+                                imageHtml = `
+                                    <div class="relative w-32 h-32 mx-auto mb-4">
+                                        <div class="absolute inset-0 rounded-full animate-pulse opacity-20 bg-current ${roleColorClass}"></div>
+                                        <img src="{{ $photoUrl }}" class="relative w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg ${ringColor}">
+                                        <div class="absolute bottom-1 right-2 w-6 h-6 bg-green-400 border-2 border-white rounded-full z-10"></div>
+                                    </div>
+                                `;
+                            @else
+                                // Fallback Icon
+                                let iconClass = "{{ $isSuperAdmin ? 'fa-user-astronaut' : 'fa-user-shield' }}";
+                                let iconColor = "{{ $isSuperAdmin ? 'text-indigo-500' : 'text-blue-500' }}";
+                                imageHtml = `
+                                    <div class="relative w-28 h-28 mx-auto mb-4 flex items-center justify-center rounded-full bg-slate-50 border-4 border-white shadow-md">
+                                        <i class="fas ${iconClass} text-6xl ${iconColor}"></i>
+                                    </div>
+                                `;
+                            @endif
+
+                            // 3. Fire SweetAlert
                             Swal.fire({
-                                position: 'center',
+                                title: '',
+                                html: `
+                                    <div class="pt-6 pb-2">
+                                        ${imageHtml}
+                                        <h2 class="text-3xl font-bold text-gray-800 tracking-tight animate__animated animate__fadeInUp">${titleText}</h2>
+                                        <p class="text-xl font-medium mt-1 ${roleColorClass} animate__animated animate__fadeInUp animate__delay-1s">{{ $currentUser->fullname }}</p>
+                                        <p class="text-sm text-gray-400 mt-2 animate__animated animate__fadeInUp animate__delay-2s">${roleText}</p>
+                                    </div>
+                                `,
+                                timer: 3500, // แสดง 3.5 วินาที
+                                timerProgressBar: true,
                                 showConfirmButton: false,
-                                timer: 3000,
-                                width: '480px',
-                                background: '#FFFFFF',
-                                backdrop: `rgba(0,0,0,0.4)`,
-                                // เปลี่ยนไอคอนเป็น "โล่" (Shield) สีเขียว
-                                iconHtml: '<i class="text-6xl text-green-500 fas fa-user-shield"></i>', 
-                                title: '<span class="text-2xl font-bold text-gray-800">ยินดีต้อนรับ</span>',
-                                html: '<p class="text-4xl font-bold gradient-text-soft">{{ Auth::user()->fullname }}</p><p class="mt-2 text-gray-500">ผู้ดูแลระบบ</p>',
-                                showClass: { popup: 'animate__animated animate__fadeInDown' },
-                                hideClass: { popup: 'animate__animated animate__fadeOutUp' }
+                                width: '450px',
+                                padding: '0',
+                                background: '#fff',
+                                backdrop: `
+                                    rgba(0,0,0,0.4)
+                                    url("https://www.transparenttextures.com/patterns/cubes.png")
+                                    center center
+                                    no-repeat
+                                `,
+                                customClass: {
+                                    popup: 'rounded-3xl shadow-2xl overflow-hidden'
+                                },
+                                didOpen: () => {
+                                    // Inject CSS Gradient to Popup Body via inline style is tricky, so we use container
+                                    const popup = Swal.getPopup();
+                                    popup.style.cssText += gradientBg;
+                                }
                             });
-                            // ตั้งค่า session key ของ Admin
-                            sessionStorage.setItem('admin_welcomed', 'true'); 
+
+                            // บันทึกว่าแสดงแล้ว
+                            sessionStorage.setItem(welcomeKey, 'true');
                         }
                     });
                 @endif
-
-                {{-- 3. (สำคัญ) โค้ดเคลียร์ sessionStorage ตอน Logout (ต้องเคลียร์ทั้ง 2 key) --}}
+                {{-- 3. (สำคัญ) โค้ดเคลียร์ sessionStorage ตอน Logout --}}
                 const logoutButton = document.querySelector('form[action="{{ route('logout') }}"] button');
                 if(logoutButton) {
                     logoutButton.addEventListener('click', function() {
-                        sessionStorage.removeItem('creator_welcomed'); // เคลียร์ของ Super Admin
-                        sessionStorage.removeItem('admin_welcomed');   // เคลียร์ของ Admin
+                        sessionStorage.removeItem('creator_welcomed'); // เคลียร์ของเก่า (เผื่อไว้)
+                        sessionStorage.removeItem('admin_welcomed');   // เคลียร์ของเก่า
+                        // เคลียร์ตาม ID ที่เพิ่งใช้ไป
+                        const currentUserKey = 'welcome_session_' + {{ Auth::check() ? Auth::user()->id : '0' }};
+                        sessionStorage.removeItem(currentUserKey);
                     });
                 }
              @endauth

@@ -31,6 +31,16 @@ class AuthServiceProvider extends ServiceProvider
             if (Schema::hasTable('permissions')) {
 
                 Gate::before(function (User $user, $ability) {
+                    
+                    // 🔒 Toggle Check for Auto Confirm (From Database)
+                    if ($ability === 'transaction:auto_confirm') {
+                        $isDisabled = \Illuminate\Support\Facades\DB::table('user_meta')
+                            ->where('user_id', $user->id)
+                            ->value('is_auto_confirm_disabled');
+                        
+                        if ($isDisabled) return false;
+                    }
+
                     // ✅✅✅ แก้ไขจุดนี้: เปลี่ยนจาก env() มาเป็น config() ✅✅✅
                     if ($user->id === (int)config('app.super_admin_id')) {
                         return true;
@@ -58,6 +68,12 @@ class AuthServiceProvider extends ServiceProvider
                 $permissions = Permission::pluck('name')->all();
                 foreach ($permissions as $permission) {
                     Gate::define($permission, function (User $user) use ($permission) {
+                        if ($permission === 'transaction:auto_confirm') {
+                            $isDisabled = \Illuminate\Support\Facades\DB::table('user_meta')
+                                ->where('user_id', $user->id)
+                                ->value('is_auto_confirm_disabled');
+                            if ($isDisabled) return false;
+                        }
                         return $user->hasPermissionTo($permission);
                     });
                 }

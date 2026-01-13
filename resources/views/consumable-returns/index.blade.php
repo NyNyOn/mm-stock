@@ -56,7 +56,7 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4 text-center text-sm text-gray-600">
-                                {{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y') }}
+                                {{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y H:i น.') }}
                             </td>
                             <td class="px-6 py-4 text-center">
                                 <span class="inline-flex items-center justify-center w-8 h-8 text-sm font-bold text-blue-600 bg-blue-100 rounded-full">
@@ -117,7 +117,7 @@
                                 
                                 <div class="flex items-center text-xs text-gray-500 mb-2">
                                      <i class="far fa-calendar-alt mr-1"></i>
-                                     {{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y') }}
+                                     {{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y H:i น.') }}
                                 </div>
                             </div>
                             
@@ -172,6 +172,7 @@
                 <table class="w-full">
                     <thead class="bg-gray-50">
                         <tr>
+                            <th class="px-4 py-3 text-sm font-medium text-left">รูป</th>
                             <th class="px-4 py-3 text-sm font-medium text-left">อุปกรณ์</th>
                             <th class="px-4 py-3 text-sm font-medium text-center">ประเภท</th>
                             <th class="px-4 py-3 text-sm font-medium text-center">จำนวน</th>
@@ -182,6 +183,19 @@
                     <tbody class="divide-y divide-gray-100">
                         @forelse ($userReturnHistory as $history)
                         <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3">
+                                @php
+                                    $imgUrl = 'https://placehold.co/100x100/e2e8f0/64748b?text=No+Image';
+                                    if ($history->originalTransaction && $history->originalTransaction->equipment && $history->originalTransaction->equipment->latestImage) {
+                                         $deptKey = config('department_stocks.default_nas_dept_key', 'mm');
+                                         $filename = $history->originalTransaction->equipment->latestImage->file_name;
+                                         $imgUrl = route('nas.image', ['deptKey' => $deptKey, 'filename' => $filename]);
+                                    }
+                                @endphp
+                                <div class="w-10 h-10 overflow-hidden bg-gray-100 rounded-md border">
+                                    <img src="{{ $imgUrl }}" class="object-cover w-full h-full">
+                                </div>
+                            </td>
                             <td class="px-4 py-3 font-medium text-gray-800">
                                 {{ optional(optional($history->originalTransaction)->equipment)->name ?? 'N/A' }}
                             </td>

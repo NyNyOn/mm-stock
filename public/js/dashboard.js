@@ -294,25 +294,28 @@ document.addEventListener('DOMContentLoaded', function () {
                                 y: {
                                     stacked: false, // ต้องเป็น FALSE
                                     beginAtZero: true,
-                                    max: yAxisMax, // 🔥 ใช้ค่าที่คำนวณไว้
-                                    ticks: { precision: 0 },
-                                    grid: { color: '#f3f4f6' }
+                                    max: Math.ceil(maxDataValue) + 1, // Ensure max is always integer and slightly higher
+                                    ticks: {
+                                        stepSize: 1,
+                                        precision: 0,
+                                        autoSkip: false
+                                    },
+                                    grid: {
+                                        display: false, // Hide grid lines completely to solve strikethrough
+                                        drawBorder: false
+                                    }
                                 }
                             },
                             plugins: {
                                 legend: { display: false },
                                 datalabels: {
-                                    // 🔥 การตั้งค่า Data Labels
                                     anchor: 'end',
                                     align: 'top',
-                                    offset: 8,     // เลื่อนตัวเลขขึ้นมาเพื่อไม่ให้ติดขอบ
-                                    clip: false,   // ไม่อนุญาตให้ตัวเลขถูกตัดเมื่ออยู่ติดขอบ
-                                    // 🔥 กำหนดสีตัวเลขให้เป็นสีเดียวกับขอบแท่ง (borderColor)
-                                    color: (ctx) => {
-                                        return ctx.dataset.borderColor;
-                                    },
-                                    font: { weight: 'bold', size: 10 },
-                                    formatter: (val) => val > 0 ? val : '' // แสดงเฉพาะค่าที่มากกว่า 0
+                                    offset: 4,
+                                    clip: false,
+                                    color: '#4b5563', // Use specific color instead of dynamic for safety
+                                    font: { weight: 'bold', size: 12 },
+                                    formatter: (val) => val > 0 ? val : ''
                                 },
                                 tooltip: {
                                     padding: 12,

@@ -19,25 +19,39 @@ class ReturnController extends Controller
      */
     public function index()
     {
-        // ปรับปรุง Query ให้ดึงเฉพาะรายการที่ "ต้องคืน"
-        // และสถานะเป็น "เสร็จสมบูรณ์" (ผู้ใช้รับของแล้ว) หรือ "ปิดงาน"
-        // และจำนวนที่คืนแล้ว (returned_quantity) ยังน้อยกว่า จำนวนที่ยืมไป (quantity_change)
+        $user = Auth::user();
         
-        // ✅✅✅ START: แก้ไข Query ตรงนี้ ✅✅✅
-        $borrowedItems = Transaction::with(['equipment', 'user'])
-            // ‼️ อัปเดต: ให้ดึงทั้ง 'borrow' (ของเก่า) และ 'returnable' (ของใหม่)
-            ->whereIn('type', ['borrow', 'returnable']) 
-            ->whereIn('status', ['completed', 'closed']) // สถานะที่ผู้ใช้รับของไปแล้ว
+        // 1. รายการที่ "ฉัน" ยืมอยู่ (My Borrowed Items)
+        // แสดงให้ User เห็นเพื่อกด "แจ้งคืน" (Request Return)
+        $myItems = Transaction::with(['equipment.images', 'user'])
+            ->where('user_id', $user->id)
+            ->whereIn('type', ['borrow', 'returnable'])
+            ->whereIn('status', ['completed', 'closed', 'return_requested']) // สถานะ Active + Pending Return
             ->where(function ($query) {
-                // กรองเอารายการที่ยังคืนไม่ครบ
                 $query->whereNull('returned_quantity')
                       ->orWhereRaw('ABS(quantity_change) > returned_quantity');
             })
             ->orderBy('transaction_date', 'asc')
             ->get();
-        // ✅✅✅ END: แก้ไข Query ✅✅✅
 
-        return view('returns.index', compact('borrowedItems'));
+        // 2. Setting Check
+        $allowUserReturn = \App\Models\Setting::where('key', 'allow_user_return_request')->value('value');
+
+        // 3. (New) Admin View: All Borrowed Items
+        $allBorrowedItems = collect();
+        if ($user->can('permission:manage')) {
+             $allBorrowedItems = Transaction::with(['equipment.images', 'user'])
+                ->whereIn('type', ['borrow', 'returnable'])
+                ->whereIn('status', ['completed', 'close', 'return_requested']) // Completed/Active or Requested
+                ->where(function ($query) {
+                    $query->whereNull('returned_quantity')
+                          ->orWhereRaw('ABS(quantity_change) > returned_quantity');
+                })
+                ->orderBy('transaction_date', 'desc')
+                ->get();
+        }
+
+        return view('returns.index', compact('myItems', 'allowUserReturn', 'allBorrowedItems'));
     }
 
     /**
@@ -68,9 +82,8 @@ class ReturnController extends Controller
             }
 
             // --- ตรวจสอบว่ามีของค้างคืนจริงหรือไม่ ---
-            // (สมมติว่าเป็นการคืนเต็มจำนวนตาม Logic เดิม)
-            $quantityToReturn = abs($originalTransaction->quantity_change);
             $remainingToReturn = abs($originalTransaction->quantity_change) - ($originalTransaction->returned_quantity ?? 0);
+            $quantityToReturn = $remainingToReturn; // ✅ แก้ไข: ให้คืนยอดที่เหลืออยู่ (ป้องกันการคืนเกิน)
 
             if ($remainingToReturn <= 0) {
                  return back()->withErrors(['error' => 'รายการนี้ถูกคืนครบถ้วนหรือตัดยอดไปแล้ว']);

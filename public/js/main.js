@@ -330,7 +330,26 @@ async function updateNotifications() {
             let icon = 'fa-info-circle text-gray-400';
             let bgClass = 'bg-gray-100';
 
-            if (notif.type === 'low_stock') {
+            if (notif.icon) {
+                // ✅ Database Notification (Has explicit icon)
+                icon = notif.icon;
+
+                // Assign colors based on type
+                if (notif.type === 'success') {
+                    icon += ' text-green-500';
+                    bgClass = 'bg-green-50';
+                } else if (notif.type === 'error' || notif.type === 'critical') {
+                    icon += ' text-red-500';
+                    bgClass = 'bg-red-50';
+                } else if (notif.type === 'warning') {
+                    icon += ' text-yellow-500';
+                    bgClass = 'bg-yellow-50';
+                } else {
+                    icon += ' text-blue-500';
+                    bgClass = 'bg-blue-50';
+                }
+
+            } else if (notif.type === 'low_stock') {
                 icon = 'fa-exclamation-triangle text-orange-500';
                 bgClass = 'bg-orange-50';
             } else if (notif.type === 'out_of_stock') {
@@ -344,6 +363,10 @@ async function updateNotifications() {
             const item = document.createElement('a');
             item.href = notif.url || '#';
             item.className = 'flex items-start p-3 mx-2 my-1 rounded-xl transition-all hover:bg-gray-50 group border border-transparent hover:border-blue-50';
+
+            // ✅ Add Click Handler to Mark Single Item as Read
+            item.onclick = (e) => markNotificationAsRead(e, notif.id, notif.url);
+
             item.innerHTML = `
                 <div class="w-10 h-10 ${bgClass} rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                     <i class="fas ${icon}"></i>
@@ -379,7 +402,14 @@ async function initPopularTicker() {
                 el.style.transform = 'translateY(10px)';
 
                 setTimeout(() => {
-                    el.innerHTML = `<span class="font-bold text-gray-700">${item.name}</span> <span class="text-xs text-gray-400 ml-1">(${item.count} ครั้ง)</span>`;
+                    if (item.type === 'recent') {
+                        // New Recent Access Format
+                        el.innerHTML = `<span class="font-bold text-gray-700">${item.user}:</span> <span class="text-gray-600">${item.action}</span> <span class="font-bold text-indigo-600">${item.name}</span> <span class="text-xs text-gray-400 ml-1">(${item.time})</span>`;
+                    } else {
+                        // Fallback (or if reverted to count)
+                        el.innerHTML = `<span class="font-bold text-gray-700">${item.name}</span> <span class="text-xs text-gray-400 ml-1">(${item.count} ครั้ง)</span>`;
+                    }
+
                     el.style.opacity = '1';
                     el.style.transform = 'translateY(0)';
                     index = (index + 1) % res.items.length;
@@ -394,5 +424,118 @@ async function initPopularTicker() {
     } catch (e) {
         console.error('Ticker Error:', e);
         el.innerText = 'MM Stock Pro';
+    }
+}
+
+async function toggleAutoConfirmSystem() {
+    const btn = document.getElementById('auto-confirm-btn');
+    const ping = document.getElementById('auto-confirm-ping');
+    const statusText = document.getElementById('auto-confirm-status-text');
+    const icon = btn.querySelector('i');
+    const tooltipTitle = btn.parentElement.querySelector('.font-bold');
+
+    if (!btn) return;
+
+    // Optimistic UI Update (Toggle visually first)
+    // Actually, safer to wait for server response to ensure session is set.
+    // Use a loading state if needed, but let's just wait.
+
+    try {
+        const res = await apiRequest('toggle_auto_confirm');
+        if (res.success) {
+            const isEnabled = res.enabled;
+
+            if (isEnabled) {
+                // Enabled State
+                btn.className = "relative p-3 transition-all rounded-2xl button-soft bg-yellow-50 hover:bg-yellow-100 text-yellow-600 animate-pulse-soft";
+                ping.classList.remove('hidden');
+                icon.classList.remove('grayscale');
+                statusText.innerText = "เปิดใช้งานอยู่ (อนุมัติทันที)";
+                tooltipTitle.className = "font-bold text-yellow-700 mb-1";
+                btn.parentElement.title = "คลิกเพื่อปิดระบบอนุมัติอัตโนมัติ";
+                showToast('เปิดระบบยืนยันอัตโนมัติแล้ว', 'success');
+            } else {
+                // Disabled State
+                btn.className = "relative p-3 transition-all rounded-2xl button-soft bg-gray-100 hover:bg-gray-200 text-gray-400";
+                ping.classList.add('hidden');
+                icon.classList.add('grayscale');
+                statusText.innerText = "ปิดใช้งาน (ต้องอนุมัติเอง)";
+                tooltipTitle.className = "font-bold text-gray-500 mb-1";
+                btn.parentElement.title = "คลิกเพื่อเปิดระบบอนุมัติอัตโนมัติ";
+                showToast('ปิดระบบยืนยันอัตโนมัติแล้ว', 'info');
+            }
+        } else {
+            showToast(res.message || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Toggle Error:', error);
+        showToast('การเชื่อมต่อขัดข้อง', 'error');
+    }
+}
+
+async function toggleUserReturnSystem() {
+    const btn = document.getElementById('user-return-toggle-btn');
+    const ping = document.getElementById('user-return-ping');
+    const statusText = document.getElementById('user-return-status-text');
+    const icon = btn.querySelector('i');
+    const tooltipTitle = btn.parentElement.querySelector('.font-bold');
+
+    if (!btn) return;
+
+    try {
+        const res = await apiRequest('toggle_user_return_request');
+        if (res.success) {
+            const isEnabled = res.enabled;
+
+            if (isEnabled) {
+                // Enabled State
+                btn.className = "relative p-3 transition-all rounded-2xl button-soft bg-purple-50 hover:bg-purple-100 text-purple-600";
+                ping.classList.remove('hidden');
+                icon.classList.remove('grayscale');
+                statusText.innerText = "เปิดใช้งานอยู่";
+                tooltipTitle.className = "font-bold text-purple-700 mb-1";
+                btn.parentElement.title = "คลิกเพื่อปิดระบบขอคืนอุปกรณ์";
+                showToast('เปิดระบบขอคืนอุปกรณ์แล้ว', 'success');
+            } else {
+                // Disabled State
+                btn.className = "relative p-3 transition-all rounded-2xl button-soft bg-gray-100 hover:bg-gray-200 text-gray-400";
+                ping.classList.add('hidden');
+                icon.classList.add('grayscale');
+                statusText.innerText = "ปิดใช้งาน";
+                tooltipTitle.className = "font-bold text-gray-500 mb-1";
+                btn.parentElement.title = "คลิกเพื่อเปิดระบบขอคืนอุปกรณ์";
+                showToast('ปิดระบบขอคืนอุปกรณ์แล้ว', 'info');
+            }
+        } else {
+            showToast(res.message || 'เกิดข้อผิดพลาด', 'error');
+        }
+    } catch (error) {
+        console.error('Toggle Error:', error);
+        showToast('การเชื่อมต่อขัดข้อง', 'error');
+    }
+}
+
+// ✅ Function to Mark Single Notification as Read
+async function markNotificationAsRead(event, id, url) {
+    event.preventDefault(); // Stop immediate navigation
+
+    // Optimistic UI: Hide the red dot immediately
+    const target = event.target.closest('a');
+    if (target) {
+        const dot = target.querySelector('.bg-red-500');
+        if (dot) dot.remove();
+        target.classList.add('opacity-50'); // Feedback
+    }
+
+    try {
+        // Call Backend
+        await apiRequest('mark_notification_read', { id: id });
+    } catch (e) {
+        console.error("Failed to mark read", e);
+    }
+
+    // Navigate manually after action
+    if (url && url !== '#') {
+        window.location.href = url;
     }
 }

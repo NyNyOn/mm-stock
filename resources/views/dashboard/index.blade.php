@@ -16,51 +16,83 @@
 
         {{-- 1.1 Super Admin (Soft Luxury Theme - Thai) --}}
         @if(Auth::user()->id === $superAdminId)
-            <div class="relative overflow-hidden mb-6 rounded-2xl shadow-sm gentle-shadow animate-slide-up-soft group border border-indigo-100">
-                {{-- Background with Soft Gradient --}}
-                <div class="absolute inset-0 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50"></div>
-                <div class="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-multiply"></div>
-                <div class="absolute top-0 right-0 p-8 opacity-10 transform translate-x-10 -translate-y-5">
-                    <i class="fas fa-crown text-8xl text-indigo-300"></i>
+            <div class="relative overflow-hidden mb-6 rounded-2xl shadow-sm gentle-shadow animate-slide-up-soft group border border-indigo-100 bg-white">
+                {{-- Background with Animated Gradient Flow --}}
+                <div class="absolute inset-0 bg-gradient-to-r from-white via-indigo-50 to-white animate-gradient-flow opacity-80"></div>
+                
+                {{-- ✅ [Visual Depth] Floating Orbs --}}
+                <div class="absolute top-[-50%] left-[-10%] w-96 h-96 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+                <div class="absolute top-[-50%] right-[-10%] w-96 h-96 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+                <div class="absolute -bottom-32 left-20 w-96 h-96 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+
+                {{-- ✅ [Watermark] --}}
+                <div class="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-multiply pointer-events-none"></div>
+                
+                 {{-- ✅ [Real-time Clock] --}}
+                <div class="absolute top-4 right-6 hidden md:flex items-center space-x-2 text-indigo-400/60 z-20">
+                    <i class="far fa-clock"></i>
+                    <span id="live-clock-super" class="text-sm font-mono tracking-widest">--:--:--</span>
                 </div>
 
-                <div class="relative p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                    <div class="flex items-center space-x-6 z-10">
-                        <div class="flex-shrink-0 w-20 h-20 flex items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-200 text-white">
-                            <i class="fas fa-user-astronaut text-4xl"></i>
+                <div class="relative p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div class="flex items-center space-x-6 z-10 w-full md:w-auto">
+                        <div class="relative group-hover:scale-105 transition-transform duration-500">
+                             {{-- Pulse Ring --}}
+                            <div class="absolute inset-0 bg-indigo-400 rounded-full blur opacity-20 animate-pulse"></div>
+                            
+                            {{-- Profile Picture Logic --}}
+                            @php
+                                $profileImg = Auth::user()->photo_url;
+                            @endphp
+
+                            @if($profileImg)
+                                <img src="{{ $profileImg }}" 
+                                     alt="Profile" 
+                                     class="flex-shrink-0 w-24 h-24 object-cover rounded-full border-4 border-white shadow-lg shadow-indigo-200 relative z-10">
+                            @else
+                                <div class="flex-shrink-0 w-24 h-24 flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-200 text-white relative z-10 border-4 border-white">
+                                     <i class="fas fa-user-astronaut text-4xl"></i>
+                                </div>
+                            @endif
+                            
+                             <div class="absolute bottom-0 right-0 w-6 h-6 bg-green-400 border-2 border-white rounded-full z-20" title="Online"></div>
                         </div>
                         <div>
                             <div class="flex items-center gap-3 mb-1">
-                                <span class="px-3 py-1 text-xs font-bold tracking-wider text-indigo-700 uppercase bg-indigo-100 border border-indigo-200 rounded-full">
+                                <span class="px-3 py-1 text-xs font-bold tracking-wider text-indigo-700 uppercase bg-indigo-100 border border-indigo-200 rounded-full shine-effect">
                                     <i class="fas fa-crown mr-1"></i> ผู้ดูแลระดับสูงสุด
                                 </span>
                             </div>
                             <h2 class="text-3xl font-bold text-gray-800 tracking-tight">
-                                ยินดีต้อนรับกลับ, <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">{{ Auth::user()->fullname }}</span>
+                                ยินดีต้อนรับ, <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">{{ Auth::user()->fullname }}</span>
                             </h2>
-                            <p class="mt-2 text-gray-600 text-sm md:text-base max-w-xl">
-                                ศูนย์บัญชาการระบบ: ควบคุม ตรวจสอบ และจัดการการตั้งค่าทั้งหมดขององค์กรได้จากที่นี่
+                            <p class="mt-2 text-gray-500 text-sm md:text-base">
+                                วันนี้เป็นวันที่ดีในการเริ่มงาน จัดการระบบได้เลยครับ
                             </p>
                         </div>
                     </div>
 
-                    {{-- Quick Action HUD (Soft) --}}
+                    {{-- Quick Action HUD (Glassmorphism) --}}
                     <div class="w-full md:w-auto grid grid-cols-2 md:grid-cols-4 gap-3 z-10">
-                        <a href="{{ route('management.users.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 hover:bg-white border border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all duration-300">
-                            <i class="fas fa-users-cog text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors"></i>
-                            <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700">จัดการผู้ใช้</span>
+                        <a href="{{ route('management.users.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 backdrop-blur-sm hover:bg-white border border-indigo-50 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden">
+                             <div class="absolute inset-0 bg-indigo-50 opacity-0 group-hover/btn:opacity-50 transition-opacity"></div>
+                            <i class="fas fa-users-cog text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors relative z-10"></i>
+                            <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700 relative z-10">จัดการผู้ใช้</span>
                         </a>
-                         <a href="{{ route('maintenance.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 hover:bg-white border border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all duration-300">
-                            <i class="fas fa-tools text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors"></i>
-                            <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700">แจ้งซ่อม</span>
+                         <a href="{{ route('maintenance.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 backdrop-blur-sm hover:bg-white border border-indigo-50 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden">
+                             <div class="absolute inset-0 bg-indigo-50 opacity-0 group-hover/btn:opacity-50 transition-opacity"></div>
+                            <i class="fas fa-tools text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors relative z-10"></i>
+                            <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700 relative z-10">แจ้งซ่อม</span>
                         </a>
-                         <a href="{{ route('settings.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 hover:bg-white border border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all duration-300">
-                            <i class="fas fa-cogs text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors"></i>
-                             <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700">ตั้งค่าระบบ</span>
+                         <a href="{{ route('settings.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 backdrop-blur-sm hover:bg-white border border-indigo-50 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden">
+                             <div class="absolute inset-0 bg-indigo-50 opacity-0 group-hover/btn:opacity-50 transition-opacity"></div>
+                            <i class="fas fa-cogs text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors relative z-10"></i>
+                             <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700 relative z-10">ตั้งค่าระบบ</span>
                         </a>
-                         <a href="{{ route('changelog.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 hover:bg-white border border-indigo-100 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all duration-300">
-                            <i class="fas fa-history text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors"></i>
-                             <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700">ประวัติ</span>
+                         <a href="{{ route('changelog.index') }}" class="group/btn flex flex-col items-center justify-center p-3 rounded-xl bg-white/60 backdrop-blur-sm hover:bg-white border border-indigo-50 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden">
+                             <div class="absolute inset-0 bg-indigo-50 opacity-0 group-hover/btn:opacity-50 transition-opacity"></div>
+                            <i class="fas fa-history text-indigo-500 group-hover/btn:text-indigo-600 text-xl mb-1 transition-colors relative z-10"></i>
+                             <span class="text-[10px] font-bold text-gray-600 group-hover/btn:text-indigo-700 relative z-10">ประวัติ</span>
                         </a>
                     </div>
                 </div>
@@ -68,22 +100,52 @@
 
         {{-- 1.2 IT & Admin (Soft Tech Theme - Thai) --}}
         @elseif($userGroupSlug && in_array(strtolower(str_replace(' ', '', $userGroupSlug)), ['it', 'admin', 'administrator', 'administartor', 'itsupport', 'it-support']))
-             <div class="relative overflow-hidden mb-6 rounded-2xl shadow-sm gentle-shadow animate-slide-up-soft group border border-blue-100">
-                {{-- Background with Soft Tech Gradient --}}
-                <div class="absolute inset-0 bg-gradient-to-r from-sky-50 to-blue-50"></div>
-                <div class="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] mix-blend-multiply"></div>
-                 <div class="absolute -right-10 -bottom-10 opacity-10 transform rotate-12">
+             <div class="relative overflow-hidden mb-6 rounded-2xl shadow-sm gentle-shadow animate-slide-up-soft group border border-blue-100 bg-white">
+                {{-- Background with Animated Gradient Flow --}}
+                <div class="absolute inset-0 bg-gradient-to-r from-white via-sky-50 to-white animate-gradient-flow opacity-80"></div>
+                
+                {{-- ✅ [Visual Depth] Floating Orbs --}}
+                <div class="absolute top-[-50%] left-[-10%] w-80 h-80 bg-sky-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+                <div class="absolute bottom-[-50%] right-[-10%] w-80 h-80 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+
+                {{-- ✅ [Watermark] --}}
+                <div class="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/connected.png')] mix-blend-multiply pointer-events-none"></div>
+
+                 <div class="absolute -right-10 -bottom-10 opacity-5 transform rotate-12">
                     <i class="fas fa-shield-alt text-9xl text-blue-400"></i>
+                </div>
+                
+                {{-- ✅ [Real-time Clock] --}}
+                <div class="absolute top-4 right-6 hidden md:flex items-center space-x-2 text-blue-400/60 z-20">
+                    <i class="far fa-clock"></i>
+                    <span id="live-clock-admin" class="text-sm font-mono tracking-widest">--:--:--</span>
                 </div>
 
                 <div class="relative p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
                     <div class="flex items-center space-x-5 z-10 w-full md:w-auto">
-                        <div class="flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-blue-200 text-white">
-                            <i class="fas fa-user-shield text-3xl"></i>
+                         <div class="relative group-hover:scale-105 transition-transform duration-500">
+                             {{-- Pulse Ring --}}
+                            <div class="absolute inset-0 bg-sky-400 rounded-full blur opacity-20 animate-pulse"></div>
+                            
+                            {{-- Profile Picture Logic --}}
+                            @php
+                                $profileImgIT = Auth::user()->photo_url;
+                            @endphp
+
+                            @if($profileImgIT)
+                                <img src="{{ $profileImgIT }}" 
+                                     alt="Profile" 
+                                     class="flex-shrink-0 w-20 h-20 object-cover rounded-full border-4 border-white shadow-lg shadow-blue-200 relative z-10">
+                            @else
+                                <div class="flex-shrink-0 w-20 h-20 flex items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-blue-200 text-white relative z-10 border-4 border-white">
+                                     <i class="fas fa-user-shield text-3xl"></i>
+                                </div>
+                            @endif
+                            <div class="absolute bottom-0 right-0 w-5 h-5 bg-green-400 border-2 border-white rounded-full z-20" title="Online"></div>
                         </div>
                         <div>
                              <div class="flex items-center gap-3 mb-1">
-                                <span class="px-2 py-0.5 text-[10px] font-bold tracking-wider text-blue-700 uppercase bg-blue-100 border border-blue-200 rounded-md">
+                                <span class="px-2 py-0.5 text-[10px] font-bold tracking-wider text-blue-700 uppercase bg-blue-100 border border-blue-200 rounded-md shine-effect">
                                     <i class="fas fa-check-circle mr-1"></i> ผู้ดูแลระบบ
                                 </span>
                             </div>
@@ -95,6 +157,7 @@
                             </p>
                         </div>
                     </div>
+
 
                      {{-- Admin Quick Links (Soft) --}}
                      <div class="flex items-center gap-3 z-10 w-full md:w-auto justify-start md:justify-end overflow-x-auto pb-2 md:pb-0">
@@ -360,22 +423,22 @@
                             $firstChar = mb_substr($cycle->name, 0, 1);
                         @endphp
                         
-                        <div class="relative flex flex-col xl:flex-row items-center p-4 border rounded-xl shadow-sm transition-all duration-300 group {{ $rowBg }} {{ $cardBorder }}">
+                        <div class="relative grid grid-cols-1 xl:grid-cols-12 gap-4 items-center p-4 border rounded-xl shadow-sm transition-all duration-300 group {{ $rowBg }} {{ $cardBorder }}">
                             
                             {{-- 1. Left: Avatar & Name --}}
-                            <div class="flex items-center w-full xl:w-4/12 mb-4 xl:mb-0">
-                                <div class="flex-shrink-0 flex items-center justify-center w-14 h-14 text-2xl font-bold text-white uppercase rounded-full shadow-md bg-gradient-to-br from-{{ $baseColor }}-400 to-{{ $baseColor }}-600 mr-4">
+                            <div class="xl:col-span-5 flex items-center w-full">
+                                <div class="flex-shrink-0 flex items-center justify-center w-12 h-12 text-xl font-bold text-white uppercase rounded-full shadow-md bg-gradient-to-br from-{{ $baseColor }}-400 to-{{ $baseColor }}-600 mr-3">
                                     {{ $firstChar }}
                                 </div>
                                 <div class="min-w-0 flex-grow">
-                                    <h4 class="text-lg font-bold text-gray-800 truncate" title="{{ $cycle->name }}">
+                                    <h4 class="text-base font-bold text-gray-800 truncate" title="{{ $cycle->name }}">
                                         {{ $cycle->name }}
                                     </h4>
                                     <div class="flex items-center flex-wrap gap-2 mt-1">
-                                        <span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-white border border-gray-200 text-gray-600 whitespace-nowrap">
+                                        <span class="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-white border border-gray-200 text-gray-600 whitespace-nowrap">
                                             <i class="fas fa-box-open mr-1"></i> {{ $cycle->item_count }} รายการ
                                         </span>
-                                        <span class="px-2 py-0.5 text-xs font-bold rounded-md border {{ $statusBadge }} whitespace-nowrap">
+                                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-md border {{ $statusBadge }} whitespace-nowrap">
                                             {{ $statusText }}
                                         </span>
                                     </div>
@@ -383,34 +446,34 @@
                             </div>
 
                             {{-- 2. Middle: Dates info --}}
-                            <div class="flex flex-row xl:flex-col 2xl:flex-row justify-between xl:justify-center w-full xl:w-5/12 text-sm text-gray-500 px-0 xl:px-4 space-y-0 xl:space-y-0 2xl:space-x-6 mb-4 xl:mb-0 border-t xl:border-t-0 border-b xl:border-b-0 border-gray-100 py-3 xl:py-0">
-                                <div class="flex flex-col">
-                                    <span class="text-xs text-gray-400 font-medium">ตรวจล่าสุด</span>
-                                    <span class="font-semibold text-gray-700">
+                            <div class="xl:col-span-4 flex items-center justify-between xl:justify-center w-full text-sm text-gray-500 space-x-0 xl:space-x-6 border-t xl:border-t-0 border-b xl:border-b-0 border-gray-100 py-2 xl:py-0">
+                                <div class="flex flex-col xl:items-start text-left">
+                                    <span class="text-[10px] text-gray-400 font-medium">ตรวจล่าสุด</span>
+                                    <span class="font-semibold text-gray-700 text-xs">
                                         <i class="far fa-clock mr-1"></i> {{ $cycle->formatted_date ?? '-' }}
                                     </span>
                                 </div>
-                                <div class="flex flex-col text-right xl:text-left">
-                                    <span class="text-xs text-gray-400 font-medium">นัดถัดไป</span>
-                                    <span class="font-semibold text-indigo-600">
+                                <div class="flex flex-col xl:items-start text-right xl:text-left">
+                                    <span class="text-[10px] text-gray-400 font-medium">นัดถัดไป</span>
+                                    <span class="font-semibold text-indigo-600 text-xs">
                                         <i class="far fa-calendar-alt mr-1"></i> {{ isset($cycle->next_check_date) ? \Carbon\Carbon::parse($cycle->next_check_date)->format('d/m/Y') : '-' }}
                                     </span>
                                 </div>
                             </div>
 
                             {{-- 3. Right: Countdown & Action --}}
-                            <div class="flex items-center justify-between w-full xl:w-3/12 justify-end space-x-4">
+                            <div class="xl:col-span-3 flex items-center justify-between xl:justify-end w-full space-x-3">
                                 <div class="text-right">
-                                    <span class="block text-xs text-gray-400">เหลือเวลา</span>
-                                    <span class="text-2xl font-black {{ $daysLeft < 0 ? 'text-red-600' : 'text-gray-800' }}">
+                                    <span class="block text-[10px] text-gray-400">เหลือเวลา</span>
+                                    <span class="text-xl font-black {{ $daysLeft < 0 ? 'text-red-600' : 'text-gray-800' }}">
                                         {{ $daysLeft < 0 ? abs($daysLeft) : number_format($daysLeft) }}
-                                        <span class="text-sm font-medium text-gray-500">วัน</span>
+                                        <span class="text-xs font-medium text-gray-500">วัน</span>
                                     </span>
                                 </div>
                                 <a href="{{ route('stock-checks.create', ['category_id' => $cycle->id]) }}" 
-                                   class="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-white border border-gray-200 text-gray-400 hover:text-indigo-600 hover:border-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"
+                                   class="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-white border border-gray-200 text-gray-400 hover:text-indigo-600 hover:border-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"
                                    title="ตรวจนับสต๊อกรายการนี้">
-                                    <i class="fas fa-chevron-right"></i>
+                                    <i class="fas fa-chevron-right text-sm"></i>
                                 </a>
                             </div>
 
@@ -647,5 +710,40 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     {{-- 🔥 โหลด dashboard.js ทีหลัง เพื่อให้ฟังก์ชันข้างบนเรียกใช้ได้ --}}
-    <script src="{{ asset('js/dashboard.js') }}"></script>
+
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Live Clock Logic
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('th-TH', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit',
+                hour12: false 
+            });
+            
+            const superClock = document.getElementById('live-clock-super');
+            const adminClock = document.getElementById('live-clock-admin');
+            
+            if(superClock) superClock.textContent = timeString;
+            if(adminClock) adminClock.textContent = timeString;
+        }
+        
+        setInterval(updateClock, 1000);
+        updateClock(); // Initial call
+        
+        // ... existing chart logic ...
+    });
+    </script>
+    </script>
+    {{-- 🔥 โหลด dashboard.js ทีหลัง เพื่อให้ฟังก์ชันข้างบนเรียกใช้ได้ --}}
+    <script src="{{ asset('js/dashboard.js') }}?v={{ time() }}"></script>
+    <script>
+        // Force reload css grid logic if needed
+        window.addEventListener('resize', function() {
+            if(window.dashboardChart) window.dashboardChart.resize();
+        });
+    </script>
 @endpush

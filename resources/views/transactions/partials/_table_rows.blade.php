@@ -126,6 +126,7 @@
                     'rejected' => ['label' => 'ปฏิเสธ'],
                     'returned' => ['bg' => 'bg-green-100', 'text' => 'text-green-800', 'label' => 'คืนของแล้ว', 'icon' => 'fa-check'], // ✅ Added
                     'borrowed' => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-800', 'label' => 'ยืมอยู่', 'icon' => 'fa-clock'], // ✅ Added
+                    'return_requested' => ['bg' => 'bg-purple-100', 'text' => 'text-purple-800', 'label' => 'แจ้งคืน', 'icon' => 'fa-undo'], // ✅ Fixed translation
                 ];
                 
                 $sc = $statusMap[$txn->status] ?? ['bg' => 'bg-gray-100', 'text' => 'text-gray-600', 'label' => $txn->status, 'icon' => 'fa-circle'];
@@ -183,7 +184,17 @@
                 @else
                     {{-- ยังไม่ได้ประเมิน (โชว์เฉพาะเจ้าของรายการ) --}}
                     @if(Auth::id() === $txn->user_id)
-                        <button onclick="openRatingModal('{{ route('transactions.rate', $txn->id) }}', '{{ $txn->type == 'borrow' ? 'borrow' : ($txn->equipment->is_consumable ? 'one_way' : 'return_consumable') }}')" 
+                        <button onclick="openRatingModal([{
+                                    id: {{ $txn->id }},
+                                    submit_url: '{{ route('transactions.rate', $txn->id) }}',
+                                    type: '{{ $txn->type == 'borrow' ? 'borrow' : ($txn->equipment->is_consumable ? 'one_way' : 'return_consumable') }}',
+                                    equipment: {
+                                        name: '{{ addslashes($txn->equipment->name) }}',
+                                        serial_number: '{{ $txn->equipment->serial_number }}',
+                                        category_id: {{ $txn->equipment->category_id ?? 'null' }}
+                                    },
+                                    equipment_image_url: '{{ $txn->equipment->latestImage ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}'
+                                }])" 
                                 class="text-indigo-600 hover:text-indigo-800 text-xs font-bold hover:underline transition-all flex items-center justify-center gap-1 mx-auto">
                             <i class="far fa-edit"></i> ประเมิน
                         </button>
@@ -263,6 +274,7 @@
                         </form>
                     @endif
                 @endcan
+
 
             </div>
         </td>

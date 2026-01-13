@@ -24,6 +24,11 @@ class Category extends Model
     protected $fillable = [
         'name',
         'prefix',
+        'custom_questions',
+    ];
+
+    protected $casts = [
+        'custom_questions' => 'array',
     ];
 
     /**

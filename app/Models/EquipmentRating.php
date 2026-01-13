@@ -21,15 +21,17 @@ class EquipmentRating extends Model
         'q3_answer',    // เก็บคำตอบข้อ 3
         'rating_score', // เก็บค่าคะแนนเฉลี่ยเป็นทศนิยม (แทน rating เดิม)
         'comment',
-        'rated_at'      // วันที่ประเมิน
+        'rated_at',     // วันที่ประเมิน
+        'answers',      // ✅ เก็บคำตอบ Dynamic JSON
     ];
 
     protected $casts = [
         'q1_answer' => 'integer',
         'q2_answer' => 'integer',
         'q3_answer' => 'integer',
-        'rating_score' => 'float', // แปลงเป็น float อัตโนมัติเมื่อดึงมาใช้
+        'rating_score' => 'float',
         'rated_at' => 'datetime',
+        'answers' => 'array', // ✅ Dynamic Answers
     ];
 
     /**
@@ -67,22 +69,37 @@ class EquipmentRating extends Model
      */
     public static function calculateScore($q1, $q2, $q3)
     {
-        // 1. ถ้ามีข้อใดข้อหนึ่งเป็น "ยังไม่เคยใช้งาน" (ค่า 2) ถือว่าไม่มีคะแนน
-        if ($q1 == 2 || $q2 == 2 || $q3 == 2) {
-            return null;
+        // Legacy Support
+        return self::calculateDynamicScore([$q1, $q2, $q3]);
+    }
+
+    /**
+     * คำนวณคะแนนแบบ Dynamic (รับ Array คำตอบ)
+     * Rule:
+     * - Choice 1 (แย่) = 1 คะแนน
+     * - Choice 3 (ดี) = 5 คะแนน
+     * - Choice 2 (ไม่ได้ใช้) = ทำให้เป็น Null ทันที (Unrated)
+     */
+    public static function calculateDynamicScore(array $answers)
+    {
+        if (empty($answers)) return null;
+
+        $totalScore = 0;
+        $count = count($answers);
+
+        foreach ($answers as $val) {
+            $val = (int)$val;
+            // ถ้ามีข้อใดข้อหนึ่งเป็น "ยังไม่เคยใช้งาน" (2) -> ถือว่าไม่ได้ประเมิน
+            if ($val === 2) {
+                return null;
+            }
+            
+            // 1 -> 1.0, 3 -> 5.0
+            $totalScore += ($val === 3) ? 5.0 : 1.0;
         }
 
-        // 2. แปลงค่าจาก Choice (1,3) เป็นคะแนนเต็ม (1, 5)
-        // Choice 1 (Negative) => 1 คะแนน
-        // Choice 3 (Positive) => 5 คะแนน
-        $s1 = ($q1 == 3) ? 5.0 : 1.0;
-        $s2 = ($q2 == 3) ? 5.0 : 1.0;
-        $s3 = ($q3 == 3) ? 5.0 : 1.0;
+        if ($count === 0) return 0;
 
-        // 3. หาค่าเฉลี่ย
-        $average = ($s1 + $s2 + $s3) / 3;
-
-        // 4. ปัดเศษทศนิยม 2 ตำแหน่ง
-        return round($average, 2);
+        return round($totalScore / $count, 2);
     }
 }

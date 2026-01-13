@@ -20,9 +20,12 @@ class UserConfirmedReceipt extends Notification
         $this->transaction = $transaction;
     }
 
-    public function via(object $notifiable): array
+    public function via($notifiable): array
     {
-        return ['database', SynologyChannel::class]; // ✅ Added Database
+        if ($notifiable instanceof \App\Services\SynologyService) {
+            return [SynologyChannel::class];
+        }
+        return ['database'];
     }
 
     // ✅ Database Notification Structure

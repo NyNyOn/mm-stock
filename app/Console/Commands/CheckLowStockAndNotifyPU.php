@@ -32,7 +32,7 @@ class CheckLowStockAndNotifyPU extends Command
     public function handle()
     {
         $isForce = $this->option('force');
-        \Illuminate\Support\Facades\Log::info("Running stock:monthly-check. Force: " . ($isForce ? 'Yes' : 'No'));
+        // \Illuminate\Support\Facades\Log::info("Running stock:monthly-check. Force: " . ($isForce ? 'Yes' : 'No'));
 
         // 0. Check Schedule (if not forced)
         if (!$isForce) {
@@ -42,7 +42,7 @@ class CheckLowStockAndNotifyPU extends Command
 
             $now = Carbon::now();
             
-            \Illuminate\Support\Facades\Log::info("Checking Schedule. Now: {$now->format('d H:i')}, Scheduled: Day {$scheduleDay} Time {$scheduleTime}");
+            // \Illuminate\Support\Facades\Log::info("Checking Schedule. Now: {$now->format('d H:i')}, Scheduled: Day {$scheduleDay} Time {$scheduleTime}");
 
             // Check if today is the scheduled day
             if ($now->day != $scheduleDay) {

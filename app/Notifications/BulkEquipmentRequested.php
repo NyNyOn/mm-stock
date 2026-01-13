@@ -29,9 +29,12 @@ class BulkEquipmentRequested extends Notification
         $this->submitter = $submitter;
     }
 
-    public function via(object $notifiable): array
+    public function via($notifiable): array
     {
-        return ['database', SynologyChannel::class]; // ✅ Added Database
+        if ($notifiable instanceof \App\Services\SynologyService) {
+            return [SynologyChannel::class];
+        }
+        return ['database'];
     }
 
     // ✅ Database Notification Structure

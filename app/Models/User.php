@@ -11,6 +11,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log; // Keep Log for potential errors
 use App\Models\Permission; // Add this if Permission model exists in App\Models
+use Illuminate\Support\Facades\Storage;
 use App\Models\ServiceUserRole; // ✅ 1. เพิ่ม Use Statement (จากไฟล์ตัวอย่างที่ถูกต้อง)
 
 
@@ -28,6 +29,12 @@ class User extends Authenticatable
     public $timestamps = false;
     // ✅ 2. อัปเดต fillable ให้ตรงกับไฟล์ตัวอย่างที่ถูกต้อง
     protected $fillable = ['fullname', 'username', 'employeecode', 'photo_path', 'access_token', 'status', 'department_id'];
+
+    // ✅ Override notifications to use correct connection (Fix for Multi-DB)
+    public function notifications()
+    {
+        return $this->morphMany(\App\Models\Notification::class, 'notifiable')->orderBy('created_at', 'desc');
+    }
     protected $hidden = ['password', 'remember_token'];
     protected $appends = ['photo_url'];
 
@@ -176,21 +183,34 @@ class User extends Authenticatable
      */
     public function getPhotoUrlAttribute(): string
     {
-        // ตรวจสอบว่ามี photo_path และไม่เป็นค่าว่าง
-        if ($this->photo_path && !empty($this->photo_path)) {
-            // ดึง Base URL และ Path รูปภาพจาก config
-            $baseUrl = config('employee_portal.base_uri');
-            $photoPath = config('employee_portal.photo_path');
+         $path = $this->photo_path;
 
-             // ตัด / ท้าย baseUrl และ / หน้า photoPath ออก (ถ้ามี)
-             $baseUrl = rtrim($baseUrl, '/');
-             $photoPath = ltrim($photoPath, '/');
-
-            // สร้าง URL เต็ม
-            return "{$baseUrl}/{$photoPath}/{$this->photo_path}";
+        // 1. ถ้าไม่มีค่า -> ใช้ UI Avatars
+        if (empty($path)) {
+            return 'https://ui-avatars.com/api/?name=' . urlencode($this->fullname ?? $this->username) . '&background=random&color=fff';
         }
-        // ถ้าไม่มีรูปภาพ ให้ใช้ URL จาก ui-avatars.com
-        return 'https://ui-avatars.com/api/?name=' . urlencode($this->fullname ?? $this->username) . '&background=random&color=fff';
+
+        // 2. ถ้าเป็น Full URL อยู่แล้ว -> คืนค่าเดิม
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            return $path;
+        }
+
+        // 3. (Safe Fallback) สร้าง External URL ตาม Config (ไม่เช็คไฟล์ Local เพื่อป้องกัน 500 Error)
+        $baseUrl = config('employee_portal.base_uri');
+        if ($baseUrl) {
+             $photoPath = config('employee_portal.photo_path') ?? '';
+             $baseUrl = rtrim($baseUrl, '/');
+             $photoPath = trim($photoPath, '/');
+             
+             // ถ้ามี Path ย่อย ให้ต่อ Path
+             if(!empty($photoPath)) {
+                 return "{$baseUrl}/{$photoPath}/{$path}";
+             }
+             return "{$baseUrl}/{$path}";
+        }
+
+        // 4. Default Fallback
+        return 'https://ui-avatars.com/api/?name=' . urlencode($this->fullname) . '&background=random&color=fff';
     }
 
     // ✅✅✅ โค้ดที่แก้ไขและรัดกุมที่สุดสำหรับ Frozen State ✅✅✅

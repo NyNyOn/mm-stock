@@ -23,9 +23,12 @@ class ItemWriteOffNotification extends Notification
         $this->handler = $handler;
     }
 
-    public function via(object $notifiable): array
+    public function via($notifiable): array
     {
-        return ['database', SynologyChannel::class]; // ✅ Added Database
+        if ($notifiable instanceof \App\Services\SynologyService) {
+            return [SynologyChannel::class];
+        }
+        return ['database'];
     }
 
     public function toArray($notifiable)

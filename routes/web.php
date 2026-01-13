@@ -63,6 +63,18 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/transactions/{transaction}', [TransactionController::class, 'show'])->name('transactions.show');
 
+    // ✅✅✅ User Return Request Routes ✅✅✅
+    // ✅✅✅ User Direct Return Route ✅✅✅
+    Route::post('/transactions/{transaction}/request-return', [TransactionController::class, 'processDirectReturn'])->name('transactions.requestReturn');
+    
+    // (Deprecated Approval Routes Removed)
+    
+    Route::post('/settings/update-return-request-setting', [SettingsController::class, 'updateReturnRequestSetting'])
+        ->name('settings.update.return-request')
+        ->middleware('can:permission:manage');
+    // ✅✅✅ End User Return Request Routes ✅✅✅
+
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -191,8 +203,12 @@ Route::middleware('auth')->group(function () {
     });
 
     // Specific Action Routes
+    // Publicly accessible for Rating System
+    Route::get('/categories/{category}/evaluation-config', [CategoryController::class, 'getEvaluationConfig'])->name('categories.evaluation-config.get');
+
     Route::middleware('can:master-data:manage')->group(function () {
-        Route::resource('categories', CategoryController::class)->except(['create', 'edit']);
+        Route::post('/categories/{category}/evaluation-config', [CategoryController::class, 'updateEvaluationConfig'])->name('categories.evaluation-config.update');
+    Route::resource('categories', CategoryController::class)->except(['create', 'edit']);
         Route::resource('locations', LocationController::class)->except(['create', 'edit']);
         Route::resource('units', UnitController::class)->except(['create', 'edit']);
         
@@ -244,7 +260,7 @@ Route::middleware('auth')->group(function () {
             
     });
 
-});
+    // Generic handlers
+    Route::post('/ajax-handler', [AjaxController::class, 'handleRequest'])->name('ajax.handler');
 
-// Public AJAX Routes
-Route::post('/ajax-handler', [AjaxController::class, 'handleRequest'])->name('ajax.handler');
+});

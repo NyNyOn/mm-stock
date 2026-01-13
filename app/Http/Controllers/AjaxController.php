@@ -94,10 +94,31 @@ class AjaxController extends Controller
                 return $this->clearNotifications();
             case 'get_popular_items':
                 return $this->getPopularItems();
+            case 'mark_notification_read':
+                return $this->markNotificationRead($request);
+            case 'toggle_auto_confirm':
+                return $this->toggleAutoConfirm($request);
+            case 'toggle_user_return_request':
+                return $this->toggleUserReturnRequest($request);
 
             default:
                 return response()->json(['success' => false, 'message' => 'Invalid action specified.']);
         }
+    }
+
+    private function markNotificationRead(Request $request)
+    {
+        $user = Auth::user();
+        $notificationId = $request->input('id');
+
+        if ($notificationId) {
+            $notification = $user->notifications()->find($notificationId);
+            if ($notification) {
+                $notification->markAsRead();
+                return response()->json(['success' => true]);
+            }
+        }
+        return response()->json(['success' => false, 'message' => 'Notification not found']);
     }
 
     // =========================================================================
@@ -644,43 +665,45 @@ class AjaxController extends Controller
             $notifications = [];
             $unreadCount = 0;
             
-            // 1. Low Stock Notifications
-            $lowStockQuery = Equipment::where(function($q) {
-                    $q->where('status', 'low_stock')
-                      ->orWhere(function($sub) {
-                          $sub->whereColumn('quantity', '<=', 'min_stock')->where('min_stock', '>', 0);
-                      });
-                })
-                ->limit(10); // Check more items since we might filter some out
-            
-            // Filter by cleared time if exists
-            if ($lastCleared) {
-                // Only show items updated AFTER the clear time
-                $lowStockQuery->where('updated_at', '>', $lastCleared);
-            }
-            
-            $lowStockItems = $lowStockQuery->get();
-
-            foreach ($lowStockItems as $item) {
-                // If item updated AFTER last check, it's unread.
-                $isUnread = !$lastCheck || ($item->updated_at && $item->updated_at->gt($lastCheck));
-                if ($isUnread) $unreadCount++;
-
-                if ($item->quantity <= 0) {
-                    $type = 'out_of_stock';
-                    $message = "สินค้าหมด: {$item->name}";
-                } else {
-                    $type = 'low_stock';
-                    $message = "สินค้าใกล้หมด: {$item->name} (เหลือ {$item->quantity})";
+            // 1. Low Stock Notifications (Restricted to Admins/Purchasers)
+            if ($user->can('equipment:manage') || $user->can('po:create')) {
+                $lowStockQuery = Equipment::where(function($q) {
+                        $q->where('status', 'low_stock')
+                          ->orWhere(function($sub) {
+                              $sub->whereColumn('quantity', '<=', 'min_stock')->where('min_stock', '>', 0);
+                          });
+                    })
+                    ->limit(10); // Check more items since we might filter some out
+                
+                // Filter by cleared time if exists
+                if ($lastCleared) {
+                    // Only show items updated AFTER the clear time
+                    $lowStockQuery->where('updated_at', '>', $lastCleared);
                 }
+                
+                $lowStockItems = $lowStockQuery->get();
 
-                $notifications[] = [
-                    'id' => $item->id,
-                    'type' => $type,
-                    'message' => $message,
-                    'url' => route('equipment.index', ['search' => $item->name]),
-                    'is_read' => !$isUnread
-                ];
+                foreach ($lowStockItems as $item) {
+                    // If item updated AFTER last check, it's unread.
+                    $isUnread = !$lastCheck || ($item->updated_at && $item->updated_at->gt($lastCheck));
+                    if ($isUnread) $unreadCount++;
+
+                    if ($item->quantity <= 0) {
+                        $type = 'out_of_stock';
+                        $message = "สินค้าหมด: {$item->name}";
+                    } else {
+                        $type = 'low_stock';
+                        $message = "สินค้าใกล้หมด: {$item->name} (เหลือ {$item->quantity})";
+                    }
+
+                    $notifications[] = [
+                        'id' => $item->id,
+                        'type' => $type,
+                        'message' => $message,
+                        'url' => route('equipment.index', ['search' => $item->name]),
+                        'is_read' => !$isUnread
+                    ];
+                }
             }
 
             // 2. Pending Approval Notifications (For Approvers)
@@ -708,6 +731,27 @@ class AjaxController extends Controller
                         'is_read' => !$isUnread
                     ];
                 }
+            }
+
+            // 3. ✅ Database Notifications (System Alerts: Approved, Rejected, Returned, etc.)
+            // Fetch unread notifications from the 'notifications' table
+            foreach ($user->unreadNotifications as $dbNotif) {
+                // Filter by lastCleared if needed (optional, but good for "Clear All" logic consistency)
+                if ($lastCleared && $dbNotif->created_at <= $lastCleared) continue;
+
+                $data = $dbNotif->data;
+                $unreadCount++;
+
+                $notifications[] = [
+                    'id' => $dbNotif->id,
+                    'type' => $data['type'] ?? 'info', // success, error, info
+                    'message' => $data['body'] ?? ($data['message'] ?? 'แจ้งเตือนใหม่'),
+                    'title' => $data['title'] ?? 'แจ้งเตือน',
+                    'url' => $data['action_url'] ?? '#',
+                    'is_read' => false,
+                    'icon' => $data['icon'] ?? 'fas fa-bell', // Use icon from data
+                    'custom_html' => true // Flag for JS to use custom styling
+                ];
             }
 
             return response()->json([
@@ -758,26 +802,94 @@ class AjaxController extends Controller
     private function getPopularItems()
     {
         try {
-            // Get top 5 most frequently withdrawn items
-            $popular = Transaction::whereIn('type', ['withdraw', 'borrow', 'consumable']) // Include all usage types
-                ->select('equipment_id', DB::raw('count(*) as total_usage'))
-                ->groupBy('equipment_id')
-                ->orderByDesc('total_usage')
+            // Updated: Get 5 latest transactions instead of popular items
+            // This makes the ticker show "Real-time" activity which is more useful
+            $recent = Transaction::with(['equipment', 'user'])
+                ->orderBy('transaction_date', 'desc') // ✅ Fixed: Use transaction_date
                 ->limit(5)
-                ->with('equipment:id,name,unit_id') // Eager load equipment
                 ->get();
             
-            $results = $popular->map(function($tx) {
+            $results = $recent->map(function($tx) {
                  if(!$tx->equipment) return null;
+                 
+                 $action = 'ทำรายการ';
+                 if ($tx->type == 'borrow') $action = 'ยืม (Borrow)';
+                 else if ($tx->type == 'return') $action = 'คืน (Return)';
+                 else if ($tx->type == 'withdraw') $action = 'เบิก (Withdraw)';
+                 
+                 // User name (short)
+                 $userName = $tx->user ? explode(' ', $tx->user->fullname)[0] : 'Unknown';
+
                  return [
                      'name' => $tx->equipment->name,
-                     'count' => $tx->total_usage
+                     'action' => $action,
+                     'user' => $userName,
+                     'time' => $tx->transaction_date ? $tx->transaction_date->diffForHumans() : 'เมื่อสักครู่', 
+                     'type' => 'recent' 
                  ];
             })->filter()->values();
 
             return response()->json(['success' => true, 'items' => $results]);
         } catch (\Exception $e) {
              return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    private function toggleAutoConfirm()
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) return response()->json(['success' => false, 'message' => 'Unauthorized']);
+
+            // Get current state from DB
+            $meta = DB::table('user_meta')->where('user_id', $user->id)->first();
+            $currentStatus = $meta ? $meta->is_auto_confirm_disabled : false;
+            
+            // Toggle
+            $newState = !$currentStatus;
+
+            // Save to DB
+            DB::table('user_meta')->updateOrInsert(
+                ['user_id' => $user->id],
+                ['is_auto_confirm_disabled' => $newState, 'updated_at' => now()]
+            );
+            
+            // Sync Session (optional, for immediate use if needed, but we rely on DB now)
+            session(['auto_confirm_disabled' => $newState]);
+            
+            return response()->json([
+                'success' => true, 
+                'enabled' => !$newState, // If disabled=false, enabled=true
+                'message' => $newState ? 'ปิดระบบยืนยันอัตโนมัติแล้ว' : 'เปิดระบบยืนยันอัตโนมัติแล้ว'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    private function toggleUserReturnRequest(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user || !$user->can('permission:manage')) {
+                 return response()->json(['success' => false, 'message' => 'Unauthorized']);
+            }
+
+            $currentValue = Setting::where('key', 'allow_user_return_request')->value('value');
+            $newState = ($currentValue == '1') ? '0' : '1';
+
+            Setting::updateOrCreate(
+                ['key' => 'allow_user_return_request'],
+                ['value' => $newState, 'updated_at' => now()]
+            );
+
+            return response()->json([
+                'success' => true,
+                'enabled' => ($newState == '1'),
+                'message' => ($newState == '1') ? 'เปิดระบบขอคืนอุปกรณ์แล้ว' : 'ปิดระบบขอคืนอุปกรณ์แล้ว'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
     }
 }

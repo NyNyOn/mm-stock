@@ -6,6 +6,11 @@
 @section('content')
 <div class="container mx-auto p-4 lg:p-6 space-y-6">
 
+    @php
+        // ✅ Fetch Settings Once
+        $allowReturn = \App\Models\Setting::where('key', 'allow_user_return_request')->value('value') == '1';
+    @endphp
+
     {{-- Alert Messages --}}
     @if (session('success'))
         <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded shadow-sm flex items-center animate-fade-in-down">
@@ -29,12 +34,22 @@
                       {{ $statusFilter == 'admin_pending' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
                 <i class="fas fa-user-shield {{ $statusFilter == 'admin_pending' ? 'text-indigo-500' : 'text-gray-400' }}"></i>
                 รอจัดส่ง (Admin)
+                {{-- (Badge logic remains same) --}}
                 @if(isset($adminPendingCount) && $adminPendingCount > 0)
                     <span class="absolute -top-1 -right-2 flex h-4 w-4 items-center justify-center">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[10px] text-white items-center justify-center ring-2 ring-white">
                             {{ $adminPendingCount }}
                         </span>
+                    </span>
+                @endif
+                {{-- 🔴 ADDED: Badge for Return Requests --}}
+                @php 
+                    $returnReqCount = \App\Models\Transaction::where('status', 'return_requested')->count();
+                @endphp
+                @if($returnReqCount > 0)
+                     <span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">
+                        <i class="fas fa-undo mr-1"></i> {{ $returnReqCount }} คืน
                     </span>
                 @endif
             </a>
@@ -110,7 +125,7 @@
                     </tr>
                 </thead>
                 <tbody id="transaction-table-body" class="bg-white divide-y divide-gray-200">
-                    @include('transactions.partials._table_rows', ['transactions' => $transactions])
+                    @include('transactions.partials._table_rows', ['transactions' => $transactions, 'allowReturn' => $allowReturn])
                 </tbody>
             </table>
         </div>
@@ -118,7 +133,7 @@
 
     {{-- CARD CONTAINER (Mobile) --}}
     <div class="block md:hidden space-y-4">
-        @include('transactions.partials._mobile_cards', ['transactions' => $transactions])
+        @include('transactions.partials._mobile_cards', ['transactions' => $transactions, 'allowReturn' => $allowReturn])
     </div>
 
     {{-- Pagination --}}
@@ -315,6 +330,7 @@
                     'rejected': 'ปฏิเสธ',
                     'returned': 'คืนของแล้ว',
                     'borrowed': 'ยืมอยู่',
+                    'return_requested': 'แจ้งคืน', // ✅ Added
                 };
                 statusEl.innerText = statusMap[status] || status.toUpperCase();
                 

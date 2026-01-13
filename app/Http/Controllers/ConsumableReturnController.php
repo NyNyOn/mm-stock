@@ -42,7 +42,8 @@ class ConsumableReturnController extends Controller
         $returnableItems = Transaction::with(['equipment.latestImage'])
             ->where('user_id', Auth::id())
             ->where('return_condition', 'allowed')
-            ->where('type', 'partial_return')
+            // ->where('type', 'partial_return') // ❌ Previously restricted to partial_return only
+            ->whereIn('type', ['partial_return', 'returnable']) // ✅ Allow both Partial Return and Borrow (Returnable)
             ->where('status', 'completed')
             // ตรวจสอบว่ายังมียอดคงเหลือให้คืน (Abs(จำนวนเบิก) > จำนวนที่คืนแล้ว)
             ->where(DB::raw('ABS(quantity_change)'), '>', DB::raw('COALESCE(returned_quantity, 0)'))
@@ -107,7 +108,48 @@ class ConsumableReturnController extends Controller
             $notePrefix = "[ขอคืนของ] ";
         }
 
-        ConsumableReturn::create([
+        if ($request->action_type === 'write_off') {
+            DB::beginTransaction();
+            try {
+                // 1. Update Original Transaction
+                $originalTransaction->increment('returned_quantity', $quantityToProcess);
+
+                // 2. Create 'Adjust' Transaction Log
+                Transaction::create([
+                    'equipment_id' => $originalTransaction->equipment_id,
+                    'user_id' => Auth::id(),
+                    'handler_id' => null, // No handler needed for auto-action
+                    'type' => 'adjust',
+                    'quantity_change' => 0, 
+                    'notes' => "[แจ้งใช้หมด] อ้างอิง #TXN-{$originalTransaction->id} (Auto-Approved)",
+                    'transaction_date' => now(),
+                    'status' => 'completed',
+                    'confirmed_at' => now(),
+                    'admin_confirmed_at' => now(),
+                ]);
+
+                // 3. Create Return Record (Approved)
+                $return = ConsumableReturn::create([
+                    'original_transaction_id' => $originalTransaction->id,
+                    'requested_by_user_id' => Auth::id(),
+                    'quantity_returned' => $quantityToProcess,
+                    'action_type' => 'write_off',
+                    'notes' => $notePrefix . $request->notes,
+                    'status' => 'approved', // ✅ Auto-Approve directly
+                    'approved_by_user_id' => null, // System auto-approve
+                ]);
+
+                DB::commit();
+                return back()->with('success', 'แจ้งใช้งานหมดแล้วสำเร็จ (ระบบบันทึกเรียบร้อย)');
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
+            }
+        }
+
+        // === Standard Return Flow (Pending Admin Approval) ===
+        $return = ConsumableReturn::create([
             'original_transaction_id' => $originalTransaction->id,
             'requested_by_user_id' => Auth::id(),
             'quantity_returned' => $quantityToProcess,
@@ -115,6 +157,29 @@ class ConsumableReturnController extends Controller
             'notes' => $notePrefix . $request->notes,
             'status' => 'pending',
         ]);
+
+        // ✅✅✅ Notification Trigger (Only for Returns) ✅✅✅
+        try {
+            // Re-query to get relationships
+            $newReturn = ConsumableReturn::with(['originalTransaction.equipment', 'requester'])->find($return->id);
+
+            // 1. Notify Admins (Database Bell)
+            // User model does not use Spatie trait, so we filter manually using custom hasPermissionTo
+            $admins = User::all()->filter(function($user) {
+                return $user->hasPermissionTo('permission:manage');
+            });
+            
+            if ($admins->isNotEmpty()) {
+                \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\ConsumableReturnRequested($newReturn));
+            }
+
+            // 2. Notify Synology Chat
+            $synology = new \App\Services\SynologyService();
+            $synology->notify(new \App\Notifications\ConsumableReturnRequested($newReturn));
+            
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Consumable Return Notification Error: " . $e->getMessage());
+        }
 
         $msg = $request->action_type === 'write_off' ? 'แจ้งใช้งานหมดแล้วสำเร็จ กรุณารอ Admin ตรวจสอบ' : 'ส่งคำขอคืนพัสดุสำเร็จ กรุณารอ Admin อนุมัติ';
         return back()->with('success', $msg);
@@ -138,10 +203,15 @@ class ConsumableReturnController extends Controller
             // 1. อัปเดต Transaction เดิมให้ยอด Returned เพิ่มขึ้น (เพื่อให้รายการหายไปจากหน้า User เพราะถือว่าเคลียร์แล้ว)
             $originalTransaction->increment('returned_quantity', $return->quantity_returned);
 
+            Log::info("Approving Return ID: {$return->id}, Type: {$return->action_type}, Qty: {$return->quantity_returned}, Current Eq Qty: {$equipment->quantity}");
+
             // 2. จัดการ Stock และสร้าง Transaction ใหม่ตามประเภท
             if ($return->action_type === 'return') {
                 // === กรณีคืนของ: เพิ่ม Stock กลับ ===
                 $equipment->increment('quantity', $return->quantity_returned);
+                
+                $equipment->refresh(); // Check new value
+                Log::info("Incremented! New Eq Qty: {$equipment->quantity}");
 
                 // สร้าง Transaction 'return'
                 Transaction::create([
@@ -155,9 +225,11 @@ class ConsumableReturnController extends Controller
                     'status' => 'completed',
                     'confirmed_at' => now(),
                     'admin_confirmed_at' => now(),
+                    'return_condition' => 'allowed', // Ensure this field is present if required
                 ]);
 
             } else {
+                Log::info("Action is NOT return (write_off). No stock increment.");
                 // === กรณีใช้หมด (Write-off): ไม่เพิ่ม Stock ===
                 // สร้าง Transaction 'adjust' เพื่อเก็บ Log ว่าของชิ้นนี้ถูกใช้หมดแล้ว
                 Transaction::create([
@@ -183,6 +255,7 @@ class ConsumableReturnController extends Controller
             $return->requester->notify(new ConsumableReturnApproved($return));
 
             DB::commit();
+            Log::info("Approval Committed Successfully.");
             return back()->with('success', 'อนุมัติรายการเรียบร้อยแล้ว');
 
         } catch (\Exception $e) {

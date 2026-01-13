@@ -33,9 +33,15 @@ class EquipmentRequested extends Notification
         $this->submitter = $submitter; // <-- เก็บค่าผู้กด
     }
 
-    public function via(object $notifiable): array
+    public function via($notifiable): array
     {
-        return ['database', SynologyChannel::class]; // ✅ Added Database
+        // If notifying SynologyService, use only SynologyChannel
+        if ($notifiable instanceof \App\Services\SynologyService) {
+            return [SynologyChannel::class];
+        }
+        
+        // Default to database for Users
+        return ['database'];
     }
 
     // ✅ Database Notification Structure

@@ -101,4 +101,23 @@ class SettingsController extends Controller
             return response()->json(['message' => 'เกิดข้อผิดพลาดในการโหลดรายชื่อผู้ใช้'], 500);
         }
     }
+    /**
+     * (Method ใหม่) บันทึกการตั้งค่าอนุญาตให้ User กดขอคืนของ
+     */
+    public function updateReturnRequestSetting(Request $request)
+    {
+        $request->validate(['enabled' => 'required|boolean']);
+
+        try {
+            Setting::updateOrCreate(
+                ['key' => 'allow_user_return_request'],
+                ['value' => $request->enabled ? '1' : '0']
+            );
+
+            return response()->json(['message' => 'บันทึกการตั้งค่าเรียบร้อยแล้ว']);
+        } catch (\Exception $e) {
+            Log::error('Error saving return request setting: ' . $e->getMessage());
+            return response()->json(['message' => 'เกิดข้อผิดพลาดในการบันทึก'], 500);
+        }
+    }
 }

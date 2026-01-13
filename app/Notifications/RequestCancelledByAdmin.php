@@ -25,7 +25,21 @@ class RequestCancelledByAdmin extends Notification
 
     public function via($notifiable)
     {
-        return [SynologyChannel::class];
+        if ($notifiable instanceof \App\Services\SynologyService) {
+            return [SynologyChannel::class];
+        }
+        return ['database'];
+    }
+
+    public function toArray($notifiable)
+    {
+        return [
+            'title' => 'คำขอเบิกถูกปฏิเสธ',
+            'body' => "คำขอ '{$this->transaction->equipment->name}' ถูกปฏิเสธโดย Admin {$this->canceller->fullname}",
+            'action_url' => route('transactions.index', ['status' => 'my_history']),
+            'type' => 'error', // Use error/danger style
+            'icon' => 'fas fa-times-circle'
+        ];
     }
 
     public function toSynology(object $notifiable): void

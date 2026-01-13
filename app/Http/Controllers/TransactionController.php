@@ -295,7 +295,22 @@ class TransactionController extends Controller
 
             $firstTransactionData = null;
 
-            foreach ($request->items as $itemData) {
+            // ✅✅✅ Pre-process: Merge duplicate items by ID ✅✅✅
+            $mergedItems = [];
+            foreach ($request->items as $item) {
+                $id = $item['id'];
+                if (isset($mergedItems[$id])) {
+                    $mergedItems[$id]['quantity'] += (int)$item['quantity'];
+                } else {
+                    $mergedItems[$id] = [
+                        'id' => $id,
+                        'quantity' => (int)$item['quantity']
+                    ];
+                }
+            }
+            $itemsToProcess = array_values($mergedItems);
+
+            foreach ($itemsToProcess as $itemData) {
                 $equipment = Equipment::lockForUpdate()->find($itemData['id']);
                 $quantityToWithdraw = (int)$itemData['quantity'];
 
@@ -394,8 +409,31 @@ class TransactionController extends Controller
             // ✅ ส่งแจ้งเตือนเสมอ
             if ($firstTransactionData && $firstTransactionData->user) {
                 try {
-                    Log::info("Sending EquipmentRequested notification (storeWithdrawal).");
+                    // Notify Synology (Admin Log)
                     (new SynologyService())->notify(new EquipmentRequested($firstTransactionData->load('equipment', 'user'), $loggedInUser));
+                    
+                    // ✅ Notify Receiver if Admin did it for them (Item Received)
+                    if ($canAutoConfirm && $isSelfWithdrawal && $userIdToAssign !== $loggedInUser->id) {
+                         // Note: $isSelfWithdrawal check in storeWithdrawal logic might be tricky. 
+                         // Check line 369: if ($canAutoConfirm && $isSelfWithdrawal)
+                         // If isSelfWithdrawal is true, then userIdToAssign IS loggedInUser.
+                         // So this block might not needed here IF storeWithdrawal ONLY handles self?
+                         // Line 345: $isSelfWithdrawal = ($request->input('requestor_type') !== 'other');
+                         // If 'other', isSelfWithdrawal is false.
+                         // Line 369: if ($canAutoConfirm && $isSelfWithdrawal) -> Only logic for SELF.
+                         // Line 380: else -> Logic for OTHER (Pending).
+                    }
+                    
+                    // Wait, storeWithdrawal logic:
+                    // Line 369: if ($canAutoConfirm && $isSelfWithdrawal) { status=completed }
+                    // Line 380: else { status=pending }
+                    // So storeWithdrawal DOES NOT allow Admin to Auto-Confirm for Others?
+                    // If so, it goes to Pending. Then Admin approves -> RequestApproved -> User notified.
+                    // So storeWithdrawal might be fine (captured by adminConfirmShipment).
+                    
+                    // BUT handleUserTransaction (Line 522):
+                    // if ($canAutoConfirm) { status=completed } (No check for isSelfWithdrawal!!!!)
+                    // So handleUserTransaction IS the place where Admin acts for Other and it completes immediately.
                 } catch (\Exception $e) { Log::error("Notification Error: " . $e->getMessage()); }
             }
 
@@ -546,8 +584,13 @@ class TransactionController extends Controller
 
             // ✅ ส่งแจ้งเตือนเสมอ (ไม่ว่าจะเบิกให้ตัวเองหรือคนอื่น)
             try {
-                Log::info("Sending EquipmentRequested notification. Requestor: {$requestorType}, AutoConfirm: " . ($canAutoConfirm ? 'Yes' : 'No'));
+                // Notify Synology (Admin Log)
                 (new SynologyService())->notify(new EquipmentRequested($transaction->load('equipment', 'user'), $loggedInUser));
+
+                // ✅ Notify Receiver if Admin did it for them (Item Received)
+                if ($canAutoConfirm && $userIdToAssign !== $loggedInUser->id) {
+                     $transaction->user->notify(new \App\Notifications\ItemReceived($transaction, $loggedInUser));
+                }
             } catch (\Exception $e) { Log::error("Notify Error: " . $e->getMessage()); }
 
             if ($bypassed) {
@@ -695,7 +738,8 @@ class TransactionController extends Controller
                     'user_confirmed_at' => $isCompleted ? now() : null,
                     'confirmed_at' => $isCompleted ? now() : null,
                     'handler_id' => $isCompleted ? $loggedInUser->id : null,
-                    'return_condition' => ($equipment->withdrawal_type === 'returnable') ? 'allowed' : 'not_allowed'
+                    'handler_id' => $isCompleted ? $loggedInUser->id : null,
+                    'return_condition' => in_array($equipment->withdrawal_type, ['returnable', 'partial_return']) ? 'allowed' : 'not_allowed'
                 ]);
                 
                 $results[] = $transaction;
@@ -705,15 +749,30 @@ class TransactionController extends Controller
             
             if (count($results) > 0) {
                 // ✅ Group ALL Transactions for Notification (Pending + Completed)
-                $transactionsToNotify = collect($results);
+                $transactionIds = collect($results)->pluck('id');
 
-                if ($transactionsToNotify->isNotEmpty()) {
+                if ($transactionIds->isNotEmpty()) {
                     try {
-                        // Load relations for all transactions
-                        $transactionsToNotify->load('equipment.unit', 'user'); // Eager load unit as well
+                        // Fix: Re-query to get Eloquent Collection (so .load() works and relations are fresh)
+                        $transactionsToNotify = Transaction::with(['equipment.unit', 'user'])
+                                                ->whereIn('id', $transactionIds)
+                                                ->get();
                         
-                        // Send Single Bulk Notification
+                        // 1. Send Single Bulk Notification to Synology
                         (new SynologyService())->notify(new \App\Notifications\BulkEquipmentRequested($transactionsToNotify, $loggedInUser));
+
+                        // 2. Notify Admins (Bell Notification) if there are pending items
+                        $hasPending = $transactionsToNotify->contains('status', 'pending');
+                        if ($hasPending) {
+                            $admins = User::all()->filter(function($user) {
+                                return $user->hasPermissionTo('equipment:manage');
+                            });
+
+                            if ($admins->isNotEmpty()) {
+                                \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\BulkEquipmentRequested($transactionsToNotify, $loggedInUser));
+                            }
+                        }
+
                     } catch (\Exception $e) { 
                         Log::error("Bulk Notification Error: " . $e->getMessage());
                     }
@@ -745,7 +804,15 @@ class TransactionController extends Controller
             $equipment->decrement('quantity', abs($transaction->quantity_change));
             $transaction->update(['admin_confirmed_at' => now(), 'handler_id' => Auth::id(), 'status' => 'shipped']);
             
-            try { (new SynologyService())->notify(new RequestApproved($transaction->load('user', 'equipment'))); } catch (\Exception $e) {}
+            try { 
+                // 1. Notify User (Database) -> Shows in Bell
+                $transaction->user->notify(new RequestApproved($transaction->load('user', 'equipment')));
+                
+                // 2. Notify Synology (Chat) -> Shows in Team Channel
+                (new SynologyService())->notify(new RequestApproved($transaction)); 
+            } catch (\Exception $e) {
+                Log::error("Notification Error in adminConfirmShipment: " . $e->getMessage());
+            }
 
             DB::commit();
             return back()->with('success', 'ยืนยันแล้ว');
@@ -778,6 +845,16 @@ class TransactionController extends Controller
                     Equipment::where('id', $transaction->equipment_id)->increment('quantity', $transaction->quantity_change);
                 }
 
+                // 1. Notify Admins (Database)
+                $admins = User::all()->filter(function($user) {
+                    return $user->hasPermissionTo('transaction:auto_confirm'); // Or 'permission:manage'
+                });
+                
+                if ($admins->isNotEmpty()) {
+                    \Illuminate\Support\Facades\Notification::send($admins, new UserConfirmedReceipt($transaction));
+                }
+
+                // 2. Notify Synology (Chat)
                 try { (new SynologyService())->notify(new UserConfirmedReceipt($transaction->load('equipment', 'user', 'handler'))); } catch (\Exception $e) {}
 
                 DB::commit();
@@ -821,13 +898,32 @@ class TransactionController extends Controller
 
     public function userCancel(Request $request, Transaction $transaction) 
     { 
-        if (Auth::id() !== $transaction->user_id && !Auth::user()->can('permission:manage')) return back()->with('error', 'ไม่มีสิทธิ์');
+        $user = Auth::user();
+        $isOwner = $user->id === $transaction->user_id;
+        $isAdmin = $user->can('permission:manage');
+
+        if (!$isOwner && !$isAdmin) return back()->with('error', 'ไม่มีสิทธิ์');
         if ($transaction->status !== 'pending') return back()->with('error', 'ยกเลิกไม่ได้');
 
-        $transaction->update(['status' => 'cancelled', 'notes' => $transaction->notes . "\nยกเลิกโดยผู้ใช้"]);
-        try { (new SynologyService())->notify(new RequestCancelledByUser($transaction)); } catch(\Exception $e) {}
+        if ($isAdmin && !$isOwner) {
+            // Admin Rejecting
+            $transaction->update(['status' => 'cancelled', 'notes' => $transaction->notes . "\n[System: ปฏิเสธโดย Admin " . $user->fullname . "]"]);
+            try { 
+                // Notify User (DB)
+                $transaction->user->notify(new \App\Notifications\RequestCancelledByAdmin($transaction, $user)); 
+                
+                // Notify Synology (Chat)
+                (new SynologyService())->notify(new \App\Notifications\RequestCancelledByAdmin($transaction, $user)); 
+            } catch(\Exception $e) { 
+                Log::error("Notify Cancel Admin Error: " . $e->getMessage()); 
+            }
+        } else {
+            // User Cancelling
+            $transaction->update(['status' => 'cancelled', 'notes' => $transaction->notes . "\nยกเลิกโดยผู้ใช้"]);
+            try { (new SynologyService())->notify(new RequestCancelledByUser($transaction)); } catch(\Exception $e) {}
+        }
         
-        return back()->with('success', 'ยกเลิกสำเร็จ'); 
+        return back()->with('success', 'ยกเลิกรายการสำเร็จ'); 
     }
 
     public function adminCancelTransaction(Request $request, Transaction $transaction) 
@@ -905,6 +1001,7 @@ class TransactionController extends Controller
             'q1' => 'required|integer|in:1,2,3',
             'q2' => 'required|integer|in:1,2,3',
             'q3' => 'required|integer|in:1,2,3',
+            'answers' => 'nullable|array', // ✅ Dynamic
             'comment' => 'nullable|string|max:500',
         ]);
 
@@ -912,11 +1009,18 @@ class TransactionController extends Controller
             return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
         }
 
-        if (!method_exists(\App\Models\EquipmentRating::class, 'calculateScore')) {
-             return response()->json(['success' => false, 'message' => 'System Error: Please update App\Models\EquipmentRating.php'], 500);
+        if (!method_exists(\App\Models\EquipmentRating::class, 'calculateDynamicScore')) {
+             return response()->json(['success' => false, 'message' => 'System Error: Method calculateDynamicScore not found'], 500);
         }
 
-        $score = \App\Models\EquipmentRating::calculateScore($request->q1, $request->q2, $request->q3);
+        // Use answers array if available, otherwise fallback to q1-q3
+        $answersToCalc = $request->answers ?? [$request->q1, $request->q2, $request->q3];
+        // Ensure values are just the values (if associative array passed)
+        if (is_array($answersToCalc) && array_keys($answersToCalc) !== range(0, count($answersToCalc) - 1)) {
+            $answersToCalc = array_values($answersToCalc);
+        }
+        
+        $score = \App\Models\EquipmentRating::calculateDynamicScore($answersToCalc);
 
         DB::beginTransaction();
         try {
@@ -927,6 +1031,7 @@ class TransactionController extends Controller
                     'q1_answer' => $request->q1,
                     'q2_answer' => $request->q2,
                     'q3_answer' => $request->q3,
+                    'answers' => $request->answers, // ✅ Save Dynamic Answers
                     'rating_score' => $score,
                     'comment' => $request->comment,
                     'rated_at' => now(), 
@@ -943,6 +1048,117 @@ class TransactionController extends Controller
                 'success' => false, 
                 'message' => 'System Error: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    // =========================================================================
+    // 5. USER RETURN REQUEST SYSTEM
+    // =========================================================================
+
+    // =========================================================================
+    // 5. USER DIRECT RETURN SYSTEM
+    // =========================================================================
+
+    public function processDirectReturn(Request $request, Transaction $transaction)
+    {
+        // 1. Check if feature is enabled
+        $isEnabled = \App\Models\Setting::where('key', 'allow_user_return_request')->value('value');
+        if (!$isEnabled) {
+            return back()->with('error', 'ระบบขอคืนอุปกรณ์ปิดใช้งานอยู่ (ต้องคืนผ่าน Admin เท่านั้น)');
+        }
+
+        // 2. Authorization (Must be owner)
+        if (Auth::id() !== $transaction->user_id) {
+            return back()->with('error', 'ไม่มีสิทธิ์ทำรายการนี้');
+        }
+
+        // 3. Validation
+        if ($transaction->status !== 'completed') {
+            return back()->with('error', 'สถานะไม่ถูกต้อง (ต้องเป็น Completed เท่านั้น)');
+        }
+        if ($transaction->return_condition !== 'allowed') {
+            return back()->with('error', 'รายการนี้ไม่สามารถคืนได้');
+        }
+        
+        $request->validate([
+            'return_condition' => 'required|in:good,defective',
+            'problem_description' => 'required_if:return_condition,defective|nullable|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $condition = $request->input('return_condition', 'good');
+            $problem = $request->input('problem_description', '-');
+
+            // --- Logic from ReturnController@store (Simplified for User) ---
+            
+            // A. Update Original Transaction
+            $quantityToReturn = abs($transaction->quantity_change) - ($transaction->returned_quantity ?? 0);
+            if ($quantityToReturn <= 0) {
+                return back()->with('error', 'รายการนี้ถูกคืนครบถ้วนหรือตัดยอดไปแล้ว');
+            }
+            
+            $transaction->returned_quantity = ($transaction->returned_quantity ?? 0) + $quantityToReturn;
+            if ($transaction->returned_quantity >= abs($transaction->quantity_change)) {
+                $transaction->status = 'returned'; 
+            }
+            $transaction->save();
+            
+            $equipment = Equipment::lockForUpdate()->find($transaction->equipment_id);
+            
+            // B. Create Return Transaction History
+            $newReturnTxn = Transaction::create([
+                'equipment_id' => $equipment->id,
+                'user_id' => $transaction->user_id,
+                'handler_id' => null, // System / Self
+                'type' => 'return',
+                'quantity_change' => $quantityToReturn,
+                'notes' => "User Returned (Direct). Condition: " . ucfirst($condition),
+                'transaction_date' => now(),
+                'status' => 'completed',
+                'confirmed_at' => now(),
+                'user_confirmed_at' => now(),
+                'admin_confirmed_at' => now(), // Auto-confirm
+            ]);
+
+            // C. Handle Stock based on Condition
+            if ($condition === 'defective') {
+                // Case: Defective -> Split to Maintenance
+                $maintenanceEquipment = $equipment->replicate(['id', 'created_at', 'updated_at']);
+                $maintenanceEquipment->quantity = $quantityToReturn;
+                $maintenanceEquipment->status = 'maintenance';
+                $maintenanceEquipment->notes = "User reported defective. Split from ID: {$equipment->id}. Ref User TXN-{$newReturnTxn->id}";
+                $maintenanceEquipment->save();
+
+                // Log Maintenance
+                \App\Models\MaintenanceLog::create([
+                    'equipment_id' => $maintenanceEquipment->id,
+                    'transaction_id' => $newReturnTxn->id,
+                    'reported_by_user_id' => Auth::id(),
+                    'problem_description' => $problem,
+                    'status' => 'pending',
+                ]);
+                
+                // Notify Admin about Repair? Maybe.
+            } else {
+                // Case: Good -> Restock
+                $equipment->increment('quantity', $quantityToReturn);
+            }
+            $equipment->save();
+
+            DB::commit();
+            
+            // Notify Admin (Informational)
+            try {
+                 (new SynologyService())->notify(new \App\Notifications\ItemReturned($newReturnTxn->load('equipment', 'user')));
+            } catch (\Exception $e) {}
+
+            return back()->with('success', 'คืนอุปกรณ์สำเร็จ! (ยอดเข้าสต็อก/บันทึกซ่อมเรียบร้อย)');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Direct Return Error: " . $e->getMessage());
+            return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
     }
 }
