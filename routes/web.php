@@ -227,6 +227,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/purchase-orders/scheduled/add-item/{equipment}', [PurchaseOrderController::class, 'addItemToScheduled'])->name('purchase-orders.addItemToScheduled');
         // ✅ Resubmit Rejected PO
         Route::post('/purchase-orders/{purchaseOrder}/resubmit', [PurchaseOrderController::class, 'resubmit'])->name('purchase-orders.resubmit');
+        // ✅ Retry Send to PU Hub
+        Route::post('/purchase-orders/{purchaseOrder}/retry-send', [PurchaseOrderController::class, 'retrySendApi'])->name('purchase-orders.retry-send');
     });
 
     // ✅ Purchase Inspection Routes (ตรวจสอบของที่มาถึง)

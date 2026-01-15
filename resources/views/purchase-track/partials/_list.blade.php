@@ -59,10 +59,7 @@
                                     default => 'bg-gray-100 text-gray-600 border border-gray-200'
                                 };
                                 
-                                // Override Logic for Rejection/Cancellation
-                                if ($po->status === 'cancelled') {
-                                    $badgeClasses = 'bg-gray-100 text-gray-500 border border-gray-300'; // Make Type gray if rejected
-                                }
+                                // Override Logic for Rejection/Cancellation Removed per user request
                             @endphp
                             <span class="px-2 py-0.5 rounded text-xs font-bold self-center ml-2 {{ $badgeClasses }}">
                                 {{ match($po->type) { 
@@ -73,11 +70,47 @@
                                     default => ucfirst($po->type) 
                                 } }}
                             </span>
-                            
-                            {{-- 🔴 REJECTED STATUS BADGE --}}
-                            @if($po->status === 'cancelled')
+
+                            @php
+                                // Helper for Mapping Active Statuses
+                                $statusConfig = match($po->status) {
+                                    'ordered' => ['bg' => 'bg-blue-50', 'text' => 'text-blue-700', 'border' => 'border-blue-200', 'label' => 'รอ PU ดำเนินการ'],
+                                    'approved' => ['bg' => 'bg-indigo-50', 'text' => 'text-indigo-700', 'border' => 'border-indigo-200', 'label' => 'PU อนุมัติแล้ว (รอของ)'],
+                                    'shipped_from_supplier' => ['bg' => 'bg-purple-50', 'text' => 'text-purple-700', 'border' => 'border-purple-200', 'label' => 'อยู่ระหว่างจัดส่ง'],
+                                    'partial_receive' => ['bg' => 'bg-orange-50', 'text' => 'text-orange-700', 'border' => 'border-orange-200', 'label' => 'รับของบางส่วน'],
+                                    'completed' => ['bg' => 'bg-green-50', 'text' => 'text-green-700', 'border' => 'border-green-200', 'label' => 'สำเร็จ'],
+                                    'pending' => ['bg' => 'bg-yellow-50', 'text' => 'text-yellow-700', 'border' => 'border-yellow-200', 'label' => 'กำลังดำเนินการ (Pending)'], 
+                                    default => ['bg' => 'bg-gray-50', 'text' => 'text-gray-600', 'border' => 'border-gray-200', 'label' => ucfirst($po->status)]
+                                };
+                                
+                                $isResubmit = $po->pu_data['is_resubmit'] ?? false;
+                                $hasRejectedItems = $po->items->contains('status', 'cancelled');
+                            @endphp
+
+                            {{-- Status Badge (For Non-Cancelled) --}}
+                            @if($po->status !== 'cancelled')
+                                <span class="px-3 py-1 ml-2 rounded text-xs font-bold {{ $statusConfig['bg'] }} {{ $statusConfig['text'] }} {{ $statusConfig['border'] }} border flex items-center shadow-sm whitespace-nowrap">
+                                    <div class="w-1.5 h-1.5 rounded-full {{ str_replace('text-', 'bg-', $statusConfig['text']) }} mr-2"></div>
+                                    {{ $statusConfig['label'] }}
+                                </span>
+                                
+                                {{-- Partial Rejection Indicator --}}
+                                @if($hasRejectedItems)
+                                    <span class="px-3 py-1 ml-2 rounded text-xs font-bold bg-red-50 text-red-600 border border-red-200 flex items-center shadow-sm whitespace-nowrap" title="มีบางรายการถูกปฏิเสธ">
+                                        <i class="fas fa-exclamation-circle mr-1.5"></i> บางรายการถูกปฏิเสธ
+                                    </span>
+                                @endif
+                            @else
+                                {{-- Cancelled Badge --}}
                                 <span class="px-3 py-1 ml-2 rounded text-xs font-bold bg-red-100 text-red-600 border border-red-200 flex items-center shadow-sm">
                                     <i class="fas fa-ban mr-1.5"></i> ถูกปฏิเสธ (Rejected)
+                                </span>
+                            @endif
+
+                            {{-- Resubmit Indicator --}}
+                            @if($isResubmit && $po->status !== 'cancelled')
+                                <span class="px-3 py-1 ml-2 rounded text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 flex items-center shadow-sm animate-pulse">
+                                    <i class="fas fa-sync-alt mr-1.5"></i> แก้ไขแล้ว (รอตรวจสอบ)
                                 </span>
                             @endif
                         </div>
@@ -118,6 +151,16 @@
                 
                 {{-- Action Buttons --}}
                 <div class="ml-auto flex flex-col items-end gap-2">
+                     {{-- 0. Manual Retry Send (For Pending/Stuck) --}}
+                    @if($po->status === 'pending')
+                         <form action="{{ route('purchase-orders.retry-send', $po->id) }}" method="POST">
+                            @csrf
+                            <button type="submit" class="inline-flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg border border-gray-300 shadow-sm transition-colors whitespace-nowrap" title="กดปุ่มนี้หากรายการค้างอยู่นานเกินไป">
+                                <i class="fas fa-paper-plane text-blue-500"></i> ยืนยันส่งข้อมูล (Retry)
+                            </button>
+                        </form>
+                    @endif
+
                      {{-- 1. Receive Button --}}
                     @if(in_array($po->status, ['shipped_from_supplier', 'partial_receive', 'ordered']))
                         <a href="{{ route('receive.index') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors whitespace-nowrap">
@@ -128,14 +171,35 @@
 
                     {{-- 2. Resubmit Button (For Rejected Only) --}}
                     {{-- 2. Resubmit Logic (Advanced 4 Cases) --}}
-                     @if($po->status === 'cancelled')
+                     {{-- 2. Resubmit Logic (Advanced 4 Cases & Partial Rejection) --}}
+                     @php
+                        $hasRejectedItems = $po->items->contains('status', 'cancelled');
+                        $isCancelled = $po->status === 'cancelled';
+                     @endphp
+
+                     @if($isCancelled || $hasRejectedItems)
                         @php
-                            $rejectionCode = $po->pu_data['rejection_code'] ?? 0;
-                            // Keywords fallback if code missing (Backward Compat)
+                            $rejectionCode = 0;
+                            // Priority 1: Check Item Level
+                            $rejectedItems = $po->items->where('status', 'cancelled');
+                            if ($rejectedItems->isNotEmpty()) {
+                                // If ANY item is 3 (Fixable), treat as Fixable
+                                if ($rejectedItems->contains('rejection_code', 3) || $rejectedItems->contains(fn($i) => str_contains($i->rejection_reason, 'ไม่ชัดเจน'))) {
+                                    $rejectionCode = 3;
+                                } else {
+                                    $rejectionCode = $rejectedItems->first()->rejection_code ?? 0;
+                                }
+                            }
+                            // Priority 2: PO Level (Legacy/Full Rejection)
+                            if ($rejectionCode == 0) {
+                                $rejectionCode = $po->pu_data['rejection_code'] ?? 0;
+                            }
+                            
+                            // Fallback: Keywords
                             if ($rejectionCode === 0 && isset($po->pu_data['rejection_reason'])) {
                                 $r = $po->pu_data['rejection_reason'];
                                 if (str_contains($r, 'ไม่ชัดเจน')) $rejectionCode = 3;
-                                elseif (str_contains($r, 'ไม่จำเป็น') || str_contains($r, 'งบประมาณ') || str_contains($r, 'ทดแทน')) $rejectionCode = 1; // Block
+                                elseif (str_contains($r, 'ไม่จำเป็น') || str_contains($r, 'งบประมาณ') || str_contains($r, 'ทดแทน')) $rejectionCode = 1;
                             }
                         @endphp
 
@@ -183,6 +247,35 @@
                             <span class="text-red-500 text-xs pl-1">(โดย {{ $po->pu_data['rejected_by'] }})</span>
                         @endif
                     </p>
+                </div>
+            </div>
+        @endif
+
+        {{-- 🔵 RESUBMIT INFO BOX --}}
+        @if(($po->pu_data['is_resubmit'] ?? false) && $po->status !== 'cancelled')
+             @php
+                $resubmitNote = '';
+                if (str_contains($po->notes, '[Resubmit Info]:')) {
+                     $parts = explode('[Resubmit Info]:', $po->notes);
+                     $resubmitNote = trim(end($parts));
+                }
+            @endphp
+            <div class="bg-blue-50 border-t border-blue-100 px-6 py-4 flex items-start gap-4">
+                <div class="bg-white p-2 rounded-full border border-blue-200 text-blue-600 shadow-sm shrink-0">
+                    <i class="fas fa-sync-alt animate-spin-slow"></i>
+                </div>
+                <div>
+                    <h4 class="text-sm font-bold text-blue-800">รายการนี้ได้รับการแก้ไขและส่งใหม่ (Resubmitted)</h4>
+                    <p class="text-sm text-blue-700 mt-1 leading-relaxed">
+                        คุณได้ทำการแก้ไขและส่งข้อมูลให้ PU ตรวจสอบใหม่แล้ว โดยอ้างอิงเลข PR เดิม 
+                        <span class="font-mono font-bold bg-blue-100 px-1.5 py-0.5 rounded text-blue-900 border border-blue-200 text-xs tracking-wider">{{ $po->pr_number }}</span>
+                    </p>
+                    @if($resubmitNote)
+                        <div class="mt-2 text-xs bg-white/60 p-2 rounded border border-blue-200 text-blue-900 inline-block">
+                            <i class="fas fa-comment-alt mr-1 text-blue-400"></i>
+                            <strong>เหตุผลของคุณ:</strong> "{{ $resubmitNote }}"
+                        </div>
+                    @endif
                 </div>
             </div>
         @endif
@@ -285,8 +378,18 @@
                             $equip = $item->equipment;
                             $img = ($equip && $equip->images->isNotEmpty()) ? $equip->images->first()->image_url : asset('images/placeholder.webp');
                             $itemName = $item->item_description ?? ($equip ? $equip->name : 'สินค้าไม่ระบุชื่อ');
+                            
+                            // ✅ ITEM SEPARATION LOGIC
+                            $isRejectedPage = request()->routeIs('purchase-track.rejected');
+                            $itemIsRejected = $item->status == 'cancelled';
+
+                            // If on Rejected Page, show ONLY rejected items (and maybe items that belong to a fully rejected PO)
+                            // If whole PO is rejected, show all items? Or just rejected ones?
+                            // Logic: Show item if strict match to page context
+                            if ($isRejectedPage && !$itemIsRejected) continue;
+                            if (!$isRejectedPage && $itemIsRejected) continue;
                         @endphp
-                        <div class="flex items-start gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow h-full">
+                        <div class="flex items-start gap-4 bg-white p-4 rounded-lg border {{ $itemIsRejected ? 'border-red-300 ring-2 ring-red-50' : 'border-gray-200' }} shadow-sm hover:shadow-md transition-shadow h-full">
                             <div class="h-16 w-16 rounded-lg bg-gray-100 border border-gray-200 flex-shrink-0 overflow-hidden">
                                 <img src="{{ $img }}" class="h-full w-full object-cover">
                             </div>
@@ -294,10 +397,19 @@
                                 <p class="text-sm font-bold text-gray-900 line-clamp-2 leading-snug" title="{{ $itemName }}">
                                     {{ $itemName }}
                                 </p>
-                                <div class="mt-2 flex items-center gap-3 text-xs">
+                                <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
                                     <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium whitespace-nowrap">
                                         สั่ง {{ $item->quantity_ordered }}
                                     </span>
+                                    
+                                    {{-- Rejected Item Badge --}}
+                                    @if($itemIsRejected)
+                                        <span class="text-red-600 flex items-center gap-1 font-bold whitespace-nowrap">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            ถูกปฏิเสธ
+                                        </span>
+                                    @endif
+
                                     @if($item->quantity_received > 0)
                                         <span class="text-green-600 flex items-center gap-1 font-medium whitespace-nowrap">
                                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
@@ -317,6 +429,22 @@
                                         </span>
                                     @endif
                                 </div>
+                                
+                                {{-- Reason Box per Item --}}
+                                @if($itemIsRejected && $item->rejection_reason)
+                                    <div class="mt-2 bg-red-50 p-2 rounded text-xs text-red-700 border border-red-100">
+                                        <strong>เหตุผล:</strong> {{ $item->rejection_reason }}
+                                        @if($item->rejection_code == 3)
+                                            <div class="mt-1 text-blue-700 font-medium cursor-pointer underline" onclick="triggerResubmit('{{$po->id}}')">
+                                                <i class="fas fa-edit"></i> คลิกที่นี่เพื่อแก้ไขและส่งใหม่
+                                            </div>
+                                        @elseif(in_array($item->rejection_code, [1,2,4]))
+                                            <div class="mt-1 text-red-800 font-medium">
+                                                *ต้องสร้างรายการใหม่
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     @endforeach
@@ -335,11 +463,30 @@
 <script>
     if (typeof triggerResubmit !== 'function') {
         window.triggerResubmit = function(id) {
-            const note = prompt("กรุณาระบุข้อความถึง PU (อธิบายเหตุผลการแก้ไข):");
-            if (note !== null) {
-                document.getElementById('resubmit-note-'+id).value = note;
-                document.getElementById('resubmit-form-'+id).submit();
-            }
+            Swal.fire({
+                title: 'แก้ไขและส่งใหม่',
+                text: "กรุณาระบุข้อความถึง PU (อธิบายเหตุผลการแก้ไข):",
+                input: 'textarea',
+                inputPlaceholder: 'เช่น แก้ไขราคาให้แล้วครับ, แนบสเปคใหม่ให้แล้วครับ...',
+                inputAttributes: {
+                    'aria-label': 'Type your message here'
+                },
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'ยืนยันส่งข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'กรุณาระบุข้อความอธิบายก่อนส่งครับ!';
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('resubmit-note-'+id).value = result.value;
+                    document.getElementById('resubmit-form-'+id).submit();
+                }
+            });
         }
     }
 </script>

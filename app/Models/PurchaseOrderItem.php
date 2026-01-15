@@ -44,6 +44,8 @@ class PurchaseOrderItem extends Model
         'image',
         'inspection_status',
         'inspection_notes',
+        'rejection_code', // New
+        'rejection_reason', // New
         // 'dept_key', // Removed
     ];
 

@@ -31,14 +31,23 @@ class PurchaseOrderController extends Controller
         $this->authorize('po:view');
 
         try {
-            // --- ✅ START: แก้ไข Query ตรงนี้ (เปลี่ยน latestImage เป็น images) ---
+            // Helper to exclude resubmitted items (which belong in tracking)
+            $excludeResubmit = function($q) {
+                $q->where(function($sub) {
+                    $sub->whereNull('pu_data->is_resubmit')
+                        ->orWhere('pu_data->is_resubmit', '!=', true);
+                });
+            };
+
             $scheduledOrder = PurchaseOrder::with([
                 'items.equipment.category',
                 'items.equipment.unit',
                 'items.equipment.images',
                 'requester'
             ])
-                ->where('type', 'scheduled')->where('status', 'pending')->first();
+                ->where('type', 'scheduled')->where('status', 'pending')
+                ->where($excludeResubmit)
+                ->first();
 
             $urgentOrders = PurchaseOrder::with([
                 'items.equipment.category',
@@ -46,7 +55,9 @@ class PurchaseOrderController extends Controller
                 'items.equipment.images',
                 'requester'
             ])
-                ->where('type', 'urgent')->where('status', 'pending')->orderBy('created_at', 'desc')->get();
+                ->where('type', 'urgent')->where('status', 'pending')
+                ->where($excludeResubmit)
+                ->orderBy('created_at', 'desc')->get();
 
             $glpiOrders = PurchaseOrder::with([
                 'items.equipment.category',
@@ -54,7 +65,9 @@ class PurchaseOrderController extends Controller
                 'items.equipment.images',
                 'requester'
             ])
-                ->where('type', 'job_order_glpi')->where('status', 'pending')->orderBy('created_at', 'desc')->get();
+                ->where('type', 'job_order_glpi')->where('status', 'pending')
+                ->where($excludeResubmit)
+                ->orderBy('created_at', 'desc')->get();
 
             $jobOrders = PurchaseOrder::with([
                 'items.equipment.unit',
@@ -63,9 +76,10 @@ class PurchaseOrderController extends Controller
             ])
                 ->where('type', 'job_order')
                 ->where('status', 'pending')
+                ->where($excludeResubmit)
                 ->orderBy('created_at', 'desc')
                 ->get();
-            // --- ✅ END: แก้ไข Query ---
+            // --- ✅ END: Filtered Out Resubmitted Items ---
 
             $defaultDeptKey = config('department_stocks.default_key', 'mm');
 
@@ -154,7 +168,7 @@ class PurchaseOrderController extends Controller
             $order->ordered_at = now();
             $order->save();
 
-            return ['message' => 'API is disabled. Order marked as ordered locally (Bypassed).'];
+            return ['success' => true, 'message' => 'API is disabled. Order marked as ordered locally (Bypassed).'];
         }
 
         // --- ถ้าเปิดใช้งาน API ก็ทำตาม Logic เดิม ---
@@ -290,8 +304,8 @@ class PurchaseOrderController extends Controller
         // DEBUG: Log the full response to see why we are missing po_code
         Log::info("PU API Response for PO #{$order->id}: ", $responseData);
 
-        // Store full response data
-        $order->pu_data = $responseData;
+        // Store full response data (MERGE to keep is_resubmit/history)
+        $order->pu_data = array_merge($order->pu_data ?? [], $responseData ?? []);
 
         // Determine PR Number
         if (isset($responseData['pr_code'])) {
@@ -354,7 +368,11 @@ class PurchaseOrderController extends Controller
             );
         } catch (\Exception $e) { Log::error("Notify PU Sync Error: " . $e->getMessage()); }
 
-        return $response->json();
+        return [
+            'success' => true,
+            'message' => 'ส่งข้อมูลไปยัง PU Hub เรียบร้อยแล้ว',
+            'data' => $response->json()
+        ];
     }
 
 
@@ -671,7 +689,7 @@ class PurchaseOrderController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($purchaseOrder) {
+            DB::transaction(function () use ($purchaseOrder, $request) {
                 // 1. Update Existing PO (No Clone)
                 $purchaseOrder->status = 'pending';
                 // Don't clear pr_number or po_number if we want to reuse them
@@ -713,13 +731,46 @@ class PurchaseOrderController extends Controller
                     $item->save();
                 }
             });
+            
+            // 🚀 Trigger API to PU Hub
+            // Fixed: Pass $request to sendPurchaseOrderToApi
+            $apiResult = $this->sendPurchaseOrderToApi($purchaseOrder, $request);
+            if (!$apiResult['success']) {
+                // Warning only - because local status is already safe.
+                return redirect()->route('purchase-track.index')
+                    ->with('warning', 'บันทึกแก้ไขแล้ว แต่ส่งข้อมูลไป PU ไม่สำเร็จ: ' . $apiResult['message']);
+            }
 
-            return redirect()->route('purchase-orders.index')
-                ->with('success', 'เปิดให้แก้ไขรายการเรียบร้อยแล้ว (สถานะกลับเป็น Pending)');
+            return redirect()->route('purchase-track.index')
+                ->with('success', 'ส่งข้อมูลแก้ไขไปรายการติดตามพัสดุเรียบร้อยแล้ว');
 
         } catch (\Exception $e) {
             Log::error("Resubmit Error: " . $e->getMessage());
             return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
+        }
+    }
+    // =============================================
+    // API Retry Feature
+    // =============================================
+    public function retrySendApi(Request $request, PurchaseOrder $purchaseOrder)
+    {
+        $this->authorize('po:create');
+        
+        // Allow retry for Pending (Stuck), Ordered (Update), or Cancelled (if re-opening logic exists)
+        // Checks logic handled inside sendPurchaseOrderToApi mostly, but here we gatekeep basic status.
+        // For Resubmit flow, status is 'pending'.
+        
+        try {
+             // Fixed: Pass $request
+             $apiResult = $this->sendPurchaseOrderToApi($purchaseOrder, $request);
+             
+             if ($apiResult['success']) {
+                 return back()->with('success', 'ส่งข้อมูลไป PU Hub เรียบร้อยแล้ว 🚀');
+             } else {
+                 return back()->with('error', 'ส่งไม่สำเร็จ: ' . $apiResult['message']);
+             }
+        } catch (\Exception $e) {
+             return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
     }
 }

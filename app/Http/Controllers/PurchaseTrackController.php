@@ -18,7 +18,8 @@ class PurchaseTrackController extends Controller
             'approved',
             'shipped_from_supplier',
             'partial_receive',
-            'completed'
+            'completed',
+            'pending' // ✅ Include Pending (Resubmitted POs)
         ];
 
         $purchaseOrders = $this->fetchOrders($trackingStatuses);
@@ -32,9 +33,25 @@ class PurchaseTrackController extends Controller
 
     public function rejectedIndex()
     {
-        $trackingStatuses = ['cancelled', 'rejected'];
-
-        $purchaseOrders = $this->fetchOrders($trackingStatuses);
+        // ✅ Updated Query: Include Whole PO Rejection OR Partial Item Rejection
+        $purchaseOrders = PurchaseOrder::with([
+            'items' => function ($q) {
+                $q->with(['equipment' => function ($eq) {
+                    $eq->withTrashed()->with(['category', 'unit', 'images']);
+                }]);
+            },
+            'requester',
+            'orderedBy'
+        ])
+        ->where(function($query) {
+             $query->whereIn('status', ['cancelled', 'rejected'])
+                   ->orWhereHas('items', function($q) {
+                       $q->where('status', 'cancelled');
+                   });
+        })
+        ->orderBy('updated_at', 'desc')
+        ->orderBy('id', 'desc')
+        ->paginate(10);
 
         if (request()->ajax()) {
             return view('purchase-track.partials._list', compact('purchaseOrders'))->render();

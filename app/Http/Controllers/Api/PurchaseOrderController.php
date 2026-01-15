@@ -239,6 +239,7 @@ class PurchaseOrderController extends Controller
             $poCode = $request->input('po_code');
             $reason = $request->input('reason', 'ไม่ระบุเหตุผล');
             $rejectedBy = $request->input('rejected_by', 'System');
+            $rejectedItemsList = $request->input('rejected_items'); // Array of items
 
             Log::info("API: Received PR Rejection for PR: {$prCode} / PO: {$poCode}");
 
@@ -255,25 +256,69 @@ class PurchaseOrderController extends Controller
 
             if ($po) {
                 $puData = $po->pu_data ?? [];
-                $puData['rejection_reason'] = $reason;
+                $puData['rejection_reason'] = $reason; // Main reason (or summary)
                 $puData['rejected_by'] = $rejectedBy;
                 $puData['rejected_at'] = now()->toDateTimeString();
 
-                // ✅ Determine Rejection Code (Logic 4 Cases)
-                $rejectionCode = $request->input('rejection_code');
-                if (!$rejectionCode) {
-                    // Fallback: Keyword Matching
-                    if (str_contains($reason, 'ไม่จำเป็น')) $rejectionCode = 1;
-                    elseif (str_contains($reason, 'งบประมาณ')) $rejectionCode = 2;
-                    elseif (str_contains($reason, 'ไม่ชัดเจน')) $rejectionCode = 3;
-                    elseif (str_contains($reason, 'ทดแทน')) $rejectionCode = 4;
-                    else $rejectionCode = 0; // Unknown
+                // ✅ Determine Rejection Code (Logic 4 Cases) - Main PO Code
+                $mainRejectionCode = $request->input('rejection_code');
+                if (!$mainRejectionCode) {
+                    if (str_contains($reason, 'ไม่จำเป็น')) $mainRejectionCode = 1;
+                    elseif (str_contains($reason, 'งบประมาณ')) $mainRejectionCode = 2;
+                    elseif (str_contains($reason, 'ไม่ชัดเจน')) $mainRejectionCode = 3;
+                    elseif (str_contains($reason, 'ทดแทน')) $mainRejectionCode = 4;
+                    else $mainRejectionCode = 0;
                 }
-                $puData['rejection_code'] = $rejectionCode;
+                $puData['rejection_code'] = $mainRejectionCode; 
+
+                // --- ITEM LEVEL LOGIC ---
+                if (!empty($rejectedItemsList) && is_array($rejectedItemsList)) {
+                    foreach ($rejectedItemsList as $rItem) {
+                        // Find item by pr_item_id (preferable) or maybe equipment/index?
+                        // Assuming pr_item_id was synced previously. If not, this might fail to find item.
+                        // Fallback: Try match by item_name ??
+                        $itemRef = $rItem['pr_item_id'] ?? null;
+                        
+                        $item = null;
+                        if ($itemRef) {
+                            $item = $po->items()->where('pr_item_id', $itemRef)->first();
+                        }
+                        
+                        if ($item) {
+                            $item->status = 'cancelled'; // Mark item as rejected
+                            $item->rejection_code = $rItem['rejection_code'] ?? $mainRejectionCode;
+                            $item->rejection_reason = $rItem['reason'] ?? $reason;
+                            $item->save();
+                            Log::info("Item Rejected: ID {$item->id} Code {$item->rejection_code}");
+                        }
+                    }
+
+                    // Check if ALL items are rejected
+                    $activeItems = $po->items()->where('status', '!=', 'cancelled')->count();
+                    if ($activeItems === 0) {
+                        $po->status = 'cancelled';
+                        $po->notes = "🚫 ถูกปฏิเสธครบทุกรายการ: {$reason}\n" . $po->notes;
+                    } else {
+                        // Partial Rejection
+                        $po->notes = "⚠️ มีบางรายการถูกปฏิเสธ: {$reason}\n" . $po->notes;
+                        // Keep PO status as is (e.g. pending/ordered) so users see active items.
+                    }
+
+                } else {
+                    // --- WHOLE PO REJECTION (Legacy/Full) ---
+                    $po->notes = "🚫 ถูกปฏิเสธทั้งใบ: {$reason} (Code: {$mainRejectionCode})\n" . $po->notes;
+                    $po->status = 'cancelled';
+                    
+                    // Also mark all items as cancelled? Technically yes.
+                    foreach($po->items as $item) {
+                        $item->status = 'cancelled';
+                        $item->rejection_code = $mainRejectionCode;
+                        $item->rejection_reason = $reason;
+                        $item->save();
+                    }
+                }
 
                 $po->pu_data = $puData;
-                $po->notes = "🚫 ถูกปฏิเสธโดย PU: {$reason} (Code: {$rejectionCode}) (โดย {$rejectedBy})\n" . $po->notes;
-                $po->status = 'cancelled'; // Use 'cancelled' (or 'rejected' if enum allows, using 'cancelled' for safety)
                 $po->save();
 
                 // 🔔 Notify Rejection
