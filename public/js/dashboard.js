@@ -258,21 +258,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     });
 
-                    // 🔥 Logic: ขยายแกน Y ให้สูงกว่าค่าสูงสุด 1 ช่องเสมอ (Max Data + Buffer)
-                    let yAxisMax = undefined;
-                    if (maxDataValue > 0) {
-                        if (maxDataValue >= 10) {
-                            // ถ้าค่ามาก ให้เพิ่ม 15% (เพื่อให้ดูไม่เต็ม) และปัดขึ้นเป็นจำนวนเต็ม
-                            yAxisMax = Math.ceil(maxDataValue * 1.15);
-                        } else {
-                            // ถ้าค่าน้อย ให้เพิ่ม 2 หน่วย
-                            yAxisMax = maxDataValue + 2;
-                        }
-                    } else {
-                        // ถ้าไม่มีข้อมูล ให้กำหนด Max เป็น 10
-                        yAxisMax = 10;
-                    }
-
+                    // 🔥 Logic: ขยายแกน Y ให้สูงกว่าค่าสูงสุด และปัดขึ้นเป็นจำนวนเต็มหารด้วย 5 ลงตัว + 5 (Padding)
+                    // เช่น Max=12 -> ปัดเป็น 15 -> บวก 5 = 20 (Scale: 0, 5, 10, 15, 20)
+                    let yAxisMax = Math.ceil((maxDataValue + 1) / 5) * 5 + 5;
 
                     if (dashboardChart) dashboardChart.destroy();
 
@@ -294,9 +282,9 @@ document.addEventListener('DOMContentLoaded', function () {
                                 y: {
                                     stacked: false, // ต้องเป็น FALSE
                                     beginAtZero: true,
-                                    max: Math.ceil(maxDataValue) + 1, // Ensure max is always integer and slightly higher
+                                    max: yAxisMax, // Use the calculated max with 5-unit step logic
                                     ticks: {
-                                        stepSize: 1,
+                                        stepSize: 5, // ✅ Force step size to 5
                                         precision: 0,
                                         autoSkip: false
                                     },

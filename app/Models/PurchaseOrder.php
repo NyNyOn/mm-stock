@@ -106,5 +106,22 @@ class PurchaseOrder extends Model
      //     // Assumes Supplier model uses the default 'mysql' connection
      //     return $this->belongsTo(Supplier::class);
      // }
+     /**
+     * Get the Thai label for status.
+     */
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'pending' => 'รอการยืนยัน',
+            'ordered' => 'สั่งซื้อแล้ว',
+            'approved' => 'อนุมัติแล้ว',
+            'shipped_from_supplier' => 'อยู่ระหว่างจัดส่ง',
+            'partial_receive' => 'รับของบางส่วน',
+            'completed' => 'รับของครบแล้ว',
+            'cancelled' => 'ยกเลิก',
+            'contact_vendor' => 'ติดต่อผู้ขาย',
+            default => $this->status,
+        };
+    }
 }
 

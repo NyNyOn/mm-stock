@@ -40,8 +40,7 @@ Route::prefix('v1')->group(function () {
     // ✅ เพิ่ม: ดึงรายละเอียด 1 ชิ้น (โดยระบุ ID)
     Route::get('/equipments/{id}', [V1EquipmentController::class, 'show'])->name('api.v1.equipments.show');
 
-    // ✅ เพิ่ม: รับ Webhook จาก PU (Public)
-    Route::post('/notify-hub-arrival', [PurchaseOrderController::class, 'receiveHubNotification']);
+
 });
 
 
@@ -75,6 +74,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Delivery Notification
      Route::post('/po-delivery-notification/{purchaseOrder}', [PurchaseOrderController::class, 'notifyDelivery'])
           ->name('api.v1.po-delivery-notification');
+
+    // ✅ Webhook from PU (Now Secured with Token to track usage)
+    Route::post('/notify-hub-arrival', [PurchaseOrderController::class, 'receiveHubNotification'])->name('api.v1.notify-hub-arrival');
 
 
 });

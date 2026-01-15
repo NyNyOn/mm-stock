@@ -32,8 +32,13 @@ class StockCheckController extends Controller
             $lastCheckDate = null;
 
             // ตรวจสอบวันที่นับล่าสุดของหมวดหมู่นั้นๆ
+            // ตรวจสอบวันที่นับล่าสุดของหมวดหมู่นั้นๆ (รวมถึงการนับแบบ "ทั้งหมด" ที่ category_id เป็น NULL หรือว่าง)
             $lastStockCheck = StockCheck::where('status', 'completed')
-                ->where('category_id', $category->id) 
+                ->where(function($q) use ($category) {
+                     $q->where('category_id', $category->id)
+                       ->orWhereNull('category_id')
+                       ->orWhere('category_id', '');
+                })
                 ->latest('completed_at')
                 ->first();
 
@@ -69,7 +74,20 @@ class StockCheckController extends Controller
             return $category;
         });
 
-        return view('stock-check.create', compact('categories'));
+        // ✅ [NEW] ดึงข้อมูลการนับแบบ "ทั้งหมด" (Count All) ล่าสุด
+        $lastGlobalCheck = StockCheck::where('status', 'completed')
+            ->where(function($q) {
+                $q->whereNull('category_id')
+                  ->orWhere('category_id', '');
+            })
+            ->latest('completed_at')
+            ->first();
+            
+        $lastGlobalCheckDate = ($lastGlobalCheck && $lastGlobalCheck->completed_at) 
+            ? $lastGlobalCheck->completed_at->format('Y-m-d H:i:s') 
+            : '-';
+
+        return view('stock-check.create', compact('categories', 'lastGlobalCheckDate'));
     }
 
     public function store(Request $request)
@@ -82,17 +100,24 @@ class StockCheckController extends Controller
 
         DB::beginTransaction();
         try {
+            // ✅ [FIX] ตรวจสอบ category_id ถ้าเป็นค่าว่างให้บันทึกเป็น NULL (Count All)
+            $catId = $request->category_id;
+            if (empty($catId)) {
+                $catId = null;
+            }
+
             $stockCheck = StockCheck::create([
                 'name' => $request->name,
                 'scheduled_date' => $request->scheduled_date,
                 'status' => 'scheduled',
-                'category_id' => $request->category_id, 
+                'category_id' => $catId, 
             ]);
 
             $query = Equipment::where('status', '!=', 'sold');
 
-            if ($request->filled('category_id')) {
-                $query->where('category_id', $request->category_id);
+            // ✅ [FIX] Query ให้ถูกต้องตาม category_id ที่เป็น NULL หรือมีค่า
+            if (!empty($catId)) {
+                $query->where('category_id', $catId);
             }
 
             $equipmentsToCount = $query->get();

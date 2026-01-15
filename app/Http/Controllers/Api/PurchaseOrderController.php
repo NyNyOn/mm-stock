@@ -201,50 +201,300 @@ class PurchaseOrderController extends Controller
     }
 
     /**
-     * (Inbound) รับแจ้งเตือนจาก PU Hub ว่าสินค้ามาถึงแล้ว (Step 3)
+     * (Inbound) Recieves notification from PU Hub (Phase 2 & 3).
+     * Handles:
+     * 1. item_status_updated (Phase 2): PO Update, Shipping Status
+     * 2. item_inspection_result (Phase 3): Handling rejected items (Force Approve, Return, Recheck)
      */
     public function receiveHubNotification(Request $request)
     {
         Log::info("API: Received Hub Notification", $request->all());
 
         // 1. Validate Fields
+        // ✅ Prioritize Secret from DB Setting (UI), Fallback to Config (.env)
+        $secret = \App\Models\Setting::where('key', 'pu_api_webhook_secret')->value('value') ?? config('services.pu_hub.webhook_secret');
+        
+        if ($secret && $request->header('X-Hub-Secret') !== $secret) {
+             Log::warning("API: Unauthorized Webhook Attempt from IP: " . $request->ip());
+             return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        // Basic validation (event field might be new, so optional for backward compat)
         $request->validate([
             'pr_item_id' => 'required',
             'po_code'    => 'nullable',
             'pr_code'    => 'nullable',
-            'status'     => 'required', 
+            // 'status'     => 'required', // Status might depend on action
         ]);
         
-        $poCode = $request->po_code ?? $request->pr_code;
+        $eventType = $request->input('event', 'item_status_updated'); // Default to Phase 2 event
+        $action = $request->input('action'); 
+        $prItemId = $request->pr_item_id;
 
-        if (!$poCode) {
-             return response()->json(['success' => false, 'message' => 'PO Code or PR Code is required'], 400);
+        // --------------------------------------------------------
+        // Handler for PR REJECTION (Phase 3.1)
+        // --------------------------------------------------------
+        if ($eventType === 'pr_rejected') {
+            $prCode = $request->input('pr_code');
+            $poCode = $request->input('po_code');
+            $reason = $request->input('reason', 'ไม่ระบุเหตุผล');
+            $rejectedBy = $request->input('rejected_by', 'System');
+
+            Log::info("API: Received PR Rejection for PR: {$prCode} / PO: {$poCode}");
+
+            $query = PurchaseOrder::query();
+            if ($prCode) {
+                $query->where('pr_number', $prCode);
+            } elseif ($poCode) {
+                $query->where('po_number', $poCode);
+            } else {
+                 return response()->json(['success' => false, 'message' => 'Missing pr_code or po_code for rejection event'], 400);
+            }
+
+            $po = $query->first();
+
+            if ($po) {
+                $puData = $po->pu_data ?? [];
+                $puData['rejection_reason'] = $reason;
+                $puData['rejected_by'] = $rejectedBy;
+                $puData['rejected_at'] = now()->toDateTimeString();
+
+                // ✅ Determine Rejection Code (Logic 4 Cases)
+                $rejectionCode = $request->input('rejection_code');
+                if (!$rejectionCode) {
+                    // Fallback: Keyword Matching
+                    if (str_contains($reason, 'ไม่จำเป็น')) $rejectionCode = 1;
+                    elseif (str_contains($reason, 'งบประมาณ')) $rejectionCode = 2;
+                    elseif (str_contains($reason, 'ไม่ชัดเจน')) $rejectionCode = 3;
+                    elseif (str_contains($reason, 'ทดแทน')) $rejectionCode = 4;
+                    else $rejectionCode = 0; // Unknown
+                }
+                $puData['rejection_code'] = $rejectionCode;
+
+                $po->pu_data = $puData;
+                $po->notes = "🚫 ถูกปฏิเสธโดย PU: {$reason} (Code: {$rejectionCode}) (โดย {$rejectedBy})\n" . $po->notes;
+                $po->status = 'cancelled'; // Use 'cancelled' (or 'rejected' if enum allows, using 'cancelled' for safety)
+                $po->save();
+
+                // 🔔 Notify Rejection
+                try {
+                    $po->refresh();
+                    (new \App\Services\SynologyService())->notify(
+                        new \App\Notifications\PurchaseOrderUpdatedNotification($po, 'rejected')
+                    );
+                } catch (\Exception $e) { Log::error("Notify Rejection Error: " . $e->getMessage()); }
+
+                return response()->json(['success' => true, 'message' => 'PO designated as rejected/cancelled successfully']);
+            } else {
+                return response()->json(['success' => false, 'message' => 'PO not found for rejection'], 404);
+            }
         }
 
-        // 2. Logic อัปเดตสถานะในฝั่ง MM
-        $po = PurchaseOrder::where('po_number', $poCode)
-                            ->orWhere('pr_number', $poCode)
-                            ->orWhere('id', $poCode)
-                            ->first();
+        // --- HANDLER FOR REJECTION RESPONSES (Phase 3) ---
+        if ($eventType === 'item_inspection_result') {
+            Log::info("API: Processing Inspection Result Action: {$action}");
 
-        if ($po) {
-            // Updated: Accept various statuses or map them.
-            // If PU sends 'ordered' but context is "Notification of Shipping", we mark it "shipped_from_supplier".
-            // Or we blindly trust: $po->status = 'shipped_from_supplier';
-            // User requested: "Status not changed, still shows only PR Issued". 
-            // Correct status is 'shipped_from_supplier'.
-            $po->status = 'shipped_from_supplier';
-            $po->save();
-            Log::info("API: Updated PO #{$po->id} to 'shipped_from_supplier'");
+            $item = \App\Models\PurchaseOrderItem::where('pr_item_id', $prItemId)->first();
+            if (!$item) {
+                return response()->json(['success' => false, 'message' => 'Item not found'], 404);
+            }
+
+            DB::beginTransaction();
+            try {
+                switch ($action) {
+                    case 'force_approve': // 1. Force Approve (User overrides rejection)
+                        // Objective: Accept item into stock despite previous rejection.
+                        // Logic: Add stock, Log Transaction, Update Status.
+                        
+                        $qtyToReceive = $item->quantity_ordered - $item->quantity_received;
+                        if ($qtyToReceive <= 0) $qtyToReceive = 1; // Fallback if data sync issue
+
+                        // Find Equipment
+                        $equipment = $item->equipment_id ? \App\Models\Equipment::find($item->equipment_id) : null;
+                        
+                        // Update Stock
+                        if ($equipment) {
+                            $equipment->quantity += $qtyToReceive;
+                            $equipment->save();
+
+                            // Create Transaction Log
+                            \App\Models\Transaction::create([
+                                'equipment_id'    => $equipment->id,
+                                'user_id'         => 1, // System User
+                                'handler_id'      => 1,
+                                'type'            => 'receive',
+                                'quantity_change' => $qtyToReceive,
+                                'notes'           => "Accepted by PU (Force Approve) - PO {$item->purchaseOrder->po_number}",
+                                'transaction_date'=> now(),
+                                'status'          => 'completed',
+                            ]);
+                        }
+
+                        // Update Item Status
+                        $item->quantity_received = $item->quantity_ordered; // Full receive
+                        $item->inspection_status = 'pass';
+                        $item->status = 'received';
+                        $item->inspection_notes = "Force Approved by PU ({$request->inspector})";
+                        $item->save();
+                        
+                        Log::info("API: Force Approved Item #{$item->id}. Stock added: {$qtyToReceive}");
+                        break;
+
+                    case 'return': // 2. Return (User confirms return)
+                        // Objective: Item goes back. Unlink/Cleanup.
+                        $item->status = 'returned'; // Special status to hide/archive
+                        $item->inspection_notes = "Returned to Supplier by PU ({$request->inspector})";
+                        // Note: Cannot set purchase_order_id to NULL (DB Constraint). 
+                        // We leave it linked to old PO until new PO Webhook arrives to "adopt" it.
+                        $item->save();
+                        
+                        Log::info("API: Returned Item #{$item->id}. Waiting for new PO alignment.");
+                        break;
+
+                    case 'inspection_recheck': // Alias from actual PU log
+                    case 'recheck': // 3. Re-Check (User requests re-inspection)
+                        // Objective: Reset status to allow inspector to check again.
+                        $item->inspection_status = null;
+                        $item->inspection_notes = null;
+                        // $item->issue_qty_handled = null; 
+                        // Ensure main status allows showing in Receive page
+                        if ($item->status == 'received') {
+                             $item->status = 'shipped_from_supplier'; // Revert to shipped
+                             // WARNING: If stock was added, this is messy. But usually only comes from rejection state (no stock added).
+                        }
+                        $item->save();
+                        Log::info("API: Reset Item #{$item->id} for Re-Check.");
+                        break;
+                        
+                    default:
+                        Log::warning("API: Unknown action '{$action}' for inspection result.");
+                }
+                
+                DB::commit();
+                return response()->json(['success' => true, 'message' => "Action '{$action}' processed successfully."]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error("API: Action failed: " . $e->getMessage());
+                return response()->json(['success' => false, 'message' => 'Internal Server Error'], 500);
+            }
+        }
+
+
+        // --- EXISTING LOGIC (Phase 2 - Status Updates) ---
+        // 2. Logic อัปเดตสถานะในฝั่ง MM (Improved Matching)
+    $po = null;
+
+    // A. Try matching by PO Number (if provided)
+    if (!empty($request->po_code)) {
+        $po = PurchaseOrder::where('po_number', $request->po_code)->first();
+    }
+
+    // B. Try matching by PR Number (if not found yet and pr_code provided)
+    if (!$po && !empty($request->pr_code)) {
+        $po = PurchaseOrder::where('pr_number', $request->pr_code)->first();
+    }
+
+    // C. Try matching by Item ID (Reliable fallback if we saved pr_item_id)
+    if (!empty($request->pr_item_id)) {
+        $item = \App\Models\PurchaseOrderItem::where('pr_item_id', $request->pr_item_id)->first();
+        if ($item) {
+            
+            // ✅ DETECT PO CHANGE (Item Moved to New PO)
+            // If PU sends a PO Code that is different from what the item currently has -> Move it!
+            if (!empty($request->po_code) && $item->purchaseOrder && $item->purchaseOrder->po_number !== $request->po_code) {
+                Log::info("API: Item #{$item->id} (PR Item {$request->pr_item_id}) indicates new PO Code '{$request->po_code}'. Processing Move...");
+                
+                // Find OK target PO or Create it? 
+                // Usually we expect the PO to exist or be created via payload. 
+                // If $po (found by A) exists, use it. If not, we might need to rely on the 'create if missing' logic below (if any) or just find strictly.
+                
+                $targetPO = PurchaseOrder::where('po_number', $request->po_code)->first();
+                if ($targetPO) {
+                    $oldPOId = $item->purchase_order_id;
+                    $item->purchase_order_id = $targetPO->id;
+                    $item->save();
+                    Log::info("API: Moved Item #{$item->id} from PO #{$oldPOId} to PO #{$targetPO->id} ({$targetPO->po_number}).");
+                    $po = $targetPO; // Set current context to new PO
+                } else {
+                    Log::warning("API: New PO Code '{$request->po_code}' not found in system via PO Number. Cannot move item yet.");
+                    // Fallback: If we can't find the new PO, we might use the old one for now, or create?
+                    // Let's stick to old one but Log warning.
+                    $po = $item->purchaseOrder;
+                }
+
+            } else {
+                 $po = $item->purchaseOrder;
+            }
+
+            
+             // ✅ RESET INSPECTION STATUS (Logic moved to 'recheck' action above, but kept here for legacy/simple updates)
+            if ($request->status == 'shipped_from_supplier' || $request->status == 'arrived_at_hub') {
+                 // Only reset if previously inspected/rejected to allow retry if PU sends update?
+                 // But 'recheck' action is now the formal way.
+                 // let's keep this as backup for Phase 2 general updates.
+                 if ($item->inspection_status || $item->status == 'returned') {
+                      $item->inspection_status = null;
+                      $item->inspection_notes = null;
+                      $item->status = 'shipped_from_supplier'; // ✅ Undo 'returned' status so it shows up in Receive Page again
+                      $item->save();
+                 }
+            }
+        }
+    }
+
+    if ($po) {
+        // ✅ sync fields strict update: Always update if PU sends them
+        if (!empty($request->po_code)) {
+            $po->po_number = $request->po_code;
+        }
+        if (!empty($request->pr_code)) {
+            $po->pr_number = $request->pr_code;
+        }
+
+        // Update Status based on payload
+        // If status is 'arrived_at_hub' or 'shipped_from_supplier', we consider it en route.
+        // Or if 'ordered', it's ordered.
+        
+        // Map status if needed, otherwise use what they sent or default to 'shipped_from_supplier'
+        // User previously wanted it to show in Receive page, so 'shipped_from_supplier' is appropriate for 'arrived_at_hub'.
+        
+        $newStatus = $request->status;
+        if ($newStatus == 'arrived_at_hub') {
+            $newStatus = 'shipped_from_supplier'; // Map to our system status
+        } elseif ($newStatus == 'ordered') {
+            $newStatus = 'ordered'; 
+        } 
+        
+        // Only update status if it's advancing (optional, but good practice). 
+        // For now, valid statuses for us are: pending, ordered, shipped_from_supplier, partial_receive, contact_vendor, completed
+        
+        // ✅ BUG FIX: Don't revert 'completed' status
+        if ($po->status !== 'completed') {
+            if (in_array($newStatus, ['shipped_from_supplier', 'partial_receive', 'contact_vendor', 'ordered'])) {
+                 $po->status = $newStatus;
+            }
         } else {
-            Log::warning("API: PO not found for code: {$poCode}");
+             Log::info("API: Skipping status update for PO #{$po->id} because it is already COMPLETED.");
         }
 
-        // 3. Return Success to PU System
-        return response()->json([
-            'success' => true,
-            'message' => 'Notification received processed.',
-            'dept_name' => 'MM Department (IT)' 
-        ]);
+        $po->save();
+        Log::info("API: Updated PO #{$po->id} (Ref: {$request->po_code}/{$request->pr_code}) to '{$po->status}'");
+        
+        // ✅ Notify User (Synology) about Status Update / PO Number Assignment
+        try {
+            // Re-load to ensure we have latest data (po_number, etc.)
+            $po->refresh();
+            (new \App\Services\SynologyService())->notify(
+                new \App\Notifications\PurchaseOrderUpdatedNotification($po, $po->status)
+            );
+        } catch (\Exception $e) { Log::error("Webhook Notification Error: " . $e->getMessage()); }
+        
+        return response()->json(['success' => true, 'message' => 'Notification processed', 'po_id' => $po->id]);
+
+    } else {
+        Log::warning("API: PO not found for code: " . ($request->po_code ?? $request->pr_code ?? 'N/A') . " / Item: " . $request->pr_item_id);
+        return response()->json(['success' => false, 'message' => 'PO/PR Reference not found'], 404);
+    }
     }
 }

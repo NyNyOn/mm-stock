@@ -28,6 +28,7 @@ class ApiTokenController extends Controller
             'intake_path'          => Setting::where('key', 'pu_api_intake_path')->value('value') ?? config('services.pu_hub.intake_path'),
             'inspection_path'      => Setting::where('key', 'pu_api_inspection_path')->value('value') ?? config('services.pu_hub.inspection_path'),
             'origin_department_id' => Setting::where('key', 'pu_api_origin_department_id')->value('value') ?? config('services.pu_hub.origin_department_id'),
+            'webhook_secret'       => Setting::where('key', 'pu_api_webhook_secret')->value('value') ?? config('services.pu_hub.webhook_secret'),
             
             // Priority Mapping
             'priority_scheduled'   => Setting::where('key', 'pu_api_priority_scheduled')->value('value') ?? config('services.pu_hub.priorities.scheduled', 'Scheduled'),
@@ -92,12 +93,13 @@ class ApiTokenController extends Controller
     public function updatePuSettings(Request $request)
     {
         $request->validate([
-            'pu_api_enabled' => 'required|boolean', 
+            'pu_api_enabled' => 'required',
             'pu_api_base_url' => 'required|url',
             'pu_api_token' => 'required|string',
             'pu_api_intake_path' => 'required|string',
             'pu_api_inspection_path' => 'required|string',
             'pu_api_origin_department_id' => 'nullable|integer',
+            'pu_api_webhook_secret' => 'nullable|string', 
             // Priority Validations
             'pu_api_priority_scheduled' => 'required|string',
             'pu_api_priority_urgent' => 'required|string',
@@ -112,6 +114,7 @@ class ApiTokenController extends Controller
                 'pu_api_intake_path'          => $request->pu_api_intake_path,
                 'pu_api_inspection_path'      => $request->pu_api_inspection_path,
                 'pu_api_origin_department_id' => $request->pu_api_origin_department_id,
+                'pu_api_webhook_secret'       => $request->pu_api_webhook_secret, // ✅ Added
                 // Priority Settings
                 'pu_api_priority_scheduled'   => $request->pu_api_priority_scheduled,
                 'pu_api_priority_urgent'      => $request->pu_api_priority_urgent,

@@ -5,11 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PurchaseOrderItem extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
 
     /**
      * Use the DEFAULT connection defined in .env for this specific app clone.
@@ -31,6 +30,7 @@ class PurchaseOrderItem extends Model
      */
     protected $fillable = [
         'purchase_order_id',
+        'pr_item_id', // ID from PU Hub
         'equipment_id', // Refers to equipment in the SAME database
         'item_description',
         'quantity_ordered',
@@ -79,4 +79,3 @@ class PurchaseOrderItem extends Model
         return $this->belongsTo(User::class, 'requester_id', 'id');
     }
 }
-

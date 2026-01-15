@@ -59,14 +59,29 @@ class TransactionController extends Controller
 
     private function checkPendingConfirmations($userId)
     {
-        $hasPending = Transaction::where('user_id', $userId)
+        $pendingTransactions = Transaction::with('equipment')
+            ->where('user_id', $userId)
             ->whereIn('status', ['shipped', 'user_confirm_pending'])
-            ->exists();
+            ->get();
 
-        if ($hasPending) {
+        if ($pendingTransactions->isNotEmpty()) {
             $user = User::select('fullname')->find($userId);
             $name = $user ? $user->fullname : "ผู้ใช้";
-            return "ไม่สามารถทำรายการได้: คุณ {$name} ยังมีรายการค้างรับของ (Shipped) \nกรุณากดรับของ (Confirm Receipt) ในระบบก่อนทำรายการใหม่";
+            
+            // Build detailed list of pending items
+            $itemsList = $pendingTransactions->map(function($txn) {
+                $equipmentName = $txn->equipment ? $txn->equipment->name : 'N/A';
+                $qty = abs($txn->quantity_change);
+                $date = $txn->transaction_date->format('d/m/Y H:i');
+                return "• {$equipmentName} (จำนวน: {$qty}) - เบิกเมื่อ: {$date}";
+            })->join("\n");
+            
+            $message = "⚠️ ไม่สามารถทำรายการได้\n\n" .
+                       "คุณ {$name} ยังมีรายการค้างรับของ ({$pendingTransactions->count()} รายการ):\n" .
+                       "{$itemsList}\n\n" .
+                       "📌 กรุณากดยืนยันรับของ (Confirm Receipt) ในหน้า 'รายการเบิก' ก่อนทำรายการใหม่";
+            
+            return $message;
         }
         return null;
     }
@@ -950,6 +965,17 @@ class TransactionController extends Controller
     {
         try {
             $userId = Auth::id();
+            
+            // ✅ Check for pending confirmations FIRST
+            if ($pendingError = $this->checkPendingConfirmations($userId)) {
+                return response()->json([
+                    'blocked' => true,
+                    'reason' => 'pending_confirmations',
+                    'message' => $pendingError
+                ]);
+            }
+            
+            // Then check for unrated transactions
             $unratedTransactions = $this->getUnratedTransactions($userId);
 
             if ($unratedTransactions->count() > 0) {
@@ -970,6 +996,7 @@ class TransactionController extends Controller
 
                 return response()->json([
                     'blocked' => true,
+                    'reason' => 'unrated_transactions',
                     'message' => 'มีรายการค้างประเมิน',
                     'unrated_items' => $unratedTransactions->values()
                 ]);

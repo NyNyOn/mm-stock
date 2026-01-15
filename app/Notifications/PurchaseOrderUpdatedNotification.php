@@ -43,7 +43,8 @@ class PurchaseOrderUpdatedNotification extends Notification
     public function toArray($notifiable)
     {
         $poNumber = $this->purchaseOrder->po_number ?? '-';
-        $status = ucfirst($this->purchaseOrder->status);
+        // $status = ucfirst($this->purchaseOrder->status);
+        $status = $this->purchaseOrder->status_label;
         
         $title = "PU อัปเดตข้อมูล";
         $body = "มีการอัปเดตข้อมูลใบสั่งซื้อ #{$this->purchaseOrder->id}";
@@ -54,6 +55,10 @@ class PurchaseOrderUpdatedNotification extends Notification
         } elseif ($this->action === 'shipped_from_supplier') {
             $title = "สินค้ากำลังจัดส่ง";
             $body = "PU แจ้งว่าสินค้ากำลังเดินทางมาส่ง";
+        } elseif ($this->action === 'cancelled' || $this->action === 'rejected') {
+            $title = "ใบสั่งซื้อถูกปฏิเสธ";
+            $reason = $this->purchaseOrder->pu_data['rejection_reason'] ?? 'ไม่ระบุเหตุผล';
+            $body = "PU ปฏิเสธรายการนี้: {$reason}";
         }
 
         // ✅ Add Summary of Items to Body
@@ -66,20 +71,29 @@ class PurchaseOrderUpdatedNotification extends Notification
             $moreText = $itemCount > 1 ? " และอื่นๆ รวม {$itemCount} รายการ" : "";
             $body .= "\n📦 {$itemName} (x{$itemQty}){$moreText}";
         }
+        
+        $type = ($this->action === 'cancelled' || $this->action === 'rejected') ? 'error' : 'info';
+        $icon = ($this->action === 'cancelled' || $this->action === 'rejected') ? 'fas fa-ban' : 'fas fa-file-invoice-dollar';
 
         return [
             'title' => $title,
             'body' => $body,
             'action_url' => route('purchase-orders.index'),
-            'type' => 'info', // success, error, info
-            'icon' => 'fas fa-file-invoice-dollar'
+            'type' => $type, 
+            'icon' => $icon
         ];
     }
 
     public function toSynology(object $notifiable): void
     {
         $webhookUrl = config('services.synology.chat_webhook_url');
-        if (!$webhookUrl) { return; }
+        if (!$webhookUrl) { 
+            Log::warning('Synology Webhook URL not configured in Notification.');
+            return; 
+        }
+
+        // ✅ Robust Clean URL (Copied from CheckLowStockAndNotifyPU)
+        $webhookUrl = str_replace(['"', "'", '%22'], '', $webhookUrl);
 
         try {
             $poId = $this->purchaseOrder->id;
@@ -90,7 +104,6 @@ class PurchaseOrderUpdatedNotification extends Notification
             $url = route('purchase-orders.index');
 
             $title = "🔔 **แจ้งเตือนใบสั่งซื้อ (PU Update)**";
-            $color = "green";
 
             if ($this->action === 'ordered') {
                 $title = "✅ **PU ตอบรับใบสั่งซื้อแล้ว**";
@@ -98,7 +111,11 @@ class PurchaseOrderUpdatedNotification extends Notification
             } elseif ($this->action === 'shipped_from_supplier') {
                 $title = "🚚 **อัปเดตสถานะ: สินค้ากำลังจัดส่ง**";
                 $messageBody = "PU แจ้งว่า Supplier ได้จัดส่งสินค้าแล้ว";
-                $color = "blue";
+            } elseif ($this->action === 'cancelled' || $this->action === 'rejected') {
+                $title = "🚫 **แจ้งเตือน: ใบสั่งซื้อถูกปฏิเสธ (Rejected)**";
+                $reason = $this->purchaseOrder->pu_data['rejection_reason'] ?? 'ไม่ระบุเหตุผล';
+                $rejectedBy = $this->purchaseOrder->pu_data['rejected_by'] ?? 'PU';
+                $messageBody = "⚠️ **เหตุผล:** {$reason}\n👤 **โดย:** {$rejectedBy}\n💡 *กรุณาตรวจสอบและกดแก้ไขเพื่อส่งใหม่*";
             } else {
                  $messageBody = "มีการอัปเดตข้อมูลใบสั่งซื้อจาก PU";
             }
@@ -116,16 +133,25 @@ class PurchaseOrderUpdatedNotification extends Notification
 
             $message = "{$title}\n" .
                        "{$messageBody}\n" .
-                       "{$itemsList}\n" . // Insert Item List
+                       "{$itemsList}\n" . 
                        "🆔 **ID:** #{$poId}\n" .
                        "🔖 **PO No:** {$poNumber}\n" .
                        "📄 **PR No:** {$prNumber}\n" .
                        "👤 **ผู้ขอ:** {$requester}\n" .
-                       "📊 **สถานะปัจจุบัน:** {$status}\n" .
+                       "📊 **สถานะปัจจุบัน:** {$this->purchaseOrder->status_label}\n" .
                        "📌 **URL:** {$url}";
             
             $payload = ['text' => $message];
-            Http::withoutVerifying()->asForm()->post($webhookUrl, ['payload' => json_encode($payload)]);
+            
+            Log::info("Sending Notification to Synology for PO #{$poId}...", ['url' => $webhookUrl]);
+
+            $response = Http::withoutVerifying()->asForm()->post($webhookUrl, ['payload' => json_encode($payload)]);
+            
+            if (!$response->successful()) {
+                Log::error("Synology Notification Failed: " . $response->body());
+            } else {
+                Log::info("Synology Notification Sent Successfully.");
+            }
 
         } catch (\Exception $e) {
             Log::error('PurchaseOrderUpdated Notification Error: ' . $e->getMessage());

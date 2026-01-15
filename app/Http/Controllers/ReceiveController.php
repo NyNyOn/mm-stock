@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Config;
+use App\Services\PuHubService;
 
 class ReceiveController extends Controller
 {
@@ -34,12 +35,14 @@ class ReceiveController extends Controller
                 },
                 'orderedBy'
             ])
-            ->whereIn('status', ['shipped_from_supplier', 'partial_receive']) 
+            // Reverted: 'ordered' removed. User wants items to appear ONLY after PU Webhook (shipped) AND PO Number is assigned.
+            ->whereIn('status', ['shipped_from_supplier', 'partial_receive', 'contact_vendor']) 
+            ->whereNotNull('po_number') // ✅ Enforce PO Number existence 
             ->whereHas('items', function ($query) {
                 $query->where(function ($q) {
                     $q->whereNull('quantity_received')
                       ->orWhereRaw('quantity_received < quantity_ordered');
-                });
+                })->where('status', '!=', 'returned'); // ✅ Exclude explicitly returned items
             })
             ->orderBy('created_at', 'desc')
             ->get();
@@ -47,6 +50,10 @@ class ReceiveController extends Controller
              $currentDeptKey = Config::get('app.dept_key', 'it');
              $departmentsConfig = Config::get('department_stocks.departments', []);
              $currentDeptName = $departmentsConfig[$currentDeptKey]['name'] ?? strtoupper($currentDeptKey);
+
+            if (request()->ajax()) {
+                return view('receive.partials._list', compact('pendingPOs', 'currentDeptName'))->render();
+            }
 
             return view('receive.index', compact('pendingPOs', 'currentDeptName'));
 
@@ -84,8 +91,9 @@ class ReceiveController extends Controller
                 }
 
                 $receiveNowQty = (int)($data['receive_now_quantity'] ?? 0);
+                $issueQty = (int)($data['issue_qty_handled'] ?? 0); // ✅ Capture Issue/Reject Qty
                 $inspectionStatus = $data['inspection_status'] ?? 'pass';
-                $inspectionNotes = $data['inspection_notes'] ?? null;
+                $inspectionNotes = $data['inspection_notes'] ?? $data['notes_reject_description'] ?? null;
 
                 $poItem = PurchaseOrderItem::lockForUpdate()->find($poItemId);
                 if (!$poItem) continue;
@@ -109,22 +117,25 @@ class ReceiveController extends Controller
                 // ถ้าเป็น damaged, wrong_item จะไม่เพิ่มสต๊อก แต่จะบันทึก Transaction ไว้เป็นหลักฐาน
                 if (in_array($inspectionStatus, ['pass', 'incomplete']) && $receiveNowQty > 0) {
                     
-                    if (($alreadyReceived + $receiveNowQty) > $totalOrdered) {
-                        $skippedItems[] = "รายการ '{$poItem->item_description}' รับเกินจำนวนที่สั่ง";
-                        continue;
-                    }
+                    // ALLOW OVER-SHIPMENT (Per Final Guide)
+                    // if (($alreadyReceived + $receiveNowQty) > $totalOrdered) { ... }
 
                     // $equipment->increment('quantity', $receiveNowQty); // ❌ Increment does not fire model events
                     $equipment->quantity += $receiveNowQty;
                     $equipment->save(); // ✅ Save fires 'saving' event which updates status
                     
+                    // Fetch PO Details for Log
+                    $po = $poItem->purchaseOrder;
+                    $poNum = $po->po_number ?? '-';
+                    $prNum = $po->pr_number ?? '-';
+
                     Transaction::create([
                         'equipment_id'    => $equipment->id,
                         'user_id'         => Auth::id(),
                         'handler_id'      => Auth::id(),
                         'type'            => 'receive',
                         'quantity_change' => $receiveNowQty,
-                        'notes'           => "รับของจาก PO #{$poId} ({$inspectionStatus})",
+                        'notes'           => "รับของเข้าคลัง: PO {$poNum} / PR {$prNum} (จำนวน: {$receiveNowQty}) - {$inspectionStatus}",
                         'transaction_date'=> now(),
                         'status'          => 'completed',
                         'admin_confirmed_at' => now(),
@@ -135,20 +146,24 @@ class ReceiveController extends Controller
                     // อัปเดตจำนวนที่รับแล้วใน PO Item
                     $poItem->quantity_received = $alreadyReceived + $receiveNowQty;
                 } else {
-                    // กรณีของเสีย/ผิดรุ่น: บันทึก Log หรือ Transaction แบบ 0 qty เพื่อเป็นหลักฐานว่าตรวจแล้ว
+                    /* 
+                    // ❌ REMOVED: User requested to hide 0-qty transactions to avoid confusion.
+                    // Data is still saved in purchase_order_items (inspection_status/notes).
+                    
                      Transaction::create([
                         'equipment_id'    => $equipment->id,
                         'user_id'         => Auth::id(),
                         'handler_id'      => Auth::id(),
                         'type'            => 'receive',
-                        'quantity_change' => 0, // ไม่เพิ่มสต๊อก
-                        'notes'           => "ปฏิเสธรับของ PO #{$poId}: {$inspectionStatus} - {$inspectionNotes}",
+                        'quantity_change' => 0, // ไม่เพิ่มสต๊อก (ถูกต้องแล้ว)
+                        'notes'           => "ปฏิเสธรับของ PO #{$poId}: {$inspectionStatus} (จำนวน: {$issueQty}) - {$inspectionNotes}",
                         'transaction_date'=> now(),
                         'status'          => 'completed',
                         'admin_confirmed_at' => now(),
                         'user_confirmed_at' => now(),
                         'confirmed_at' => now(),
                     ]);
+                    */
                 }
 
                 // 3. บันทึกผลการตรวจ (Inspection Result) กลับลง DB
@@ -175,21 +190,127 @@ class ReceiveController extends Controller
             foreach (array_unique($poIdsToUpdate) as $poId) {
                 $purchaseOrder = PurchaseOrder::find($poId);
                 if ($purchaseOrder) {
-                    $remainingItemsCount = $purchaseOrder->items()
+                    // Count items that are NOT fully handled yet
+                    // Handled = (received >= ordered) OR (status is returned/inspection_failed)
+                    $pendingItemsCount = $purchaseOrder->items()
                         ->where(function ($q) {
-                            $q->whereNull('quantity_received')
-                              ->orWhereRaw('quantity_received < quantity_ordered');
+                            // Conditions for being "Pending":
+                            // 1. Not yet received enough quantity
+                            $q->whereRaw('ifnull(quantity_received, 0) < quantity_ordered')
+                              // 2. AND Status is NOT in a "Finalized Rejection" state
+                              ->whereNotIn('status', ['returned', 'inspection_failed']);
                         })->count();
 
-                    if ($remainingItemsCount == 0) {
+                    if ($pendingItemsCount == 0) {
                         $purchaseOrder->update(['status' => 'completed']);
                     } else {
-                        $purchaseOrder->update(['status' => 'partial_receive']);
+                        // If logic was previously completed but now we found pending (unlikely in this flow but safe)
+                        // Or just to set partial
+                        if ($purchaseOrder->status != 'completed') {
+                             $purchaseOrder->update(['status' => 'partial_receive']);
+                        }
                     }
                 }
             }
 
             DB::commit();
+
+            // ✅ ส่งผลการตรวจสอบกลับไปยัง PU-HUB (Phase 3)
+            try {
+                $puHubService = app(PuHubService::class);
+                $inspections = [];
+
+                foreach ($inputItems as $poItemId => $data) {
+                    if (!isset($data['selected'])) continue;
+
+                    $poItem = PurchaseOrderItem::find($poItemId);
+                    if (!$poItem || !$poItem->inspection_status) continue;
+
+                    // ✅ FIX: Use 'pr_item_id' (External ID) instead of 'id' (Local ID)
+                    if (empty($poItem->pr_item_id)) {
+                        Log::warning("[ReceiveController] Item #{$poItem->id} has no pr_item_id. Skipping PU sync.");
+                        continue;
+                    }
+
+                    // ✅ FIX: Use 'receive_now_quantity' OR 'issue_qty_handled' (Batch Qty)
+                    // accepted uses receive_now_quantity, rejected uses issue_qty_handled
+                    $currentBatchQty = (int)($data['receive_now_quantity'] ?? $data['issue_qty_handled'] ?? 0);
+
+                    // แปลงสถานะเป็น accepted/rejected ตาม PU-HUB API
+                    // Spec Ref: Final Guide
+                    // - pass (Perfect) -> accepted
+                    // - incomplete (Short Shipment) -> rejected (PU Manual Handle)
+                    // - damaged/wrong_item -> rejected
+                    
+                    $status = 'rejected'; 
+
+                    if ($poItem->inspection_status === 'pass') {
+                        $status = 'accepted';
+                    } 
+                    
+                    // ✅ CHECK OVER-SHIPMENT: If receiving MORE than ordered -> Send 'rejected'
+                    // Spec: "Scenario: Ordered 10, Arrived 15. Action: Send status: rejected"
+                    $totalOrderedForCheck = (int)$poItem->quantity_ordered;
+                    // Note: We updated quantity_received earlier (Line ~139) so it includes current batch
+                    if ($poItem->quantity_received > $totalOrderedForCheck) {
+                         $status = 'rejected';
+                         Log::info("[ReceiveController] Over-shipment detected for Item #{$poItem->id} (Ordered: {$totalOrderedForCheck}, Current Total: {$poItem->quantity_received}). Force status to REJECTED.");
+                    } 
+                    // Note: Even if 'incomplete' (Good but partial), Guide says send 'rejected' so PU knows to intervene.
+
+                    // Log the decision for debugging
+                    Log::info("[ReceiveController] Mapped Item #{$poItem->id} (Status: {$poItem->inspection_status}, Qty: {$currentBatchQty}) -> API Status: {$status}");
+                    
+                    // ✅ FORMAT NOTES: Prepend Reason (Thai) for Rejected items
+                    $finalNotes = $poItem->inspection_notes ?? '';
+                    if ($status === 'rejected') {
+                        // Map internal status to Thai Label for PU Reader
+                        $reasonMap = [
+                            'incomplete' => 'ของไม่ครบ',
+                            'damaged' => 'สินค้าเสียหาย',
+                            'wrong_item' => 'สินค้าผิดรุ่น',
+                            'quality_issue' => 'คุณภาพไม่ได้มาตรฐาน',
+                            'pass' => 'ครบถ้วนสมบูรณ์'
+                        ];
+                        $reason = $reasonMap[$poItem->inspection_status] ?? $poItem->inspection_status;
+                        
+                        if (!empty($finalNotes)) {
+                            $finalNotes = "{$reason} ({$finalNotes})";
+                        } else {
+                            $finalNotes = $reason;
+                        }
+                    }
+
+                    $inspections[] = [
+                        'pr_item_id' => $poItem->pr_item_id,
+                        'status' => $status,
+                        'received_quantity' => $currentBatchQty, 
+                        'notes' => $finalNotes
+                    ];
+                }
+
+                if (!empty($inspections)) {
+                    $result = $puHubService->confirmInspectionBatch($inspections);
+                    
+                    // Check for failures in the response
+                    if (!empty($result['results']['failed'])) {
+                        $failedCount = count($result['results']['failed']);
+                        $failedItems = collect($result['results']['failed'])->pluck('reason', 'pr_item_id')->toArray();
+                        
+                        Log::warning('[ReceiveController] PU-HUB rejected some validations', ['failed' => $failedItems]);
+                        
+                        // Append warning to session
+                        session()->flash('warning', "บันทึกสำเร็จ แต่ PU-HUB แจ้งเตือนข้อผิดพลาด {$failedCount} รายการ (โปรดติดต่อฝ่ายจัดซื้อ)");
+                    } else {
+                         Log::info('[ReceiveController] Successfully sent inspection results to PU-HUB', [
+                            'count' => count($inspections)
+                        ]);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('[ReceiveController] Failed to send inspection results to PU-HUB: ' . $e->getMessage());
+                session()->flash('warning', "บันทึกในระบบสำเร็จ แต่ไม่สามารถส่งข้อมูลไปยัง PU-HUB ได้ (Error: {$e->getMessage()})");
+            }
 
             if ($processedCount == 0) {
                 return redirect()->back()->with('warning', 'กรุณาเลือกรายการที่ต้องการรับ (ติ๊กถูกช่อง Checkbox)');

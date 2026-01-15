@@ -68,7 +68,7 @@
                     @if(Auth::user()->can('equipment:manage') || (isset($statusFilter) && $statusFilter == 'all_history'))
                         <div class="text-xs text-gray-500 mt-1 flex items-center">
                             <i class="fas fa-user-circle mr-1 text-gray-400"></i> 
-                            <span class="truncate max-w-[150px]">{{ $txn->user->fullname }}</span>
+                            <span class="truncate max-w-[150px]">{{ optional($txn->user)->fullname ?? 'System' }}</span>
                         </div>
                     @endif
                 </div>

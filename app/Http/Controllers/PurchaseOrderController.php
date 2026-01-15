@@ -226,15 +226,27 @@ class PurchaseOrderController extends Controller
         // แปลงข้อมูลเป็น Array
         $payload = $poData->toArray($request);
         $payload['origin_department_id'] = $originDeptId;
+        $payload['requestor_user_id'] = $order->ordered_by_user_id ?? Auth::id(); // ✅ Phase 1 Requirement
+
+        // ✅✅✅ Resubmit Logic: Update Existing PR ✅✅✅
+        if (isset($order->pu_data['is_resubmit']) && $order->pu_data['is_resubmit'] == true) {
+            $payload['is_resubmit'] = true;
+            
+            // กรณีเป็นการแก้ไขใบเดิม (Status cancel -> pending -> ordered)
+            // ให้ส่ง pr_code เดิมกลับไปด้วย เพื่อให้ PU อัปเดตใบเดิมแทนการสร้างใหม่
+            if (!empty($order->pr_number)) {
+                $payload['pr_code'] = $order->pr_number;
+                Log::info("Sending Resubmit/Update for Existing PR: " . $order->pr_number);
+            }
+        }
 
         // ✅✅✅ Priority Mapping: แปลงค่า Priority ให้ตรงกับที่ API ต้องการ ✅✅✅
-        // ดึงค่า Mapping จาก Config (ซึ่งโหลดมาจาก DB หรือ .env)
-        // ** เปลี่ยน Default เป็น 'Normal' เผื่อ API ไม่รับ 'Scheduled' **
+        // ดึงค่า Mapping จาก DB (Setting) เป็นหลัก ถ้าไม่มีให้ใช้ Config
         $priorityConfig = [
-            'scheduled'      => config('services.pu_hub.priorities.scheduled', 'Normal'),    // Default: Normal (ลองเปลี่ยนเป็นค่านี้ดู)
-            'urgent'         => config('services.pu_hub.priorities.urgent', 'Urgent'),       // Default: Urgent
-            'job_order'      => config('services.pu_hub.priorities.job', 'Job'),             // Default: Job
-            'job_order_glpi' => config('services.pu_hub.priorities.job', 'Job'),             // Default: Job
+            'scheduled'      => Setting::where('key', 'pu_api_priority_scheduled')->value('value') ?? config('services.pu_hub.priorities.scheduled', 'Scheduled'),
+            'urgent'         => Setting::where('key', 'pu_api_priority_urgent')->value('value') ?? config('services.pu_hub.priorities.urgent', 'Urgent'),
+            'job_order'      => Setting::where('key', 'pu_api_priority_job')->value('value') ?? config('services.pu_hub.priorities.job', 'Job'),
+            'job_order_glpi' => Setting::where('key', 'pu_api_priority_job')->value('value') ?? config('services.pu_hub.priorities.job', 'Job'),
         ];
 
         // ตรวจสอบว่า order type ปัจจุบันตรงกับ Key ไหนใน Mapping หรือไม่
@@ -298,9 +310,42 @@ class PurchaseOrderController extends Controller
         // So initially we might only get PR.
         // If the user previously had a PO number (unlikely in this flow), we don't want to wipe it unless we are sure.
         
-        // No explicit wipe of po_number here to be safe, as we are relying on what keys are present.
+        // If we only got a PR code and no PO code yet, we ensure PO number is NULL (or keep existing if partial update)
+        // No explicit wipe of po_number here to be safe.
 
         $order->save();
+
+        // ✅ MAP PR ITEM IDs: Update pr_item_id from API Response
+        if (isset($responseData['items']) && is_array($responseData['items'])) {
+            $localItems = $order->items()->orderBy('id')->get(); // Matches sent order (assuming ID order)
+            
+            foreach ($responseData['items'] as $index => $remoteItem) {
+                // Try to find local item by 'external_id' (if PU returns it)
+                // We sent 'id' => $this->id in Resource, so PU *might* return it as 'external_id' or 'reference_id' or just 'id'? 
+                // Wait, 'id' in response is likely PU's ID.
+                
+                $matchedItem = null;
+                
+                // Method A: Match by explicit ID ref (if available)
+                if (isset($remoteItem['external_id'])) {
+                    $matchedItem = $localItems->where('id', $remoteItem['external_id'])->first();
+                }
+                
+                // Method B: Match by Index Order (Fallback)
+                if (!$matchedItem && isset($localItems[$index])) {
+                    $matchedItem = $localItems[$index];
+                }
+
+                // ✅ FIX: Use 'pr_item_id' from response (based on logs)
+                $remotePrItemId = $remoteItem['pr_item_id'] ?? $remoteItem['id'] ?? null;
+
+                if ($matchedItem && $remotePrItemId) {
+                    $matchedItem->pr_item_id = $remotePrItemId;
+                    $matchedItem->save();
+                    // Log::info("Mapped Local Item #{$matchedItem->id} to PR Item ID: {$remotePrItemId}");
+                }
+            }
+        }
 
         // 🔔 Notification: PU Received & PR/PO Assigned (Sync)
         try {
@@ -614,105 +659,67 @@ class PurchaseOrderController extends Controller
         }
     }
 
-    /**
-     * (Inbound) รับแจ้งเตือนจาก PU Hub ว่าสินค้ามาถึงแล้ว (Step 3)
-     */
-    public function receiveHubNotification(Request $request)
+    // =============================================
+    // Resubmit Logic
+    // =============================================
+    public function resubmit(Request $request, PurchaseOrder $purchaseOrder)
     {
-        // 1. Validate ข้อมูลที่ส่งมา
-        $request->validate([
-            'pr_item_id' => 'required',
-            'po_code'    => 'nullable', // Allow null if pr_code is sent
-            'pr_code'    => 'nullable', // ✅ V2 Support
-            'status'     => 'required', 
-        ]);
+        $this->authorize('po:create'); 
 
-        $poCode = $request->po_code ?? $request->pr_code; // Use whichever is available
-
-        if (!$poCode) {
-            return response()->json(['success' => false, 'message' => 'PO Code or PR Code is required'], 400);
+        if ($purchaseOrder->status !== 'cancelled') {
+            return back()->with('error', 'ทำรายการได้เฉพาะใบสั่งซื้อที่ถูกปฏิเสธ (Rejected) เท่านั้น');
         }
 
-        Log::info("API: Received Hub Notification for PO #{$poCode}", $request->all());
+        try {
+            DB::transaction(function () use ($purchaseOrder) {
+                // 1. Update Existing PO (No Clone)
+                $purchaseOrder->status = 'pending';
+                // Don't clear pr_number or po_number if we want to reuse them
+                // $purchaseOrder->ordered_at = null; // Optional: Keep original order date or reset? Let's keep it to show age, or reset if process restarts. Resetting might be safer for logic.
+                // Actually, if we reset ordered_at, the 'sendPurchaseOrderToApi' will treat it as new? 
+                // sendToApi sets ordered_at = now(). So it's fine.
 
-        // 2. Logic อัปเดตสถานะในฝั่ง MM
-        // ค้นหา PO จาก po_number OR pr_number OR id (รองรับกรณี PU Hub ส่งกลับมาเป็น ID)
-        $po = PurchaseOrder::where('po_number', $poCode)
-                            ->orWhere('pr_number', $poCode)
-                            ->orWhere('id', $poCode)
-                            ->first();
+                // 2. Update Notes & Data
+                $replyNote = $request->input('resubmit_note'); 
+                if ($replyNote) {
+                    $purchaseOrder->notes .= "\n\n📝 [Resubmit Info]: " . $replyNote;
+                }
 
-        if ($po) {
-            // อัปเดตสถานะเป็น 'shipped_from_supplier' (แปลว่า PU แจ้งส่งของแล้ว)
-            $po->status = 'shipped_from_supplier';
-            $po->save();
+                $puData = $purchaseOrder->pu_data ?? [];
+                // Backup rejection info just in case
+                $puData['history'] = $puData['history'] ?? [];
+                $puData['history'][] = [
+                    'event' => 'rejected',
+                    'reason' => $puData['rejection_reason'] ?? '-',
+                    'at' => now()->toDateTimeString()
+                ];
+                
+                // Clear active rejection flags so it doesn't show as rejected anymore
+                unset($puData['rejection_reason']);
+                unset($puData['rejection_code']); 
+                
+                // Mark as Resubmit for API Handler
+                $puData['is_resubmit'] = true; 
+                
+                $purchaseOrder->pu_data = $puData;
+                $purchaseOrder->save();
 
-            // 🔔 Notification: PU Hub Callback (Async) mechanism
-            try {
-                (new \App\Services\SynologyService())->notify(
-                    new \App\Notifications\PurchaseOrderUpdatedNotification($po, 'shipped_from_supplier')
-                );
-            } catch (\Exception $e) { Log::error("Notify PU Async Error: " . $e->getMessage()); }
-
-            // ✅ Update all items to 'shipped' as well
-            foreach($po->items as $item) {
-                if ($item->status === 'pending' || $item->status === 'ordered') {
-                    $item->status = 'shipped_from_supplier';
+                // 3. Reset Items
+                foreach ($purchaseOrder->items as $item) {
+                    $item->status = 'pending';
+                    $item->inspection_status = 'pending';
+                    $item->inspection_notes = null;
+                    $item->quantity_received = 0;
                     $item->save();
                 }
-            }
+            });
 
-            return response()->json(['success' => true, 'message' => 'PO status updated to shipped_from_supplier']);
-        } else {
-            // ✅✅✅ Floating PO Logic (Create New PO) ✅✅✅
-            try {
-                // Determine PO Code
-                $finalPoCode = $request->po_code ?? $request->pr_code ?? 'UNKNOWN-' . time();
+            return redirect()->route('purchase-orders.index')
+                ->with('success', 'เปิดให้แก้ไขรายการเรียบร้อยแล้ว (สถานะกลับเป็น Pending)');
 
-                // Create Floating PO
-                $newPo = PurchaseOrder::create([
-                    'po_number' => $finalPoCode,
-                    'pr_number' => $request->pr_code,
-                    'type'      => 'general', // General/Floating
-                    'status'    => 'shipped_from_supplier', // Assume shipped if coming from this webhook
-                    'ordered_at'=> now(),
-                    'ordered_by_user_id' => Setting::where('key', 'automation_requester_id')->value('value') ?? Auth::id(), // Use System User if possible
-                    'notes'     => 'Unsolicited PO from PU Hub (Floating PO)',
-                    'pu_data'   => $request->all()
-                ]);
-
-                // Try to parse items from payload if available
-                if ($request->has('items') && is_array($request->items)) {
-                   foreach ($request->items as $itemData) {
-                       // Try to find equipment by name or create placeholder?
-                       // Ideally PU sends equipment_id or code. If not, we might strictly need it.
-                       // For now, let's assume they might send 'equipment_id' OR we just store description.
-                       $eqId = $itemData['equipment_id'] ?? null;
-                       $desc = $itemData['item_description'] ?? $itemData['name'] ?? 'Unknown Item';
-                       $qty  = $itemData['quantity'] ?? 1;
-
-                       $newPo->items()->create([
-                           'equipment_id' => $eqId, // Nullable if not found? Schema check needed.
-                           'item_description' => $desc,
-                           'quantity_ordered' => $qty,
-                           'status' => 'shipped_from_supplier'
-                       ]);
-                   }
-                }
-
-                // 🔔 Notify: New Floating PO
-                try {
-                    (new \App\Services\SynologyService())->notify(
-                        new \App\Notifications\PurchaseOrderUpdatedNotification($newPo, 'shipped_from_supplier')
-                    );
-                } catch (\Exception $e) { Log::error("Notify Floating PO Error: " . $e->getMessage()); }
-
-                return response()->json(['success' => true, 'message' => 'New Floating PO Created', 'po_id' => $newPo->id]);
-
-            } catch (\Exception $e) {
-                Log::error("Failed to create Floating PO: " . $e->getMessage());
-                return response()->json(['success' => false, 'message' => 'Failed to create Floating PO: ' . $e->getMessage()], 500);
-            }
+        } catch (\Exception $e) {
+            Log::error("Resubmit Error: " . $e->getMessage());
+            return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
     }
 }

@@ -42,8 +42,10 @@
                 'icon' => 'fa-cart-shopping',
                 'color' => 'cyan',       
                 'items' => [
-                    'purchase-orders.index' => ['icon' => 'fa-file-invoice-dollar', 'title' => 'ใบสั่งซื้อ (PO)', 'permission' => 'po:view'],
-                    'purchase-track.index' => ['icon' => 'fa-truck-fast', 'title' => 'ติดตามพัสดุ', 'permission' => 'po:view'],
+                    'purchase-orders.index' => ['icon' => 'fa-file-invoice-dollar', 'title' => 'ใบสั่งซื้อ', 'permission' => 'po:view'],
+                    'purchase-track.index' => ['icon' => 'fa-truck-fast', 'title' => 'ติดตามพัสดุ', 'permission' => 'po:view', 'exact' => true],
+                    // ✅ Shortcut Menu
+                    'purchase-track.rejected' => ['icon' => 'fa-ban', 'title' => 'รายการที่ถูกปฏิเสธ', 'permission' => 'po:view'],
                 ]
             ],
             'services' => [
@@ -232,7 +234,8 @@
                                         @can($item['permission'])
                                             @php
                                                 $baseRoute = str_replace('.index', '', $route);
-                                                $isActive = request()->routeIs($route) || request()->routeIs($baseRoute.'.*');
+                                                $checkWildcard = !isset($item['exact']) || !$item['exact'];
+                                                $isActive = request()->routeIs($route) || ($checkWildcard && request()->routeIs($baseRoute.'.*'));
                                                 $itemColor = $category['color']; 
                                             @endphp
 

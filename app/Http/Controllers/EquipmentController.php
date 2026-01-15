@@ -494,6 +494,31 @@ class EquipmentController extends Controller
         $validatedData = $validator->validated();
         $equipment = null; 
 
+        // ✅ [FIX] คำนวณวันที่นับสต็อกล่าสุด (last_stock_check_at) เพื่อป้องกันไม่ให้ถูกแช่แข็ง (Frozen) ทันที
+        // หลักการ: พยายาม "เกาะกลุ่ม" กับรอบการนับของหมวดหมู่นั้นๆ (Sync)
+        $categoryId = $validatedData['category_id'] ?? null;
+        $initialCheckDate = now(); // ค่า Default คือวันนี้ (เพราะเพิ่งรับของใหม่เข้ามา ถือว่านับแล้ว)
+        
+        if ($categoryId) {
+            $lastCategoryCheck = \App\Models\StockCheck::where('status', 'completed')
+                ->where(function($q) use ($categoryId) {
+                     $q->where('category_id', $categoryId)
+                       ->orWhereNull('category_id');
+                })
+                ->latest('completed_at')
+                ->first();
+
+            if ($lastCategoryCheck && $lastCategoryCheck->completed_at) {
+                $daysDiff = $lastCategoryCheck->completed_at->diffInDays(now());
+                // ถ้ารอบการนับล่าสุดยังไม่หมดอายุ (เช่น ไม่เกิน 105 วัน) ให้ใช้วันที่นั้น เพื่อให้รอบตรงกัน
+                if ($daysDiff < 105) {
+                    $initialCheckDate = $lastCategoryCheck->completed_at;
+                }
+            }
+        }
+        $validatedData['last_stock_check_at'] = $initialCheckDate;
+
+
         DB::transaction(function () use ($validatedData, $request, &$equipment, $purchaseOrderItemId) { 
             $validatedData['model'] = trim(($validatedData['model_name'] ?? '') . ' ' . ($validatedData['model_number'] ?? ''));
             $validatedData['has_msds'] = $request->has('has_msds');

@@ -142,6 +142,8 @@ Route::middleware('auth')->group(function () {
 
     // Purchase Order Tracking (New)
     Route::get('/purchase-tracking', [PurchaseTrackController::class, 'index'])->name('purchase-track.index')->middleware('can:po:view');
+    // ✅ Separate Page for Rejected Items
+    Route::get('/purchase-tracking/rejected', [PurchaseTrackController::class, 'rejectedIndex'])->name('purchase-track.rejected')->middleware('can:po:view');
 
     // Stock Check System
     Route::prefix('stock-checks')->name('stock-checks.')->middleware('can:stock-check:manage')->group(function () {
@@ -223,6 +225,14 @@ Route::middleware('auth')->group(function () {
         Route::post('/purchase-orders/scheduled/submit', [PurchaseOrderController::class, 'submitScheduled'])->name('purchase-orders.submitScheduled');
         Route::post('/purchase-orders/urgent/add-item/{equipment}', [PurchaseOrderController::class, 'addItemToUrgent'])->name('purchase-orders.addItemToUrgent');
         Route::post('/purchase-orders/scheduled/add-item/{equipment}', [PurchaseOrderController::class, 'addItemToScheduled'])->name('purchase-orders.addItemToScheduled');
+        // ✅ Resubmit Rejected PO
+        Route::post('/purchase-orders/{purchaseOrder}/resubmit', [PurchaseOrderController::class, 'resubmit'])->name('purchase-orders.resubmit');
+    });
+
+    // ✅ Purchase Inspection Routes (ตรวจสอบของที่มาถึง)
+    Route::middleware('can:po:manage')->group(function() {
+        Route::get('/purchase-inspections', [App\Http\Controllers\PurchaseInspectionController::class, 'index'])->name('purchase-inspections.index');
+        Route::post('/purchase-inspections/confirm', [App\Http\Controllers\PurchaseInspectionController::class, 'confirmBatch'])->name('purchase-inspections.confirm');
     });
 
     Route::middleware('can:po:manage')->group(function() {

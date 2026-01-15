@@ -17,6 +17,8 @@ class PurchaseOrderItemResource extends JsonResource
         return [
             // ✅ AUTO-FIX: Send Local ID so we can match it later
             'id' => $this->id,
+            // ✅ Send PU Hub Item ID (reference) if available
+            'pr_item_id' => $this->pr_item_id,
             
             // 1. แก้ไขชื่อสินค้า: เช็คก่อนว่ามี equipment ไหม
             // ถ้ามี: ใช้ชื่อจาก Equipment
@@ -40,8 +42,8 @@ class PurchaseOrderItemResource extends JsonResource
                 })
             ),
 
-            // หมายเหตุ
-            'notes' => $this->item_description,
+            // หมายเหตุ (User Requested to NOT send notes in PR phase)
+            'notes' => '', // $this->item_description,
             
             // ราคาต่อหน่วย (แถมให้: ถ้าอยากส่งราคากลับไปด้วย)
             'unit_price' => $this->unit_price,

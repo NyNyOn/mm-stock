@@ -122,7 +122,7 @@
                     {{-- Admin logic: Show User --}}
                     @if(Auth::user()->can('equipment:manage') || (isset($statusFilter) && $statusFilter == 'all_history'))
                         <div class="text-xs text-gray-400 flex items-center">
-                            <i class="fas fa-user-circle mr-1"></i> {{ \Illuminate\Support\Str::limit($txn->user->fullname, 15) }}
+                            <i class="fas fa-user-circle mr-1"></i> {{ \Illuminate\Support\Str::limit(optional($txn->user)->fullname ?? 'System', 15) }}
                         </div>
                     @endif
                 </div>

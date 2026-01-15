@@ -92,7 +92,7 @@ class EquipmentRequested extends Notification
 
             // ตรวจสอบสถานะรายการ
             $statusLabel = "🟠 รออนุมัติ (Pending)";
-            $headerText = "📢 **มีคำขอใหม่ใน WH Stock Pro**";
+            $headerText = "📢 **มีคำขอใหม่ใน MM Stock Pro**";
 
             if ($this->transaction->status === 'completed') {
                 $statusLabel = "🟢 อนุมัติแล้ว (Auto-Approved)";

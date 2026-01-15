@@ -45,7 +45,7 @@
                     @endphp
                     <div onclick="selectCategory(this)" 
                          class="category-card group relative bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:border-indigo-300 transition-all duration-300 cursor-pointer overflow-hidden transform hover:-translate-y-1"
-                         data-id="" data-name="ตรวจนับทั้งหมด" data-last="-" data-total="{{ $totalAllItems }}" data-status="all">
+                         data-id="" data-name="ตรวจนับทั้งหมด" data-last="{{ $lastGlobalCheckDate }}" data-total="{{ $totalAllItems }}" data-status="all">
                         
                         <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-bl-[100px] -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
                         <div class="relative z-10">
@@ -338,11 +338,14 @@
         // Panel Timer Logic
         if (selectedPanelInterval) clearInterval(selectedPanelInterval);
 
-        if (isAll) {
-            renderGenericStatus();
-        } else {
-            const lastDate = parseDateSafe(data.last);
+        // ✅ [FIX] ถ้ามีวันที่ให้ใช้ logic เดียวกันหมด ไม่ว่าจะเป็น All หรือ Category
+        const lastDate = parseDateSafe(data.last);
+        if (lastDate) {
             startPanelCountdown(lastDate);
+        } else {
+            // ถ้าไม่มีวันที่จริงๆ ค่อยใช้ Generic
+             if (isAll) renderGenericStatus();
+             else startPanelCountdown(null);
         }
         
         if(window.innerWidth < 1024) document.getElementById('active-content-panel').scrollIntoView({behavior: 'smooth', block: 'nearest'});
@@ -353,7 +356,7 @@
         updateTimeBlocks('∞', '--', '--', '--');
         document.getElementById('timer-label').innerText = 'GLOBAL STATUS';
         document.getElementById('timer-icon').innerText = '📦';
-        document.getElementById('timer-text').innerText = 'การตรวจนับรวม ไม่มีการกำหนดวันหมดอายุ';
+        document.getElementById('timer-text').innerText = 'ยังไม่เคยมีการตรวจนับแบบรวมทั้งหมด';
     }
 
     function startPanelCountdown(lastCheckDate) {

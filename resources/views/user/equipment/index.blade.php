@@ -197,9 +197,11 @@
                                     $viewingDeptName = $departments[$currentDeptKey]['name'] ?? 'แผนกอื่น';
                                     $isStockEmpty = $item->quantity <= 0;
                                     $hasUnconfirmed = ($unconfirmedCount ?? 0) > 0;
+                                    
+                                    // ✅ สำหรับปุ่มตะกร้า (ยังต้องใช้ disabled)
                                     $isDisabled = $isStockEmpty || $hasUnconfirmed || !$isSameDept;
 
-                                    // ✅ แก้ไข: เพิ่มตัวแปรเช็ค class
+                                    // ✅ ไม่ใช้ disabled แล้ว ให้ปุ่มคลิกได้เสมอ แต่เช็คที่ JavaScript
                                     $btnTriggerClass = $isSameDept ? 'live-search-withdraw-btn' : '';
 
                                     if (!$isSameDept) {
@@ -208,12 +210,28 @@
                                         $btnText = 'เบิกไม่ได้';
                                         $btnTitle = "รายการนี้เป็นของ {$viewingDeptName} คุณไม่สามารถเบิกได้";
                                         $btnOnClick = "handleOtherDeptClick('{$viewingDeptName}')";
-                                    } elseif ($isDisabled) {
+                                    } elseif ($isStockEmpty) {
                                         $btnClass = 'bg-gray-400 text-gray-600 cursor-not-allowed';
-                                        $btnIcon = $isStockEmpty ? 'fas fa-times' : 'fas fa-clock';
+                                        $btnIcon = 'fas fa-times';
                                         $btnText = 'เบิกไม่ได้';
-                                        $btnTitle = $isStockEmpty ? 'สินค้าหมดสต็อก' : 'กรุณายืนยันการรับของที่ค้างอยู่ก่อน';
-                                        $btnOnClick = '';
+                                        $btnTitle = 'สินค้าหมดสต็อก';
+                                        $btnOnClick = "Swal.fire('หมดสต็อก', 'สินค้าหมดแล้วครับ', 'warning')";
+                                    } elseif ($hasUnconfirmed) {
+                                        // ✅ กรณีมีรายการค้างรับ: ให้ปุ่มคลิกได้ แต่ไม่ใส่ onclick (ให้ class จัดการ)
+                                        $btnStates = [ 
+                                            'consumable' => [ 'text' => 'เบิกด่วน', 'icon' => 'fas fa-bolt', 'class' => 'bg-red-600 hover:bg-red-700' ], 
+                                            'returnable' => [ 'text' => 'ยืมแล้วต้องคืน', 'icon' => 'fas fa-hand-holding', 'class' => 'bg-blue-600 hover:bg-blue-700' ], 
+                                            'partial_return' => [ 'text' => 'เบิกเหลือคืนได้', 'icon' => 'fas fa-box-open', 'class' => 'bg-orange-500 hover:bg-orange-600' ], 
+                                            'unset' => [ 'text' => 'รอระบุ', 'icon' => 'fas fa-clock', 'class' => 'bg-gray-400 cursor-not-allowed' ] 
+                                        ];
+                                        $typeKey = $item->withdrawal_type ?? 'unset';
+                                        $state = $btnStates[$typeKey] ?? $btnStates['unset'];
+                                        $btnClass = $state['class'] . ' text-white';
+                                        $btnIcon = $state['icon'];
+                                        $btnText = $state['text'];
+                                        $btnTitle = 'คลิกเพื่อดูรายละเอียด';
+                                        $isUnset = ($typeKey === 'unset');
+                                        $btnOnClick = $isUnset ? "handleUnsetTypeClick()" : "";
                                     } else {
                                         $btnStates = [ 
                                             'consumable' => [ 'text' => 'เบิกด่วน', 'icon' => 'fas fa-bolt', 'class' => 'bg-red-600 hover:bg-red-700' ], 
@@ -229,7 +247,6 @@
                                         $btnTitle = 'คลิกเพื่อทำรายการ';
                                         
                                         $isUnset = ($typeKey === 'unset');
-                                        // ✅ แก้ไข: ปุ่มเบิกของแผนกตัวเอง ไม่ใส่ onclick (เพราะใช้ class แทน)
                                         $btnOnClick = $isUnset ? "handleUnsetTypeClick()" : "";
                                     }
                                 @endphp
@@ -243,7 +260,6 @@
                                             data-quantity="{{ $item->quantity }}"
                                             data-unit="{{ optional($item->unit)->name }}"
                                             data-dept-key="{{ $currentDeptKey }}"
-                                            @if($isDisabled && $isSameDept) disabled @endif 
                                             title="{{ $btnTitle }}">
                                         <i class="mr-1 {{ $btnIcon }}"></i> {{ $btnText }}
                                     </button>
@@ -385,13 +401,30 @@
             if (!response.ok) throw new Error("Network Error");
             const data = await response.json();
             if (data.blocked) {
-                if (typeof openRatingModal === 'function') {
-                    openRatingModal(data.unrated_items);
-                    Swal.fire({ icon: 'warning', title: 'กรุณาประเมินความพึงพอใจ', text: 'คุณมีรายการอุปกรณ์ที่ใช้งานเสร็จสิ้นแล้ว กรุณาให้คะแนนก่อนทำรายการใหม่', confirmButtonText: 'ไปให้คะแนน' });
-                } else {
-                    Swal.fire('Error', 'ไม่พบหน้าต่างประเมิน', 'error');
+                // ✅ Handle pending confirmations with detailed message
+                if (data.reason === 'pending_confirmations') {
+                    Swal.fire({ 
+                        icon: 'warning', 
+                        title: 'ไม่สามารถทำรายการได้', 
+                        html: data.message.replace(/\n/g, '<br>'),
+                        confirmButtonText: 'ตกลง',
+                        customClass: {
+                            htmlContainer: 'text-left'
+                        }
+                    });
+                    return;
                 }
-                return; 
+                
+                // Handle unrated transactions
+                if (data.reason === 'unrated_transactions') {
+                    if (typeof openRatingModal === 'function') {
+                        openRatingModal(data.unrated_items);
+                        Swal.fire({ icon: 'warning', title: 'กรุณาประเมินความพึงพอใจ', text: 'คุณมีรายการอุปกรณ์ที่ใช้งานเสร็จสิ้นแล้ว กรุณาให้คะแนนก่อนทำรายการใหม่', confirmButtonText: 'ไปให้คะแนน' });
+                    } else {
+                        Swal.fire('Error', 'ไม่พบหน้าต่างประเมิน', 'error');
+                    }
+                    return;
+                }
             }
         } catch (e) {
             console.error(e);

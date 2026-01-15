@@ -32,6 +32,7 @@
 
         <form action="{{ route('management.tokens.updatePuSettings') }}" method="POST" class="space-y-6">
             @csrf
+            <input type="hidden" name="pu_api_enabled" value="1">
             
             {{-- Group: Connection Info --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -60,6 +61,20 @@
                                value="{{ old('pu_api_token', $puSettings['token']) }}"
                                class="rounded-none rounded-r-lg bg-gray-50 border border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500 block w-full min-w-0 text-sm p-2.5 font-mono" 
                                placeholder="วาง Token ที่ได้จากระบบ PU ที่นี่" required>
+                    </div>
+                </div>
+
+                {{-- Webhook Secret --}}
+                <div class="col-span-1 md:col-span-2">
+                    <label for="pu_api_webhook_secret" class="block mb-2 text-sm font-medium text-gray-900">Webhook Secret (X-Hub-Secret)</label>
+                    <div class="flex">
+                        <span class="inline-flex items-center px-3 text-sm text-gray-900 bg-gray-200 border border-r-0 border-gray-300 rounded-l-md">
+                            <i class="fas fa-user-secret"></i>
+                        </span>
+                        <input type="text" id="pu_api_webhook_secret" name="pu_api_webhook_secret" 
+                               value="{{ old('pu_api_webhook_secret', $puSettings['webhook_secret']) }}"
+                               class="rounded-none rounded-r-lg bg-gray-50 border border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500 block w-full min-w-0 text-sm p-2.5 font-mono" 
+                               placeholder="กำหนด Secret Key สำหรับตรวจสอบ Webhook">
                     </div>
                 </div>
 

@@ -43,6 +43,7 @@ return [
         'token'       => env('PU_API_TOKEN'),
         'intake_path' => env('PU_API_PR_INTAKE_PATH'),
         'inspection_path' => env('PU_API_INSPECTION_PATH'),
+        'webhook_secret' => env('PU_HUB_WEBHOOK_SECRET'), // ✅ Added
 
         // "สะพาน" สำหรับเชื่อมค่า Priority จาก .env
         'priorities' => [
