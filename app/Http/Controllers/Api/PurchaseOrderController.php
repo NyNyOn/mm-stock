@@ -523,26 +523,46 @@ class PurchaseOrderController extends Controller
         $item = \App\Models\PurchaseOrderItem::where('pr_item_id', $request->pr_item_id)->first();
         if ($item) {
             
-            // ✅ DETECT PO CHANGE (Item Moved to New PO)
+            // ✅ DETECT PO CHANGE (Item Moved to New PO - SPLITTING)
             // Logic:
             // 1. If Current PO has NO Code -> Just Assign (Handled by $po update below)
-            // 2. If Current PO HAS Code AND it differs from Webhook -> Move Item
+            // 2. If Current PO HAS Code AND it differs from Webhook -> Move Item (Split)
             $currentPoCode = $item->purchaseOrder->po_number ?? null;
+            $newPoCode = $request->po_code;
             
-            if (!empty($request->po_code) && $currentPoCode && $currentPoCode !== $request->po_code) {
-                Log::info("API: Item #{$item->id} (PR Item {$request->pr_item_id}) indicates new PO Code '{$request->po_code}' (Current: {$currentPoCode}). Processing Move...");
+            if (!empty($newPoCode) && $currentPoCode && $currentPoCode !== $newPoCode) {
+                Log::info("API: Item #{$item->id} (PR Item {$request->pr_item_id}) indicates new PO Code '{$newPoCode}' (Current: {$currentPoCode}). Processing Move/Split...");
                 
-                $targetPO = PurchaseOrder::where('po_number', $request->po_code)->first();
-                if ($targetPO) {
-                    $oldPOId = $item->purchase_order_id;
-                    $item->purchase_order_id = $targetPO->id;
-                    $item->save();
-                    Log::info("API: Moved Item #{$item->id} from PO #{$oldPOId} to PO #{$targetPO->id} ({$targetPO->po_number}).");
-                    $po = $targetPO; 
-                } else {
-                    Log::warning("API: New PO Code '{$request->po_code}' not found. Cannot move item yet. (Will update current PO if valid)");
-                    $po = $item->purchaseOrder;
+                // 1. Check if Target PO already exists
+                $targetPO = PurchaseOrder::where('po_number', $newPoCode)->first();
+                
+                if (!$targetPO) {
+                    // 2. If NOT exists -> Duplicate (Split) from Original PO
+                    Log::info("API: Target PO '{$newPoCode}' not found. Creating new Split PO from #{$item->purchase_order_id}...");
+                    
+                    $originalPO = $item->purchaseOrder;
+                    $targetPO = $originalPO->replicate(); 
+                    
+                    // Set New Details
+                    $targetPO->po_number = $newPoCode;
+                    $targetPO->status = 'ordered'; // Default status for new split PO
+                    // Reset created/updated timestamps will be handled by Eloquent, but logic:
+                    $targetPO->ordered_at = now();
+                    $targetPO->pu_data = array_merge($originalPO->pu_data ?? [], ['split_from' => $originalPO->po_number, 'split_at' => now()->toIso8601String()]);
+                    $targetPO->save();
+                    
+                    Log::info("API: Created Split PO #{$targetPO->id} (PO: {$newPoCode} / PR: {$targetPO->pr_number})");
                 }
+
+                // 3. Move Item to Target PO
+                $oldPOId = $item->purchase_order_id;
+                $item->purchase_order_id = $targetPO->id;
+                $item->save();
+                
+                Log::info("API: Moved Item #{$item->id} from PO #{$oldPOId} to PO #{$targetPO->id} ({$targetPO->po_number}).");
+                
+                // Switch context to New PO
+                $po = $targetPO; 
 
             } else {
                  // First assignment or Same Code -> Use current PO, will be updated below
