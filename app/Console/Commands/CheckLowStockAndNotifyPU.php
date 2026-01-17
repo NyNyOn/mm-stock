@@ -63,6 +63,16 @@ class CheckLowStockAndNotifyPU extends Command
         // 1. Find Low Stock Items
         $lowStockItems = Equipment::whereColumn('quantity', '<=', 'min_stock')
             ->where('min_stock', '>', 0) // Ensure we only check items that track stock
+            // ✅ Anti-Duplicate Logic: Prevent re-ordering if item is already in an active PO
+            ->whereDoesntHave('purchaseOrderItems.purchaseOrder', function ($query) {
+                $query->whereIn('status', [
+                    'pending', 
+                    'ordered', 
+                    'approved', 
+                    'shipped_from_supplier', 
+                    'partial_receive'
+                ]);
+            })
             ->get();
 
         if ($lowStockItems->isEmpty()) {

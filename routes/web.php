@@ -127,6 +127,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/receive/process', [ReceiveController::class, 'process'])
         ->name('receive.process')
         ->middleware('can:receive:manage'); // Assuming receive:manage permission exists
+    Route::post('/receive/resend/{poItem}', [ReceiveController::class, 'resendInspection'])
+        ->name('receive.resend')
+        ->middleware('can:receive:manage');
 
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index')->middleware('can:report:view');
     Route::post('/reports/generate', [ReportController::class, 'generate'])->name('reports.generate')->middleware('can:report:view');

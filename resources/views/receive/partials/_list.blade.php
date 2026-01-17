@@ -111,7 +111,7 @@
                                         
                                         @if($item->inspection_status)
                                             {{-- ✅ Case: Already inspected/rejected -> Block Input --}}
-                                            <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-center">
+                                            <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-center relative group">
                                                 <div class="text-sm font-bold text-yellow-700">
                                                     <i class="fas fa-clock mr-1"></i> รอ PU ตรวจสอบ
                                                 </div>
@@ -125,6 +125,13 @@
                                                         default => $item->inspection_status
                                                     } }}
                                                 </div>
+                                                
+                                                {{-- ✈️ Resend Button (Visible on Hover) --}}
+                                                <button type="button" onclick="resendInspection({{ $item->id }})" 
+                                                        class="absolute top-1 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1.5 bg-blue-500 text-white rounded-full shadow-md hover:bg-blue-600 focus:ring-2 focus:ring-blue-300 transition-all" 
+                                                        title="ส่งข้อมูลซ้ำ (Resend to PU)">
+                                                    <i class="fas fa-paper-plane text-xs"></i>
+                                                </button>
                                             </div>
                                             {{-- Hidden Input to preserve state if needed, or just nothing --}}
                                         @elseif($isLinked)

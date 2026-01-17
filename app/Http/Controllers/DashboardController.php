@@ -16,9 +16,9 @@ class DashboardController extends Controller
 {
     public function index()
     {
-        // กำหนดเวลา Cache (วินาที)
-        $statCacheTime = 600; 
-        $listCacheTime = 300; 
+        // กำหนดเวลา Cache (วินาที) (ลดลงเพื่อให้ update ไวขึ้น)
+        $statCacheTime = 60; 
+        $listCacheTime = 60; 
         $filterCacheTime = 3600; 
 
         // --- 1. คำนวณรอบการนับสต๊อก (105 วัน) ---
@@ -85,17 +85,34 @@ class DashboardController extends Controller
         // --- Stat Cards Data ---
         $total_equipment = Cache::remember('dashboard_total_equipment', $statCacheTime, function () { return Equipment::sum('quantity'); });
         $low_stock_count = Cache::remember('dashboard_low_stock_count', $statCacheTime, function () { return Equipment::where('min_stock', '>', 0)->whereColumn('quantity', '<=', 'min_stock')->where('quantity', '>', 0)->count(); });
-        $on_order_count = Cache::remember('dashboard_on_order_count', $statCacheTime, function () { return PurchaseOrder::whereIn('status', ['ordered', 'approved', 'shipped_from_supplier', 'partial_receive'])->count(); });
+        
+        // Revised: Include contact_vendor
+        $on_order_count = Cache::remember('dashboard_on_order_count', $statCacheTime, function () { return PurchaseOrder::whereIn('status', ['ordered', 'approved', 'shipped_from_supplier', 'partial_receive', 'contact_vendor'])->count(); });
+        
         $warranty_count = Cache::remember('dashboard_warranty_count', $statCacheTime, function () { return Equipment::whereNotNull('warranty_date')->whereBetween('warranty_date', [now(), now()->addDays(30)])->count(); });
         $urgent_order_count = Cache::remember('dashboard_urgent_order_count', $statCacheTime, function () { return PurchaseOrder::where('type', 'urgent')->count(); });
         $scheduled_order_count = Cache::remember('dashboard_scheduled_order_count', $statCacheTime, function () { return PurchaseOrder::where('type', 'scheduled')->count(); });
-        $pending_transactions_count = Cache::remember('dashboard_pending_tx_count', $statCacheTime, function () { return Transaction::where('status', 'pending')->count(); });
+        
+        // FIXED: Count 'Receive' Items (PurchaseOrder in specific statuses) instead of 'Transaction pending'
+        // statuses: shipped_from_supplier, partial_receive, contact_vendor (matches ReceiveController)
+        $pending_transactions_count = Cache::remember('dashboard_pending_tx_count', $statCacheTime, function () { 
+            return PurchaseOrder::whereIn('status', ['shipped_from_supplier', 'partial_receive', 'contact_vendor'])
+                ->whereNotNull('po_number')
+                ->whereHas('items', function ($query) {
+                    $query->where(function ($q) {
+                        $q->whereNull('quantity_received')
+                          ->orWhereRaw('quantity_received < quantity_ordered');
+                    })->where('status', '!=', 'returned');
+                })
+                ->count(); 
+        });
+        
         $job_order_count = Cache::remember('dashboard_job_order_count', $statCacheTime, function () { return PurchaseOrder::where('type', 'job_order')->count(); });
 
         // --- List Data ---
         $on_order_items = Cache::remember('dashboard_on_order_items', $listCacheTime, function () { 
             return \App\Models\PurchaseOrderItem::whereHas('purchaseOrder', function($q) {
-                $q->whereIn('status', ['ordered', 'approved', 'shipped_from_supplier', 'partial_receive']);
+                $q->whereIn('status', ['ordered', 'approved', 'shipped_from_supplier', 'partial_receive', 'contact_vendor']);
             })->with('equipment')->latest()->limit(5)->get(); 
         });
         $out_of_stock_items = Cache::remember('dashboard_out_of_stock_items', $listCacheTime, function () { return Equipment::where('quantity', '<=', 0)->orderBy('name')->limit(5)->get(); });

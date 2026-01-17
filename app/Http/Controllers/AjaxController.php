@@ -29,6 +29,8 @@ class AjaxController extends Controller
     public function handleRequest(Request $request)
     {
         $action = $request->input('action');
+        
+
 
         switch ($action) {
             case 'get_dashboard_data':
@@ -657,6 +659,9 @@ class AjaxController extends Controller
     {
         try {
             $user = Auth::user();
+            $user = Auth::user();
+
+
             // ✅ Use local user_meta table instead of touching sync_ldap
             $meta = DB::table('user_meta')->where('user_id', $user->id)->first();
             $lastCheck = $meta ? $meta->last_notification_check : null;
@@ -665,99 +670,141 @@ class AjaxController extends Controller
             $notifications = [];
             $unreadCount = 0;
             
-            // 1. Low Stock Notifications (Restricted to Admins/Purchasers)
-            if ($user->can('equipment:manage') || $user->can('po:create')) {
+            $isSuperAdmin = $user->id === (int)config('app.super_admin_id');
+            
+            // 1. Low Stock Notifications (Restricted to Admins/Purchasers OR Super Admin)
+            if ($isSuperAdmin || $user->can('equipment:manage') || $user->can('po:create')) {
+                // ... (existing query) ...
                 $lowStockQuery = Equipment::where(function($q) {
                         $q->where('status', 'low_stock')
                           ->orWhere(function($sub) {
                               $sub->whereColumn('quantity', '<=', 'min_stock')->where('min_stock', '>', 0);
                           });
                     })
-                    ->limit(10); // Check more items since we might filter some out
+                    ->limit(10);
                 
-                // Filter by cleared time if exists
                 if ($lastCleared) {
-                    // Only show items updated AFTER the clear time
                     $lowStockQuery->where('updated_at', '>', $lastCleared);
                 }
                 
                 $lowStockItems = $lowStockQuery->get();
 
-                foreach ($lowStockItems as $item) {
-                    // If item updated AFTER last check, it's unread.
-                    $isUnread = !$lastCheck || ($item->updated_at && $item->updated_at->gt($lastCheck));
-                    if ($isUnread) $unreadCount++;
 
-                    if ($item->quantity <= 0) {
-                        $type = 'out_of_stock';
-                        $message = "สินค้าหมด: {$item->name}";
-                    } else {
-                        $type = 'low_stock';
-                        $message = "สินค้าใกล้หมด: {$item->name} (เหลือ {$item->quantity})";
+                foreach ($lowStockItems as $item) {
+                    try {
+                        // Ensure updated_at is a Carbon instance
+                        $updatedAt = $item->updated_at ? \Illuminate\Support\Carbon::parse($item->updated_at) : null;
+                        
+                        // If item updated AFTER last check, it's unread.
+                        // Safe check: if lastCheck is string, compare timestamps, else use Carbon gt
+                        $isUnread = false;
+                        if (!$lastCheck) {
+                            $isUnread = true;
+                        } elseif ($updatedAt) {
+                            if (is_string($lastCheck)) {
+                                $isUnread = $updatedAt->timestamp > \Illuminate\Support\Carbon::parse($lastCheck)->timestamp;
+                            } else {
+                                $isUnread = $updatedAt->gt($lastCheck);
+                            }
+                        }
+
+                        if ($isUnread) $unreadCount++;
+
+                        if ($item->quantity <= 0) {
+                            $type = 'out_of_stock';
+                            $message = "สินค้าหมด: {$item->name}";
+                        } else {
+                            $type = 'low_stock';
+                            $message = "สินค้าใกล้หมด: {$item->name} (เหลือ {$item->quantity})";
+                        }
+
+                        $notifications[] = [
+                            'id' => $item->id,
+                            'type' => $type,
+                            'message' => $message,
+                            'url' => route('equipment.index', ['search' => $item->name]),
+                            // Safe icon assignment
+                            'icon' => $type === 'out_of_stock' ? 'fa-times-circle text-red-500' : 'fa-exclamation-triangle text-orange-500', 
+                            'is_read' => !$isUnread
+                        ];
+                    } catch (\Throwable $e) {
+                         Log::error("Error processing low stock item {$item->id}: " . $e->getMessage());
                     }
+                }
+            } else {
+
+            }
+
+            // 2. Pending Approval Notifications (For Approvers OR Super Admin)
+            try {
+                if ($isSuperAdmin || ($user && $user->can('transaction:approve'))) {
+                    // ... (existing query) ...
+                    $pendingQuery = Transaction::where('status', 'pending_approval');
+                    
+                    if ($lastCleared) {
+                        $pendingQuery->where('transaction_date', '>', $lastCleared);
+                    }
+                    
+                    $pendingTxs = $pendingQuery->get();
+
+                    
+                    $pendingCount = $pendingTxs->count();
+                    if ($pendingCount > 0) {
+                         // Check if ANY pending tx is newer than last check
+                         $latestPending = $pendingTxs->max('transaction_date');
+                         $isUnread = !$lastCheck || ($latestPending && $latestPending->gt($lastCheck));
+                         if ($isUnread) $unreadCount++;
+
+                         $notifications[] = [
+                            'id' => 'pending-tx',
+                            'type' => 'pending_approval',
+                            'message' => "มีรายการรออนุมัติ {$pendingCount} รายการ",
+                            'url' => route('transactions.index', ['status' => 'pending_approval']),
+                            'is_read' => !$isUnread
+                        ];
+                    }
+                } else {
+
+                }
+            } catch (\Throwable $e) {
+                Log::error("Error processing Pending Approvals: " . $e->getMessage());
+            }
+
+            // 3. Database Notifications
+            try {
+                $dbNotifsInfo = count($user->unreadNotifications);
+                
+                // Fetch unread notifications from the 'notifications' table
+                foreach ($user->unreadNotifications as $dbNotif) {
+                    // Filter by lastCleared if needed (optional, but good for "Clear All" logic consistency)
+                    if ($lastCleared && $dbNotif->created_at <= $lastCleared) continue;
+
+                    $data = $dbNotif->data;
+                    $unreadCount++;
 
                     $notifications[] = [
-                        'id' => $item->id,
-                        'type' => $type,
-                        'message' => $message,
-                        'url' => route('equipment.index', ['search' => $item->name]),
-                        'is_read' => !$isUnread
+                        'id' => $dbNotif->id,
+                        'type' => $data['type'] ?? 'info', // success, error, info
+                        'message' => $data['body'] ?? ($data['message'] ?? 'แจ้งเตือนใหม่'),
+                        'title' => $data['title'] ?? 'แจ้งเตือน',
+                        'url' => $data['action_url'] ?? '#',
+                        'is_read' => false,
+                        'icon' => $data['icon'] ?? 'fas fa-bell', // Use icon from data
+                        'custom_html' => true // Flag for JS to use custom styling
                     ];
                 }
+            } catch (\Throwable $e) {
+                Log::error("Error processing Database Notifications: " . $e->getMessage());
             }
 
-            // 2. Pending Approval Notifications (For Approvers)
-            if ($user && $user->can('transaction:approve')) {
-                $pendingQuery = Transaction::where('status', 'pending_approval');
-                
-                if ($lastCleared) {
-                    $pendingQuery->where('created_at', '>', $lastCleared);
-                }
-                
-                $pendingTxs = $pendingQuery->get();
-                $pendingCount = $pendingTxs->count();
-                
-                if ($pendingCount > 0) {
-                     // Check if ANY pending tx is newer than last check
-                     $latestPending = $pendingTxs->max('created_at');
-                     $isUnread = !$lastCheck || ($latestPending && $latestPending->gt($lastCheck));
-                     if ($isUnread) $unreadCount++;
 
-                     $notifications[] = [
-                        'id' => 'pending-tx',
-                        'type' => 'pending_approval',
-                        'message' => "มีรายการรออนุมัติ {$pendingCount} รายการ",
-                        'url' => route('transactions.index', ['status' => 'pending_approval']),
-                        'is_read' => !$isUnread
-                    ];
-                }
-            }
-
-            // 3. ✅ Database Notifications (System Alerts: Approved, Rejected, Returned, etc.)
-            // Fetch unread notifications from the 'notifications' table
-            foreach ($user->unreadNotifications as $dbNotif) {
-                // Filter by lastCleared if needed (optional, but good for "Clear All" logic consistency)
-                if ($lastCleared && $dbNotif->created_at <= $lastCleared) continue;
-
-                $data = $dbNotif->data;
-                $unreadCount++;
-
-                $notifications[] = [
-                    'id' => $dbNotif->id,
-                    'type' => $data['type'] ?? 'info', // success, error, info
-                    'message' => $data['body'] ?? ($data['message'] ?? 'แจ้งเตือนใหม่'),
-                    'title' => $data['title'] ?? 'แจ้งเตือน',
-                    'url' => $data['action_url'] ?? '#',
-                    'is_read' => false,
-                    'icon' => $data['icon'] ?? 'fas fa-bell', // Use icon from data
-                    'custom_html' => true // Flag for JS to use custom styling
-                ];
-            }
+            
+            // Log::info("DEBUG: Total Unread Count returned: {$unreadCount}");
 
             return response()->json([
                 'success' => true,
-                'count' => $unreadCount, // Badge shows unread only
-                'total' => count($notifications),
+                'count' => $unreadCount,
+                'total' => count($notifications), 
                 'notifications' => $notifications
             ]);
 
@@ -818,7 +865,7 @@ class AjaxController extends Controller
                  else if ($tx->type == 'withdraw') $action = 'เบิก (Withdraw)';
                  
                  // User name (short)
-                 $userName = $tx->user ? explode(' ', $tx->user->fullname)[0] : 'Unknown';
+                 $userName = $tx->user ? explode(' ', $tx->user->fullname)[0] : 'PU System';
 
                  return [
                      'name' => $tx->equipment->name,

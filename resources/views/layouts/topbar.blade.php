@@ -97,16 +97,17 @@
                 </div>
             @endif
 
-            {{-- (โค้ดเดิมของคุณ: ปุ่ม Notifications + Dropdown) --}}
+            {{-- Notification Bell (Restored Vanilla JS) --}}
             <div class="relative" id="notifications-button-wrapper">
                 <button onclick="toggleDropdown('notifications-dropdown')" class="relative p-3 transition-all rounded-2xl hover:bg-gray-100 button-soft group">
-                    <i class="text-lg text-gray-500 group-hover:text-blue-600 transition-colors fas fa-inbox"></i>
+                    <i class="text-lg text-gray-500 group-hover:text-blue-600 transition-colors fas fa-bell"></i>
+                    
                     {{-- Badge Count --}}
                     <span id="notification-count" class="absolute top-2 right-2 flex px-1.5 py-0.5 text-[10px] font-bold text-white bg-red-500 rounded-full shadow-sm hidden">0</span>
                 </button>
 
                 {{-- Notification Dropdown --}}
-                <div id="notifications-dropdown" class="absolute right-0 z-50 hidden mt-2 origin-top-right w-80 rounded-2xl bg-white shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 animate-fade-in-down overflow-hidden">
+                <div id="notifications-dropdown" class="fixed inset-x-4 top-24 z-50 hidden sm:absolute sm:inset-x-auto sm:top-auto sm:mt-2 sm:right-0 sm:origin-top-right sm:w-96 rounded-2xl bg-white shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 animate-fade-in-down overflow-hidden">
                     <div class="p-3 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
                         <h3 class="font-bold text-sm text-gray-700">การแจ้งเตือน</h3>
                         <button id="clear-notifs-btn" class="text-[10px] text-gray-500 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg transition-all" title="ล้างการแจ้งเตือนทั้งหมด">
@@ -114,8 +115,11 @@
                         </button>
                     </div>
                     <div id="notifications-list" class="max-h-80 overflow-y-auto scrollbar-thin">
-                        {{-- JS will render items here --}}
-                        <div class="p-8 text-center text-gray-400 text-sm">ไม่มีการแจ้งเตือน</div>
+                        {{-- JS from main.js will render items here --}}
+                        <div class="p-8 text-center text-gray-400 text-sm">
+                            <i class="fas fa-circle-notch fa-spin text-indigo-400 mb-2"></i><br>
+                            กำลังโหลด...
+                        </div>
                     </div>
                 </div>
             </div>

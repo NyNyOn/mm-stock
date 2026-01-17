@@ -684,8 +684,10 @@ class PurchaseOrderController extends Controller
     {
         $this->authorize('po:create'); 
 
-        if ($purchaseOrder->status !== 'cancelled') {
-            return back()->with('error', 'ทำรายการได้เฉพาะใบสั่งซื้อที่ถูกปฏิเสธ (Rejected) เท่านั้น');
+        $hasRejectedItems = $purchaseOrder->items()->where('status', 'cancelled')->exists();
+
+        if ($purchaseOrder->status !== 'cancelled' && !$hasRejectedItems) {
+            return back()->with('error', 'ทำรายการได้เฉพาะใบสั่งซื้อที่ถูกปฏิเสธ (Rejected) หรือมีรายการย่อยถูกปฏิเสธเท่านั้น');
         }
 
         try {
@@ -770,7 +772,12 @@ class PurchaseOrderController extends Controller
                  return back()->with('error', 'ส่งไม่สำเร็จ: ' . $apiResult['message']);
              }
         } catch (\Exception $e) {
-             return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
+            // ✅ Translate 422 Error for User
+            if (str_contains($e->getMessage(), 'Status: 422') && str_contains($e->getMessage(), 'pr_item_id is invalid')) {
+                return back()->with('error', 'ข้อผิดพลาด: ข้อมูลสินค้าไม่ตรงกับระบบ PU (รายการนี้อาจถูกลบหรือปฏิเสธไปแล้ว) โปรดลองสร้างใบใหม่หรือติดต่อ Admin');
+            }
+
+            return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
     }
 }

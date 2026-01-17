@@ -1,6 +1,48 @@
 @foreach($purchaseOrders as $po)
+    @php
+        $isCompleted = $po->status === 'completed';
+    @endphp
+
+    @if($isCompleted)
+        {{-- Collapsed Summary for Completed Orders --}}
+        <div id="summary-{{$po->id}}" onclick="togglePo('{{$po->id}}')" class="bg-gradient-to-r from-green-50 to-white overflow-hidden shadow-sm sm:rounded-xl border border-green-200 cursor-pointer hover:shadow-md transition-all group p-4 flex items-center justify-between relative">
+            <div class="flex items-center gap-4">
+                 <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 shadow-sm group-hover:scale-110 transition-transform">
+                     <i class="fas fa-check"></i>
+                 </div>
+                 <div>
+                    <div class="flex items-center gap-2">
+                         <span class="font-bold text-gray-800">
+                             {{ !empty($po->po_number) ? 'PO: '.$po->po_number : '' }}  
+                             {{ !empty($po->po_number) && !empty($po->pr_number) ? ' | ' : '' }}
+                             {{ !empty($po->pr_number) ? 'PR: '.$po->pr_number : 'PO #'.$po->id }}
+                         </span>
+                         <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200 shadow-sm animate-pulse">สำเร็จ</span>
+                    </div>
+                     <p class="text-xs text-gray-500 mt-0.5"><i class="far fa-clock mr-1"></i> {{ $po->updated_at->format('d/m/Y H:i') }} (ล่าสุด)</p>
+                 </div>
+            </div>
+            <div class="flex items-center gap-3">
+                 <div class="text-right hidden sm:block">
+                     <p class="text-sm font-bold text-gray-700">{{ $po->items->first()->item_name }} {{ $po->items->count() > 1 ? '... (+'.($po->items->count()-1).')' : '' }}</p>
+                     <p class="text-xs text-gray-500">{{ $po->requester->department->name ?? '-' }}</p>
+                 </div>
+                 <button class="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 group-hover:text-indigo-600 shadow-sm">
+                     <i class="fas fa-chevron-down"></i>
+                 </button>
+            </div>
+        </div>
+    @endif
+
     <!-- Card รายการสั่งซื้อ -->
-    <div class="bg-white overflow-hidden shadow-md sm:rounded-xl border border-gray-200">
+    <div id="card-{{$po->id}}" class="bg-white overflow-hidden shadow-md sm:rounded-xl border border-gray-200 {{ $isCompleted ? 'hidden' : '' }}">
+         @if($isCompleted)
+             <div class="bg-green-50 px-4 py-1 border-b border-green-100 flex justify-center cursor-pointer hover:bg-green-100 transition-colors" onclick="togglePo('{{$po->id}}')" title="คลิกเพื่อย่อเก็บ">
+                  <span class="text-xs font-bold text-green-700 flex items-center gap-1">
+                      <i class="fas fa-chevron-up"></i> ย่อรายละเอียด (Collapse)
+                  </span>
+             </div>
+         @endif
         
         <!-- Header -->
         @php
@@ -78,7 +120,7 @@
                                     'approved' => ['bg' => 'bg-indigo-50', 'text' => 'text-indigo-700', 'border' => 'border-indigo-200', 'label' => 'PU อนุมัติแล้ว (รอของ)'],
                                     'shipped_from_supplier' => ['bg' => 'bg-purple-50', 'text' => 'text-purple-700', 'border' => 'border-purple-200', 'label' => 'อยู่ระหว่างจัดส่ง'],
                                     'partial_receive' => ['bg' => 'bg-orange-50', 'text' => 'text-orange-700', 'border' => 'border-orange-200', 'label' => 'รับของบางส่วน'],
-                                    'completed' => ['bg' => 'bg-green-50', 'text' => 'text-green-700', 'border' => 'border-green-200', 'label' => 'สำเร็จ'],
+                                    'completed' => ['bg' => 'bg-green-100', 'text' => 'text-green-800', 'border' => 'border-green-300', 'label' => 'สำเร็จ'],
                                     'pending' => ['bg' => 'bg-yellow-50', 'text' => 'text-yellow-700', 'border' => 'border-yellow-200', 'label' => 'กำลังดำเนินการ (Pending)'], 
                                     default => ['bg' => 'bg-gray-50', 'text' => 'text-gray-600', 'border' => 'border-gray-200', 'label' => ucfirst($po->status)]
                                 };
@@ -89,7 +131,7 @@
 
                             {{-- Status Badge (For Non-Cancelled) --}}
                             @if($po->status !== 'cancelled')
-                                <span class="px-3 py-1 ml-2 rounded text-xs font-bold {{ $statusConfig['bg'] }} {{ $statusConfig['text'] }} {{ $statusConfig['border'] }} border flex items-center shadow-sm whitespace-nowrap">
+                                <span class="px-3 py-1 ml-2 rounded text-xs font-bold {{ $statusConfig['bg'] }} {{ $statusConfig['text'] }} {{ $statusConfig['border'] }} {{ $po->status === 'completed' ? 'animate-pulse ring-2 ring-green-200' : '' }} border flex items-center shadow-sm whitespace-nowrap">
                                     <div class="w-1.5 h-1.5 rounded-full {{ str_replace('text-', 'bg-', $statusConfig['text']) }} mr-2"></div>
                                     {{ $statusConfig['label'] }}
                                 </span>
@@ -100,6 +142,16 @@
                                         <i class="fas fa-exclamation-circle mr-1.5"></i> บางรายการถูกปฏิเสธ
                                     </span>
                                 @endif
+
+                                {{-- ✈️ Resend/Retry Button (User Request) --}}
+                                @if(in_array($po->status, ['ordered', 'approved', 'shipped_from_supplier', 'partial_receive', 'completed'])) 
+                                    <form action="{{ route('purchase-orders.retry-send', $po->id) }}" method="POST" class="inline-block" onsubmit="return confirm('ยืนยันการส่งข้อมูลซ้ำไปยัง PU (Resend)? \nใช้ในกรณีที่ข้อมูลไม่ตรงกันหรือ PU ไม่ได้รับข้อมูล');">
+                                        @csrf
+                                        <button type="submit" class="p-1.5 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors" title="ส่งข้อมูลซ้ำไปยัง PU (Resend Payload)">
+                                            <i class="fas fa-paper-plane"></i>
+                                        </button>
+                                    </form>
+                                @endif
                             @else
                                 {{-- Cancelled Badge --}}
                                 <span class="px-3 py-1 ml-2 rounded text-xs font-bold bg-red-100 text-red-600 border border-red-200 flex items-center shadow-sm">
@@ -108,7 +160,7 @@
                             @endif
 
                             {{-- Resubmit Indicator --}}
-                            @if($isResubmit && $po->status !== 'cancelled')
+                            @if($isResubmit && $po->status !== 'cancelled' && $po->status !== 'completed')
                                 <span class="px-3 py-1 ml-2 rounded text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 flex items-center shadow-sm animate-pulse">
                                     <i class="fas fa-sync-alt mr-1.5"></i> แก้ไขแล้ว (รอตรวจสอบ)
                                 </span>
@@ -161,8 +213,8 @@
                         </form>
                     @endif
 
-                     {{-- 1. Receive Button --}}
-                    @if(in_array($po->status, ['shipped_from_supplier', 'partial_receive', 'ordered']))
+                     {{-- 1. Receive Button (Hide on Rejected Page) --}}
+                    @if(in_array($po->status, ['shipped_from_supplier', 'partial_receive']) && !request()->routeIs('purchase-track.rejected'))
                         <a href="{{ route('receive.index') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors whitespace-nowrap">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                             ไปตรวจรับของ
@@ -252,7 +304,7 @@
         @endif
 
         {{-- 🔵 RESUBMIT INFO BOX --}}
-        @if(($po->pu_data['is_resubmit'] ?? false) && $po->status !== 'cancelled')
+        @if(($po->pu_data['is_resubmit'] ?? false) && $po->status !== 'cancelled' && $po->status !== 'completed')
              @php
                 $resubmitNote = '';
                 if (str_contains($po->notes, '[Resubmit Info]:')) {
@@ -451,8 +503,54 @@
                 </div>
             </div>
 
-        </div>
-    </div>
+            <!-- History Logs (Expanded Section) -->
+            <div class="bg-white rounded-xl p-5 border border-gray-200 mt-6">
+                 <h4 class="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2 uppercase tracking-wide">
+                    <i class="fas fa-history text-gray-400"></i> ประวัติการดำเนินการ (Logs)
+                 </h4>
+                 <div class="space-y-3">
+                     {{-- Create Log --}}
+                     <div class="flex items-start gap-3 relative pb-3 border-l-2 border-gray-100 pl-4 last:border-0 last:pb-0">
+                         <div class="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-gray-300 ring-4 ring-white"></div>
+                         <div>
+                             <p class="text-sm font-bold text-gray-800">สร้างใบขอซื้อ (Request Created)</p>
+                             <p class="text-xs text-gray-500">{{ $po->created_at->format('d/m/Y H:i') }} โดย {{ $po->orderedBy->name ?? 'System' }}</p>
+                         </div>
+                     </div>
+
+                     {{-- PU History Logs (from pu_data['history']) --}}
+                     @if(!empty($po->pu_data['history']) && is_array($po->pu_data['history']))
+                         @foreach($po->pu_data['history'] as $log)
+                             <div class="flex items-start gap-3 relative pb-3 border-l-2 border-gray-100 pl-4 last:border-0 last:pb-0">
+                                 <div class="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-blue-400 ring-4 ring-white"></div>
+                                 <div>
+                                     <p class="text-sm font-bold text-gray-800">
+                                         {{ ucfirst($log['event'] ?? 'Updated') }}
+                                         @if(!empty($log['reason']) && $log['reason'] !== '-')
+                                            <span class="text-red-500 text-xs font-normal">({{ $log['reason'] }})</span>
+                                         @endif
+                                     </p>
+                                     <p class="text-xs text-gray-500">{{ \Carbon\Carbon::parse($log['at'] ?? now())->format('d/m/Y H:i') }}</p>
+                                 </div>
+                             </div>
+                         @endforeach
+                     @endif
+
+                     {{-- Completion Log --}}
+                     @if($po->status === 'completed')
+                        <div class="flex items-start gap-3 relative pb-3 border-l-2 border-gray-100 pl-4 last:border-0 last:pb-0">
+                             <div class="absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-4 ring-white"></div>
+                             <div>
+                                 <p class="text-sm font-bold text-green-700">คำสั่งซื้อสำเร็จ (Completed)</p>
+                                 <p class="text-xs text-gray-500">{{ $po->updated_at->format('d/m/Y H:i') }}</p>
+                             </div>
+                        </div>
+                     @endif
+                 </div>
+            </div>
+            
+        </div> <!-- End of Card Content Padding -->
+    </div> <!-- End of Card Wrapper -->
 @endforeach
 
 <!-- Pagination -->

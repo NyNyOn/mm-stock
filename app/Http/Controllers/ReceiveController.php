@@ -30,6 +30,8 @@ class ReceiveController extends Controller
                         $q->whereNull('quantity_received')
                           ->orWhereRaw('quantity_received < quantity_ordered');
                     })
+                    // ✅ Exclude Rejected/Cancelled items from the Receive View
+                    ->whereNotIn('status', ['returned', 'cancelled', 'rejected', 'inspection_failed'])
                     ->with(['equipment.latestImage', 'equipment.unit'])
                     ->orderBy('item_description');
                 },
@@ -42,7 +44,7 @@ class ReceiveController extends Controller
                 $query->where(function ($q) {
                     $q->whereNull('quantity_received')
                       ->orWhereRaw('quantity_received < quantity_ordered');
-                })->where('status', '!=', 'returned'); // ✅ Exclude explicitly returned items
+                })->whereNotIn('status', ['returned', 'cancelled', 'rejected', 'inspection_failed']); // ✅ Apply same filter to PO detection
             })
             ->orderBy('created_at', 'desc')
             ->get();
@@ -198,7 +200,7 @@ class ReceiveController extends Controller
                             // 1. Not yet received enough quantity
                             $q->whereRaw('ifnull(quantity_received, 0) < quantity_ordered')
                               // 2. AND Status is NOT in a "Finalized Rejection" state
-                              ->whereNotIn('status', ['returned', 'inspection_failed']);
+                              ->whereNotIn('status', ['returned', 'inspection_failed', 'cancelled', 'rejected']);
                         })->count();
 
                     if ($pendingItemsCount == 0) {
@@ -321,6 +323,132 @@ class ReceiveController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Receive Process Error: " . $e->getMessage());
+            return redirect()->back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
+        }
+    }
+    public function resendInspection(Request $request, PurchaseOrderItem $poItem)
+    {
+        $this->authorize('receive:manage');
+
+        try {
+            if (!$poItem->inspection_status) {
+                return redirect()->back()->with('error', 'รายการนี้ยังไม่ได้ทำการตรวจรับ (ไม่มีสถานะ Inspection)');
+            }
+
+            if (empty($poItem->pr_item_id)) {
+                return redirect()->back()->with('error', 'รายการนี้ไม่มี PR Item ID (ไม่สามารถส่งไป PU Hub ได้)');
+            }
+
+            $puHubService = app(PuHubService::class);
+            
+            // Re-construct the payload logic
+            $status = 'rejected';
+            if ($poItem->inspection_status === 'pass') {
+                $status = 'accepted';
+            }
+            
+            // Check Over-shipment
+            if ($status === 'accepted' && $poItem->quantity_received > $poItem->quantity_ordered) {
+                $status = 'rejected'; 
+            }
+
+            $finalNotes = $poItem->inspection_notes ?? '';
+            if ($status === 'rejected') {
+                $reasonMap = [
+                    'incomplete' => 'ของไม่ครบ',
+                    'damaged' => 'สินค้าเสียหาย',
+                    'wrong_item' => 'สินค้าผิดรุ่น',
+                    'quality_issue' => 'คุณภาพไม่ได้มาตรฐาน',
+                    'pass' => 'ครบถ้วนสมบูรณ์'
+                ];
+                $reason = $reasonMap[$poItem->inspection_status] ?? $poItem->inspection_status;
+                
+                // Avoid double prefixing
+                if (!str_contains($finalNotes, $reason)) {
+                    if (!empty($finalNotes)) {
+                        $finalNotes = "{$reason} ({$finalNotes})";
+                    } else {
+                        $finalNotes = $reason;
+                    }
+                }
+            }
+            
+            $qtyToSend = ($poItem->quantity_received > 0) ? $poItem->quantity_received : ($poItem->quantity_ordered > 0 ? $poItem->quantity_ordered : 1);
+            
+            $inspections = [[
+                'pr_item_id' => $poItem->pr_item_id,
+                'status' => $status,
+                'received_quantity' => $qtyToSend,
+                'notes' => $finalNotes
+            ]];
+
+            $result = $puHubService->confirmInspectionBatch($inspections);
+
+             if (!empty($result['results']['failed'])) {
+                $failedItem = $result['results']['failed'][0] ?? [];
+                $reason = $failedItem['reason'] ?? 'Unknown Error';
+
+                // ✅ Self-Healing: If PU says "delivered", it means they finalized it. Auto-complete locally.
+                if (str_contains(strtolower($reason), 'delivered')) {
+                     DB::beginTransaction();
+                     try {
+                         $qtyToReceive = $poItem->quantity_ordered - $poItem->quantity_received;
+                         if ($qtyToReceive > 0) {
+                             $equipment = $poItem->equipment;
+                             if ($equipment) {
+                                 $equipment->quantity += $qtyToReceive;
+                                 $equipment->save();
+                                 
+                                 // Log Transaction
+                                 Transaction::create([
+                                     'equipment_id'    => $equipment->id,
+                                     'user_id'         => Auth::id(),
+                                     'handler_id'      => Auth::id(), // System/User triggered
+                                     'type'            => 'receive',
+                                     'quantity_change' => $qtyToReceive,
+                                     'notes'           => "Auto-Completed via Resend (PU status: delivered)",
+                                     'transaction_date'=> now(),
+                                     'status'          => 'completed'
+                                 ]);
+                             }
+                             $poItem->quantity_received += $qtyToReceive;
+                         }
+
+                         $poItem->status = 'received';
+                         $poItem->inspection_status = 'pass';
+                         $poItem->inspection_notes = "System Auto-Completed: PU reported delivered during resend.";
+                         $poItem->save();
+                         
+                         // Check Parent PO Completion
+                         $po = $poItem->purchaseOrder;
+                         if ($po) {
+                            $pendingCount = $po->items()
+                                ->whereRaw('ifnull(quantity_received, 0) < quantity_ordered')
+                                ->whereNotIn('status', ['returned', 'inspection_failed'])
+                                ->count();
+                            if ($pendingCount == 0) {
+                                $po->status = 'completed';
+                                $po->save();
+                            }
+                         }
+
+                         DB::commit();
+                         return redirect()->back()->with('success', 'PU แจ้งว่ารายการนี้สำเร็จแล้ว (Delivered) - ระบบได้ปรับยอดรับเข้าให้โดยอัตโนมัติ เรียบร้อยแล้ว ✅');
+
+                     } catch (\Exception $ex) {
+                         DB::rollBack();
+                         Log::error("Auto-Complete Failed: " . $ex->getMessage());
+                         return redirect()->back()->with('error', "PU Rejected & Auto-Fix Failed: " . $ex->getMessage());
+                     }
+                }
+
+                return redirect()->back()->with('error', "PU Rejected: " . $reason);
+            }
+
+            return redirect()->back()->with('success', 'ส่งข้อมูลไปยัง PU Hub เรียบร้อยแล้ว 🚀');
+
+        } catch (\Exception $e) {
+            Log::error("[ReceiveController::resend] Error: " . $e->getMessage());
             return redirect()->back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
     }

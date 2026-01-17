@@ -34,8 +34,29 @@
     <script>
         let autoRefreshInterval;
 
+        function togglePo(id) {
+            const summary = document.getElementById('summary-' + id);
+            const card = document.getElementById('card-' + id);
+            
+            if (card.classList.contains('hidden')) {
+                // Expand
+                card.classList.remove('hidden');
+                if(summary) summary.classList.add('hidden');
+            } else {
+                // Collapse
+                card.classList.add('hidden');
+                if(summary) summary.classList.remove('hidden');
+            }
+        }
+
         function fetchUpdates() {
             const url = window.location.href;
+            
+            // 1. Capture Expanded State
+            const expandedDetails = Array.from(document.querySelectorAll('[id^="card-"]'))
+                .filter(el => !el.classList.contains('hidden'))
+                .map(el => el.id);
+
             fetch(url, {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
@@ -50,6 +71,18 @@
                 const container = document.getElementById('track-container');
                 if (container) {
                     container.innerHTML = html;
+                    
+                    // 2. Restore Expanded State
+                    expandedDetails.forEach(id => {
+                        const card = document.getElementById(id);
+                        const summaryId = id.replace('card-', 'summary-');
+                        const summary = document.getElementById(summaryId);
+                        
+                        if (card) {
+                            card.classList.remove('hidden');
+                            if (summary) summary.classList.add('hidden');
+                        }
+                    });
                 } else if (html.trim().length > 100) {
                      window.location.reload();
                 }

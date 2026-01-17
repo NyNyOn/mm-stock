@@ -349,6 +349,24 @@
             }
         }
         
+        function resendInspection(itemId) {
+            if(!confirm('ยืนยันการส่งข้อมูลไปยัง PU อีกครั้ง?')) return;
+
+            // Create a temporary form to submit
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/receive/resend/${itemId}`;
+            
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_token';
+            csrfInput.value = csrfToken;
+            
+            form.appendChild(csrfInput);
+            document.body.appendChild(form);
+            form.submit();
+        }
     </script>
     <style>
         /* Custom Styles for aesthetics and animations */

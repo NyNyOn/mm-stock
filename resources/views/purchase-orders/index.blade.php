@@ -4,33 +4,33 @@
 @section('subtitle', 'จัดการใบสั่งซื้อตามรอบ, ใบสั่งซื้อด่วน และใบสั่งซื้อจาก GLPI')
 
 @section('content')
-    <div class="space-y-6">
+    <div class="space-y-4 sm:space-y-6">
 
         {{-- Scheduled Purchase Orders --}}
-        <div class="p-6 soft-card gentle-shadow">
-            <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="p-4 sm:p-6 soft-card gentle-shadow">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h3 class="text-xl font-bold text-gray-800">🛒 ใบสั่งซื้อตามรอบ (Scheduled)</h3>
-                    <p class="mt-1 text-sm text-gray-500">รายการที่สร้างจากระบบตรวจสอบสต็อกอัตโนมัติ</p>
+                    <h3 class="text-lg sm:text-xl font-bold text-gray-800">🛒 ใบสั่งซื้อตามรอบ (Scheduled)</h3>
+                    <p class="mt-1 text-xs sm:text-sm text-gray-500">รายการที่สร้างจากระบบตรวจสอบสต็อกอัตโนมัติ</p>
                 </div>
-                <div class="flex items-center space-x-2">
+                <div class="flex flex-wrap items-center gap-2">
                     @can('po:create')
                     <form id="run-stock-check-form" action="{{ route('purchase-orders.runStockCheck') }}" method="POST"
                         class="hidden">@csrf</form>
                     <button type="button"
                         onclick="confirmAndSubmitForm(event, 'run-stock-check-form', 'ยืนยันการรันคำสั่ง?', 'ระบบจะตรวจสอบสต็อกและสร้างใบสั่งซื้ออัตโนมัติ')"
-                        class="flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-br from-cyan-100 to-cyan-200 text-cyan-700 rounded-xl hover:shadow-lg button-soft">
-                        <i class="mr-2 fas fa-cogs"></i>
+                        class="flex items-center px-3 py-2 text-xs sm:text-sm font-medium bg-gradient-to-br from-cyan-100 to-cyan-200 text-cyan-700 rounded-xl hover:shadow-lg button-soft">
+                        <i class="mr-1 sm:mr-2 fas fa-cogs"></i>
                         <span>ตรวจสอบสต็อกต่ำ</span>
                     </button>
                     <button type="button" id="set-auto-requester-btn"
-                        class="flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 rounded-xl hover:shadow-lg button-soft">
-                        <i class="mr-2 fas fa-user-cog"></i> ตั้งค่าผู้สั่งอัตโนมัติ
+                        class="hidden sm:flex items-center px-3 py-2 text-xs sm:text-sm font-medium bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 rounded-xl hover:shadow-lg button-soft">
+                        <i class="mr-1 sm:mr-2 fas fa-user-cog"></i> ตั้งค่าผู้สั่ง
                     </button>
                     {{-- ✅ START: ปุ่มตั้งค่าตารางเวลา Auto PO --}}
                     <button type="button" onclick="openAutoPoScheduleModal()"
-                        class="flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-br from-orange-100 to-orange-200 text-orange-700 rounded-xl hover:shadow-lg button-soft">
-                        <i class="mr-2 fas fa-clock"></i> ตั้งเวลารอบอัตโนมัติ
+                        class="flex items-center px-3 py-2 text-xs sm:text-sm font-medium bg-gradient-to-br from-orange-100 to-orange-200 text-orange-700 rounded-xl hover:shadow-lg button-soft">
+                        <i class="mr-1 sm:mr-2 fas fa-clock"></i> <span class="hidden sm:inline">ตั้งเวลา</span><span class="inline sm:hidden">เวลา</span>
                     </button>
                     {{-- ✅ END: ปุ่มตั้งค่าตารางเวลา Auto PO --}}
                     @endcan
@@ -39,8 +39,8 @@
                         class="hidden">@csrf</form>
                     <button type="button" @if(!$scheduledOrder || $scheduledOrder->items->isEmpty()) disabled @endif
                         onclick="confirmAndSubmitForm(event, 'submit-scheduled-form', 'ยืนยันการส่ง?', 'ต้องการส่งใบสั่งซื้อตามรอบไปที่ฝ่ายจัดซื้อใช่หรือไม่')"
-                        class="flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-br from-green-100 to-green-200 text-green-700 rounded-xl hover:shadow-lg button-soft disabled:opacity-50 disabled:cursor-not-allowed">
-                        <i class="mr-2 fas fa-paper-plane"></i>
+                        class="flex items-center px-3 py-2 text-xs sm:text-sm font-medium bg-gradient-to-br from-green-100 to-green-200 text-green-700 rounded-xl hover:shadow-lg button-soft disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="mr-1 sm:mr-2 fas fa-paper-plane"></i>
                         <span>ส่งใบสั่งซื้อ</span>
                     </button>
                     @endcan
@@ -58,18 +58,18 @@
         </div>
 
         {{-- Urgent Purchase Orders --}}
-        <div class="p-6 soft-card gentle-shadow">
-             <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="p-4 sm:p-6 soft-card gentle-shadow">
+             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h3 class="text-xl font-bold text-gray-800">⚡ ใบสั่งซื้อด่วน (Urgent)</h3>
-                    <p class="mt-1 text-sm text-gray-500">รายการที่ถูกเพิ่มโดยผู้ดูแลระบบ</p>
+                    <h3 class="text-lg sm:text-xl font-bold text-gray-800">⚡ ใบสั่งซื้อด่วน (Urgent)</h3>
+                    <p class="mt-1 text-xs sm:text-sm text-gray-500">รายการที่ถูกเพิ่มโดยผู้ดูแลระบบ</p>
                 </div>
                 @can('po:manage')
                  <form id="submit-urgent-form" action="{{ route('purchase-orders.submitUrgent') }}" method="POST" class="hidden">@csrf</form>
                  <button type="button" @if($urgentOrders->isEmpty() || $urgentOrders->every(fn($order) => $order->items->isEmpty())) disabled @endif
                      onclick="confirmAndSubmitForm(event, 'submit-urgent-form', 'ยืนยันการส่ง?', 'ต้องการส่งใบสั่งซื้อด่วนทั้งหมดไปที่ฝ่ายจัดซื้อใช่หรือไม่')"
-                     class="flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-br from-green-100 to-green-200 text-green-700 rounded-xl hover:shadow-lg button-soft disabled:opacity-50 disabled:cursor-not-allowed">
-                     <i class="mr-2 fas fa-paper-plane"></i>
+                     class="flex items-center px-3 py-2 text-xs sm:text-sm font-medium bg-gradient-to-br from-green-100 to-green-200 text-green-700 rounded-xl hover:shadow-lg button-soft disabled:opacity-50 disabled:cursor-not-allowed">
+                     <i class="mr-1 sm:mr-2 fas fa-paper-plane"></i>
                      <span>ส่งใบสั่งซื้อทั้งหมด</span>
                  </button>
                 @endcan
@@ -91,40 +91,38 @@
         </div>
 
         {{-- GLPI Purchase Orders --}}
-        <div class="p-6 soft-card gentle-shadow">
-            <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="p-4 sm:p-6 soft-card gentle-shadow">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h3 class="text-xl font-bold text-gray-800">
+                    <h3 class="text-lg sm:text-xl font-bold text-gray-800">
                         <i class="mr-2 text-purple-500 fas fa-ticket-alt"></i> ใบคำขอจาก GLPI (IT)
                     </h3>
-                    <p class="mt-1 text-sm text-gray-500">รายการที่ดึงมาจาก Ticket สถานะ "รอการอนุมัติ/รออะไหล่" โดยอัตโนมัติ</p>
+                    <p class="mt-1 text-xs sm:text-sm text-gray-500">รายการที่ดึงมาจาก Ticket สถานะ "รอการอนุมัติ/รออะไหล่" โดยอัตโนมัติ</p>
                 </div>
-                <div class="flex items-center space-x-2">
+                <div class="flex flex-wrap items-center gap-2">
                     <form id="run-glpi-sync-form" action="{{ route('purchase-orders.runGlpiSync') }}" method="POST" class="hidden">@csrf</form>
                     <button type="button"
                         onclick="confirmAndSubmitForm(event, 'run-glpi-sync-form', 'ยืนยันการตรวจสอบ?', 'ระบบจะเชื่อมต่อกับ GLPI เพื่อดึงใบงานใหม่เข้ามา')"
-                        class="flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 rounded-xl hover:shadow-lg button-soft">
-                        <i class="mr-2 fas fa-sync"></i><span>ตรวจสอบใบงาน GLPI</span>
+                        class="flex items-center px-3 py-2 text-xs sm:text-sm font-medium bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 rounded-xl hover:shadow-lg button-soft">
+                        <i class="mr-1 sm:mr-2 fas fa-sync"></i><span>ตรวจสอบ GLPI</span>
                     </button>
                     
                     <button type="button" id="set-auto-job-requester-btn"
-                        class="flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 rounded-xl hover:shadow-lg button-soft">
-                        <i class="mr-2 fas fa-user-cog"></i> ตั้งค่าผู้สั่งตาม Job
+                        class="hidden sm:flex items-center px-3 py-2 text-xs sm:text-sm font-medium bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 rounded-xl hover:shadow-lg button-soft">
+                        <i class="mr-1 sm:mr-2 fas fa-user-cog"></i> ตั้งค่าผู้สั่ง
                     </button>
-
-
                 </div>
             </div>
 
             <div class="mt-4 space-y-4">
                 @forelse ($glpiOrders as $order)
                 <div class="border-2 border-purple-200 bg-purple-50/50 rounded-2xl">
-                    <div class="flex flex-wrap items-center justify-between gap-2 p-4 bg-purple-100 rounded-t-xl">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 sm:p-4 bg-purple-100 rounded-t-xl">
                         <div class="min-w-0">
                             <p class="text-sm font-bold text-purple-800">{{ $order->notes }}</p>
                             <p class="text-xs text-gray-600">ผู้ร้องขอ: {{ $order->glpi_requester_name ?? 'N/A' }}</p>
                         </div>
-                        <div class="flex items-center flex-shrink-0 space-x-2">
+                        <div class="flex items-center flex-shrink-0 space-x-2 self-end sm:self-auto">
                             {{-- ✅ ปุ่มส่งใบงานเดี่ยว --}}
                             <form id="submit-single-job-form-{{ $order->id }}" action="{{ route('purchase-orders.submitSingleJobOrder', $order->id) }}" method="POST">
                                 @csrf
@@ -133,7 +131,7 @@
                                     onclick="confirmAndSubmitForm(event, 'submit-single-job-form-{{ $order->id }}', 'ยืนยันการส่ง?', 'ต้องการส่งเฉพาะใบงานนี้ไปที่ฝ่ายจัดซื้อใช่หรือไม่?')"
                                     class="px-3 py-1 text-xs font-bold text-green-700 bg-green-200 rounded-lg hover:bg-green-300 button-soft"
                                     title="ส่งใบงานนี้">
-                                <i class="fas fa-paper-plane"></i> ส่ง
+                                <i class="fas fa-paper-plane"></i> ส่งใบงานนี้
                             </button>
 
                             <form id="delete-po-form-{{ $order->id }}" action="{{ route('purchase-orders.destroy', $order->id) }}" method="POST">
@@ -148,7 +146,7 @@
                         </div>
                     </div>
 
-                    <div class="p-4">
+                    <div class="p-3 sm:p-4">
                         <div id="po-items-container-{{ $order->id }}">
                            @include('purchase-orders.partials._po_items_table_glpi', ['order' => $order])
                         </div>

@@ -268,10 +268,18 @@ document.addEventListener('DOMContentLoaded', function () {
                         type: 'bar', // กำหนดเป็น bar chart
                         data: { labels: data.labels, datasets: datasets },
                         options: {
+                            layout: {
+                                padding: {
+                                    top: 30, // 🔥 Force top padding for labels
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0
+                                }
+                            },
                             responsive: true,
                             maintainAspectRatio: false,
                             interaction: {
-                                mode: 'index', // โหมดที่ทำให้แสดงข้อมูลทุกแท่งในเดือนที่ชี้
+                                mode: 'index',
                                 intersect: false
                             },
                             scales: {
@@ -280,16 +288,15 @@ document.addEventListener('DOMContentLoaded', function () {
                                     grid: { display: false }
                                 },
                                 y: {
-                                    stacked: false, // ต้องเป็น FALSE
+                                    display: false, // Nuclear Option: Hide entire axis
+                                    stacked: false,
                                     beginAtZero: true,
-                                    max: yAxisMax, // Use the calculated max with 5-unit step logic
+                                    max: yAxisMax,
                                     ticks: {
-                                        stepSize: 5, // ✅ Force step size to 5
-                                        precision: 0,
-                                        autoSkip: false
+                                        display: false // Double check
                                     },
                                     grid: {
-                                        display: false, // Hide grid lines completely to solve strikethrough
+                                        display: false,
                                         drawBorder: false
                                     }
                                 }

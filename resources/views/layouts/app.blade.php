@@ -10,6 +10,10 @@
         <meta name="can-bypass-frozen" content="{{ Auth::user()->canBypassFrozenState() ? 'true' : 'false' }}">
         <title>{{ config('app.name', 'Laravel') }}</title>
 
+        {{-- Favicon --}}
+        <link rel="icon" type="image/png" href="{{ asset('images/mm_favicon.png') }}">
+        <link rel="apple-touch-icon" href="{{ asset('images/mm_favicon.png') }}">
+
         {{-- Hide Tailwind CDN Warning --}}
         <script>
             (function() {
@@ -107,7 +111,7 @@
 
 
         {{-- Script หลักของเรา --}}
-        <script src="{{ asset('js/main.js') }}"></script>
+        <script src="{{ asset('js/main.js') }}?v={{ time() }}"></script>
 
         @stack('scripts')
 

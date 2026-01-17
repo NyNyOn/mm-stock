@@ -8,8 +8,29 @@
 
         {{-- Navigate Tabs --}}
         {{-- Navigate / Links --}}
-        <div class="mb-6 flex justify-end">
-            <a href="{{ route('purchase-track.rejected') }}" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors shadow-sm">
+        {{-- Navigate / Links & Search --}}
+        <div class="mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            {{-- Search Form --}}
+            <form action="{{ url()->current() }}" method="GET" class="w-full md:w-1/2 flex gap-2">
+                <div class="relative flex-1">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                    <input type="text" name="search" value="{{ request('search') }}" 
+                           class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:text-sm" 
+                           placeholder="ค้นหาเลข PO, PR หรือชื่อสินค้า...">
+                </div>
+                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm transition text-sm font-medium">
+                    ค้นหา
+                </button>
+                @if(request('search'))
+                    <a href="{{ url()->current() }}" class="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium">
+                        ล้าง
+                    </a>
+                @endif
+            </form>
+            
+            <a href="{{ route('purchase-track.rejected') }}" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors shadow-sm whitespace-nowrap">
                 <i class="fas fa-history mr-2"></i> ดูประวัติรายการที่ถูกปฏิเสธ (Rejected History)
             </a>
         </div>
@@ -44,6 +65,11 @@
             // Current URL (maintains pagination page=2 etc.)
             const url = window.location.href;
 
+            // 1. Capture Expanded State
+            const expandedDetails = Array.from(document.querySelectorAll('[id^="card-"]'))
+                .filter(el => !el.classList.contains('hidden'))
+                .map(el => el.id);
+
             fetch(url, {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
@@ -51,21 +77,31 @@
                 }
             })
             .then(response => {
+                if (response.redirected && response.url.includes('/login')) {
+                    window.location.reload();
+                    return Promise.reject('Session expired');
+                }
                 if (!response.ok) throw new Error('Network response was not ok');
                 return response.text();
             })
             .then(html => {
-                // Check if content changed? For now just replace.
-                // Or better: Use a hidden version hash? 
-                // Replacing innerHTML of container
                 const container = document.getElementById('track-container');
                 if (container) {
-                    // Simple DOM Diffing or just replace? 
-                    // Replace is easiest but resets scroll if inside container.
-                    // Since container is full page height, scroll is on 'window'.
-                    // Replacing content inside shouldn't reset window scroll unless content height changes DRASTICALLY.
                     container.innerHTML = html;
-                    console.log('✅ Auto-updated tracking list.');
+                    
+                    // 2. Restore Expanded State
+                    expandedDetails.forEach(id => {
+                        const card = document.getElementById(id);
+                        const summaryId = id.replace('card-', 'summary-');
+                        const summary = document.getElementById(summaryId);
+                        
+                        if (card) {
+                            card.classList.remove('hidden');
+                            if (summary) summary.classList.add('hidden');
+                        }
+                    });
+                    
+                    console.log('✅ Auto-updated tracking list safely.');
                 } else {
                     // Case: User was on empty state, now data came? 
                     // Need to reload full page if structure changed from Empty -> List.
@@ -75,6 +111,21 @@
                 }
             })
             .catch(error => console.error('Auto-update failed:', error));
+        }
+
+        function togglePo(id) {
+            const summary = document.getElementById('summary-' + id);
+            const card = document.getElementById('card-' + id);
+            
+            if (card.classList.contains('hidden')) {
+                // Expand
+                card.classList.remove('hidden');
+                if(summary) summary.classList.add('hidden');
+            } else {
+                // Collapse
+                card.classList.add('hidden');
+                if(summary) summary.classList.remove('hidden');
+            }
         }
 
         // Start Polling every 15 seconds

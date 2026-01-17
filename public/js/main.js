@@ -36,7 +36,12 @@ function setupEventListeners() {
 // ==================================================================
 
 async function apiRequest(action, data = {}) {
-    const url = '/ajax-handler';
+    // ✅ Fix: Use Base URL from Meta Tag to support sub-directories
+    const baseUrlMeta = document.querySelector('meta[name="app-base-url"]');
+    const baseUrl = baseUrlMeta ? baseUrlMeta.getAttribute('content') : '';
+    // Ensure no double slash
+    const url = `${baseUrl.replace(/\/$/, '')}/ajax-handler`;
+
     const options = {
         method: 'POST',
         headers: {

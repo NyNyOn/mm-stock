@@ -112,22 +112,39 @@ class PurchaseOrderUpdatedNotification extends Notification
                 $title = "🚚 **อัปเดตสถานะ: สินค้ากำลังจัดส่ง**";
                 $messageBody = "PU แจ้งว่า Supplier ได้จัดส่งสินค้าแล้ว";
             } elseif ($this->action === 'cancelled' || $this->action === 'rejected') {
-                $title = "🚫 **แจ้งเตือน: ใบสั่งซื้อถูกปฏิเสธ (Rejected)**";
                 $reason = $this->purchaseOrder->pu_data['rejection_reason'] ?? 'ไม่ระบุเหตุผล';
                 $rejectedBy = $this->purchaseOrder->pu_data['rejected_by'] ?? 'PU';
-                $messageBody = "⚠️ **เหตุผล:** {$reason}\n👤 **โดย:** {$rejectedBy}\n💡 *กรุณาตรวจสอบและกดแก้ไขเพื่อส่งใหม่*";
+                
+                // ✅ Check for Partial Rejection
+                if ($this->purchaseOrder->status !== 'cancelled') {
+                    $title = "⚠️ **แจ้งเตือน: มีรายการถูกปฏิเสธบางส่วน (Partial Rejection)**";
+                     $messageBody = "⚠️ **มีสินค้าบางรายการถูกปฏิเสธ**\n**เหตุผล:** {$reason}\n👤 **โดย:** {$rejectedBy}\n💡 *กรุณาตรวจสอบและกดแก้ไขเฉพาะรายการที่ถูกปฏิเสธ*";
+                } else {
+                    $title = "🚫 **แจ้งเตือน: ใบสั่งซื้อถูกปฏิเสธ (Rejected)**";
+                     $messageBody = "⚠️ **เหตุผล:** {$reason}\n👤 **โดย:** {$rejectedBy}\n💡 *กรุณาตรวจสอบและกดแก้ไขเพื่อส่งใหม่*";
+                }
             } else {
                  $messageBody = "มีการอัปเดตข้อมูลใบสั่งซื้อจาก PU";
             }
 
-            // ✅ Add Item Details (Name + Qty)
+            // ✅ Add Item Details (Name + Qty + Status)
             $itemsList = "";
             if ($this->purchaseOrder->items->count() > 0) {
                 $itemsList = "\n📦 **รายการสินค้า:**";
                 foreach ($this->purchaseOrder->items as $item) {
                     $name = $item->equipment->name ?? $item->item_description ?? 'Unknown Item';
                     $qty = $item->quantity_ordered;
-                    $itemsList .= "\n- {$name} (x{$qty})";
+                    
+                    // Mark Rejected Items
+                    $statusMark = "";
+                    if ($item->status === 'cancelled') {
+                         $statusMark = "❌ **(ถูกปฏิเสธ)** ";
+                    }
+                    
+                    $itemsList .= "\n- {$statusMark}{$name} (x{$qty})";
+                    if ($item->status === 'cancelled' && $item->rejection_reason) {
+                        $itemsList .= " *({$item->rejection_reason})*";
+                    }
                 }
             }
 

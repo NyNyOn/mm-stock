@@ -271,6 +271,24 @@ class PurchaseOrderController extends Controller
                 }
                 $puData['rejection_code'] = $mainRejectionCode; 
 
+                // ✅ Add Log Entry for History View
+                $history = $puData['history'] ?? [];
+                $history[] = [
+                    'event' => 'Rejected',
+                    'reason' => $reason,
+                    'at' => now()->toIso8601String()
+                ];
+                $puData['history'] = $history; 
+                
+                // ✅ Normalization: Support Single Item Payload (from PU Log)
+                if (empty($rejectedItemsList) && $request->has('pr_item_id')) {
+                    $rejectedItemsList = [[
+                        'pr_item_id' => $request->input('pr_item_id'),
+                        'rejection_code' => $request->input('rejection_code') ?? $request->input('reason_code') ?? $mainRejectionCode,
+                        'reason' => $request->input('reason')
+                    ]];
+                }
+
                 // --- ITEM LEVEL LOGIC ---
                 if (!empty($rejectedItemsList) && is_array($rejectedItemsList)) {
                     foreach ($rejectedItemsList as $rItem) {
@@ -282,6 +300,16 @@ class PurchaseOrderController extends Controller
                         $item = null;
                         if ($itemRef) {
                             $item = $po->items()->where('pr_item_id', $itemRef)->first();
+                        }
+                        
+                        // ✅ Fallback: Match by description if ID not found (Robustness)
+                        if (!$item && !empty($rItem['reason']) && str_contains($rItem['reason'], 'Failed to match')) {
+                             // Contextual fallback not easy without item name.
+                        }
+                        // Note: If payload includes item name, we could use it. 
+                        // Assuming payload might have 'item_name' in future.
+                        if (!$item && !empty($rItem['item_name'])) {
+                             $item = $po->items()->where('item_description', $rItem['item_name'])->first();
                         }
                         
                         if ($item) {
@@ -321,12 +349,22 @@ class PurchaseOrderController extends Controller
                 $po->pu_data = $puData;
                 $po->save();
 
-                // 🔔 Notify Rejection
+                // 🔔 Notify Rejection (Synology + In-App)
                 try {
                     $po->refresh();
-                    (new \App\Services\SynologyService())->notify(
-                        new \App\Notifications\PurchaseOrderUpdatedNotification($po, 'rejected')
-                    );
+                    $notification = new \App\Notifications\PurchaseOrderUpdatedNotification($po, 'rejected');
+
+                    // 1. Synology
+                    (new \App\Services\SynologyService())->notify($notification);
+
+                    // 2. Database (In-App) - Notify Users with Permission
+                    // Target: Users with 'po:view' or 'po:manage' OR the Requester
+                    $notifiableUsers = \App\Models\User::permission(['po:view', 'po:manage'])->get();
+                    if ($po->requester) {
+                        $notifiableUsers = $notifiableUsers->merge([$po->requester]);
+                    }
+                    \Illuminate\Support\Facades\Notification::send($notifiableUsers->unique('id'), $notification);
+
                 } catch (\Exception $e) { Log::error("Notify Rejection Error: " . $e->getMessage()); }
 
                 return response()->json(['success' => true, 'message' => 'PO designated as rejected/cancelled successfully']);
@@ -347,42 +385,67 @@ class PurchaseOrderController extends Controller
             DB::beginTransaction();
             try {
                 switch ($action) {
-                    case 'force_approve': // 1. Force Approve (User overrides rejection)
-                        // Objective: Accept item into stock despite previous rejection.
-                        // Logic: Add stock, Log Transaction, Update Status.
+                    case 'force_approve': // 1. Force Approve (PU overrides - Auto Receive)
+                        // Objective: Immediately add stock and mark as successful.
                         
-                        $qtyToReceive = $item->quantity_ordered - $item->quantity_received;
-                        if ($qtyToReceive <= 0) $qtyToReceive = 1; // Fallback if data sync issue
-
-                        // Find Equipment
-                        $equipment = $item->equipment_id ? \App\Models\Equipment::find($item->equipment_id) : null;
+                        $qtyOrdered = $item->quantity_ordered;
+                        $qtyReceived = $item->quantity_received;
                         
-                        // Update Stock
-                        if ($equipment) {
-                            $equipment->quantity += $qtyToReceive;
-                            $equipment->save();
-
-                            // Create Transaction Log
-                            \App\Models\Transaction::create([
-                                'equipment_id'    => $equipment->id,
-                                'user_id'         => 1, // System User
-                                'handler_id'      => 1,
-                                'type'            => 'receive',
-                                'quantity_change' => $qtyToReceive,
-                                'notes'           => "Accepted by PU (Force Approve) - PO {$item->purchaseOrder->po_number}",
-                                'transaction_date'=> now(),
-                                'status'          => 'completed',
-                            ]);
+                        // Check if PU sent specific quantity, otherwise use remaining
+                        $qtyToReceive = $request->input('quantity', $request->input('approved_quantity', ($qtyOrdered - $qtyReceived)));
+                        
+                        if ($qtyToReceive > 0) {
+                            $equipment = $item->equipment;
+                            if ($equipment) {
+                                $equipment->quantity += $qtyToReceive;
+                                $equipment->save();
+                                
+                                // Create Transaction Log
+                                \App\Models\Transaction::create([
+                                    'equipment_id'    => $equipment->id,
+                                    'user_id'         => $po->ordered_by_user_id ?? 1, // Fallback to Owner or Admin
+                                    'handler_id'      => null, // System Action
+                                    'type'            => 'receive',
+                                    'quantity_change' => $qtyToReceive,
+                                    'notes'           => "Force Approved by PU ({$request->inspector}) - Auto Received",
+                                    'transaction_date'=> now(),
+                                    'status'          => 'completed',
+                                    'admin_confirmed_at' => now(),
+                                    'confirmed_at' => now(),
+                                ]);
+                            }
+                            
+                            $item->quantity_received += $qtyToReceive;
                         }
-
-                        // Update Item Status
-                        $item->quantity_received = $item->quantity_ordered; // Full receive
+                        
                         $item->inspection_status = 'pass';
-                        $item->status = 'received';
+                        $item->status = ($item->quantity_received >= $qtyOrdered) ? 'received' : 'partial_receive';
+                        $item->rejection_code = null;
+                        $item->rejection_reason = null;
                         $item->inspection_notes = "Force Approved by PU ({$request->inspector})";
                         $item->save();
                         
-                        Log::info("API: Force Approved Item #{$item->id}. Stock added: {$qtyToReceive}");
+                        Log::info("API: Auto-Received Item #{$item->id} (Qty: {$qtyToReceive}) via Force Approve.");
+                        
+                        // ✅ Check PO Completion
+                        $po = $item->purchaseOrder;
+                        $pendingCount = $po->items()
+                            ->whereRaw('ifnull(quantity_received, 0) < quantity_ordered')
+                            ->whereNotIn('status', ['returned', 'inspection_failed', 'cancelled', 'rejected'])
+                            ->count();
+                            
+                        if ($pendingCount == 0) {
+                            $po->status = 'completed';
+                            $po->save();
+                            Log::info("API: Set PO #{$po->id} to 'completed' after Force Approve.");
+                        } else {
+                            // If partially done, ensure it's 'partial_receive' logic
+                            if ($po->status == 'ordered' || $po->status == 'pending') {
+                                $po->status = 'partial_receive';
+                                $po->save();
+                            }
+                        }
+                        
                         break;
 
                     case 'return': // 2. Return (User confirms return)
@@ -401,13 +464,28 @@ class PurchaseOrderController extends Controller
                         // Objective: Reset status to allow inspector to check again.
                         $item->inspection_status = null;
                         $item->inspection_notes = null;
-                        // $item->issue_qty_handled = null; 
-                        // Ensure main status allows showing in Receive page
-                        if ($item->status == 'received') {
-                             $item->status = 'shipped_from_supplier'; // Revert to shipped
-                             // WARNING: If stock was added, this is messy. But usually only comes from rejection state (no stock added).
-                        }
+                        
+                        // Force status to something NOT cancelled/returned
+                        $item->status = 'pending_inspection'; 
                         $item->save();
+
+                        // ✅ Ensure PO is visible in Receive List
+                        // ReceiveController filters for: shipped_from_supplier, partial_receive, contact_vendor
+                        // ✅ Ensure PO is visible in Receive List
+                        // ReceiveController filters for: shipped_from_supplier, partial_receive, contact_vendor
+                        $po = $item->purchaseOrder;
+                        if (in_array($po->status, ['ordered', 'cancelled', 'pending', 'completed', 'partial_receive'])) {
+                            if ($po->status == 'completed' || $po->status == 'cancelled') {
+                                $po->status = 'partial_receive'; 
+                                $po->save();
+                                Log::info("API: Re-Opened PO #{$po->id} (Status: partial_receive) for Re-Check.");
+                            }
+                            elseif ($po->status == 'ordered' || $po->status == 'pending') {
+                                $po->status = 'shipped_from_supplier';
+                                $po->save();
+                            }
+                        }
+
                         Log::info("API: Reset Item #{$item->id} for Re-Check.");
                         break;
                         
@@ -446,13 +524,13 @@ class PurchaseOrderController extends Controller
         if ($item) {
             
             // ✅ DETECT PO CHANGE (Item Moved to New PO)
-            // If PU sends a PO Code that is different from what the item currently has -> Move it!
-            if (!empty($request->po_code) && $item->purchaseOrder && $item->purchaseOrder->po_number !== $request->po_code) {
-                Log::info("API: Item #{$item->id} (PR Item {$request->pr_item_id}) indicates new PO Code '{$request->po_code}'. Processing Move...");
-                
-                // Find OK target PO or Create it? 
-                // Usually we expect the PO to exist or be created via payload. 
-                // If $po (found by A) exists, use it. If not, we might need to rely on the 'create if missing' logic below (if any) or just find strictly.
+            // Logic:
+            // 1. If Current PO has NO Code -> Just Assign (Handled by $po update below)
+            // 2. If Current PO HAS Code AND it differs from Webhook -> Move Item
+            $currentPoCode = $item->purchaseOrder->po_number ?? null;
+            
+            if (!empty($request->po_code) && $currentPoCode && $currentPoCode !== $request->po_code) {
+                Log::info("API: Item #{$item->id} (PR Item {$request->pr_item_id}) indicates new PO Code '{$request->po_code}' (Current: {$currentPoCode}). Processing Move...");
                 
                 $targetPO = PurchaseOrder::where('po_number', $request->po_code)->first();
                 if ($targetPO) {
@@ -460,15 +538,14 @@ class PurchaseOrderController extends Controller
                     $item->purchase_order_id = $targetPO->id;
                     $item->save();
                     Log::info("API: Moved Item #{$item->id} from PO #{$oldPOId} to PO #{$targetPO->id} ({$targetPO->po_number}).");
-                    $po = $targetPO; // Set current context to new PO
+                    $po = $targetPO; 
                 } else {
-                    Log::warning("API: New PO Code '{$request->po_code}' not found in system via PO Number. Cannot move item yet.");
-                    // Fallback: If we can't find the new PO, we might use the old one for now, or create?
-                    // Let's stick to old one but Log warning.
+                    Log::warning("API: New PO Code '{$request->po_code}' not found. Cannot move item yet. (Will update current PO if valid)");
                     $po = $item->purchaseOrder;
                 }
 
             } else {
+                 // First assignment or Same Code -> Use current PO, will be updated below
                  $po = $item->purchaseOrder;
             }
 
@@ -516,8 +593,18 @@ class PurchaseOrderController extends Controller
         
         // ✅ BUG FIX: Don't revert 'completed' status
         if ($po->status !== 'completed') {
-            if (in_array($newStatus, ['shipped_from_supplier', 'partial_receive', 'contact_vendor', 'ordered'])) {
+            if (in_array($newStatus, ['shipped_from_supplier', 'partial_receive', 'contact_vendor', 'ordered', 'rejected', 'cancelled'])) {
                  $po->status = $newStatus;
+                 
+                 // If PO is cancelled/rejected, mark all pending items as cancelled too
+                 if (in_array($newStatus, ['rejected', 'cancelled'])) {
+                     foreach($po->items as $item) {
+                         if ($item->status != 'received') {
+                             $item->status = 'cancelled';
+                             $item->save();
+                         }
+                     }
+                 }
             }
         } else {
              Log::info("API: Skipping status update for PO #{$po->id} because it is already COMPLETED.");
@@ -526,13 +613,41 @@ class PurchaseOrderController extends Controller
         $po->save();
         Log::info("API: Updated PO #{$po->id} (Ref: {$request->po_code}/{$request->pr_code}) to '{$po->status}'");
         
-        // ✅ Notify User (Synology) about Status Update / PO Number Assignment
+        // ✅ Notify User (Synology + In-App) about Status Update / PO Number Assignment
         try {
             // Re-load to ensure we have latest data (po_number, etc.)
             $po->refresh();
-            (new \App\Services\SynologyService())->notify(
-                new \App\Notifications\PurchaseOrderUpdatedNotification($po, $po->status)
-            );
+            $notification = new \App\Notifications\PurchaseOrderUpdatedNotification($po, $po->status);
+
+            // 1. Synology
+            (new \App\Services\SynologyService())->notify($notification);
+
+            // 2. Database (In-App)
+            // 2. Database (In-App)
+            // Fix: User::permission() scope not available. Manually find users with permission.
+            $permissionNames = ['po:view', 'po:manage'];
+            
+            // Get Permission IDs
+            $permIds = DB::connection('mysql')->table('permissions')
+                ->whereIn('name', $permissionNames)
+                ->pluck('id');
+                
+            // Get Group IDs having these permissions
+            $groupIds = DB::connection('mysql')->table('group_permissions')
+                ->whereIn('permission_id', $permIds)
+                ->pluck('user_group_id');
+                
+            // Get User IDs in these groups
+            $userIds = DB::connection('mysql')->table('service_user_roles')
+                ->whereIn('group_id', $groupIds)
+                ->pluck('user_id');
+                
+            $notifiableUsers = \App\Models\User::whereIn('id', $userIds)->get();
+            if ($po->requester) {
+                $notifiableUsers = $notifiableUsers->merge([$po->requester]);
+            }
+            \Illuminate\Support\Facades\Notification::send($notifiableUsers->unique('id'), $notification);
+
         } catch (\Exception $e) { Log::error("Webhook Notification Error: " . $e->getMessage()); }
         
         return response()->json(['success' => true, 'message' => 'Notification processed', 'po_id' => $po->id]);
