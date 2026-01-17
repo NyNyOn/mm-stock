@@ -346,8 +346,14 @@ class PurchaseOrderController extends Controller
                     }
                 }
 
+                // ✅ Capture Actor Name
+                $rejectedBy = $request->rejected_by ?? $request->inspector ?? $request->user ?? 'PU Team';
+                $puData['rejected_by'] = $rejectedBy; // Save for View
                 $po->pu_data = $puData;
                 $po->save();
+                
+                // ✅ Log History
+                $this->addPoHistoryLog($po, 'Rejected', "Reason: {$reason} (By {$rejectedBy})");
 
                 // 🔔 Notify Rejection (Synology + In-App)
                 try {
@@ -358,8 +364,17 @@ class PurchaseOrderController extends Controller
                     (new \App\Services\SynologyService())->notify($notification);
 
                     // 2. Database (In-App) - Notify Users with Permission
-                    // Target: Users with 'po:view' or 'po:manage' OR the Requester
-                    $notifiableUsers = \App\Models\User::permission(['po:view', 'po:manage'])->get();
+                    $permissionNames = ['po:view', 'po:manage'];
+                    // Query IT Stock DB for Users with these permissions (via Roles/Groups)
+                    $userIds = DB::connection('mysql')->table('service_user_roles')
+                        ->join('group_permissions', 'service_user_roles.group_id', '=', 'group_permissions.user_group_id')
+                        ->join('permissions', 'group_permissions.permission_id', '=', 'permissions.id')
+                        ->whereIn('permissions.name', $permissionNames)
+                        ->select('service_user_roles.user_id')
+                        ->distinct() // Ensure unique user IDs
+                        ->pluck('user_id');
+
+                    $notifiableUsers = \App\Models\User::whereIn('id', $userIds)->get();
                     if ($po->requester) {
                         $notifiableUsers = $notifiableUsers->merge([$po->requester]);
                     }
@@ -382,6 +397,13 @@ class PurchaseOrderController extends Controller
                 return response()->json(['success' => false, 'message' => 'Item not found'], 404);
             }
 
+            // ✅ Handle PO Splitting / Moving BEFORE Action
+            // This ensures if Force Approve creates a new PO, the item is moved there first.
+            if (!empty($request->po_code)) {
+                $this->processPoSplit($item, $request->po_code, $prItemId);
+                $item->refresh(); // Refresh relationship after potential move
+            }
+
             DB::beginTransaction();
             try {
                 switch ($action) {
@@ -391,8 +413,8 @@ class PurchaseOrderController extends Controller
                         $qtyOrdered = $item->quantity_ordered;
                         $qtyReceived = $item->quantity_received;
                         
-                        // Check if PU sent specific quantity, otherwise use remaining
-                        $qtyToReceive = $request->input('quantity', $request->input('approved_quantity', ($qtyOrdered - $qtyReceived)));
+                        // Check if PU sent specific quantity (Prioritize received_quantity)
+                        $qtyToReceive = $request->input('received_quantity', $request->input('quantity', $request->input('approved_quantity', ($qtyOrdered - $qtyReceived))));
                         
                         if ($qtyToReceive > 0) {
                             $equipment = $item->equipment;
@@ -419,7 +441,8 @@ class PurchaseOrderController extends Controller
                         }
                         
                         $item->inspection_status = 'pass';
-                        $item->status = ($item->quantity_received >= $qtyOrdered) ? 'received' : 'partial_receive';
+                        // ✅ FIX: USER REQ: Force Approve = Item is DONE (Received) regardless of quantity
+                        $item->status = 'received'; 
                         $item->rejection_code = null;
                         $item->rejection_reason = null;
                         $item->inspection_notes = "Force Approved by PU ({$request->inspector})";
@@ -427,25 +450,67 @@ class PurchaseOrderController extends Controller
                         
                         Log::info("API: Auto-Received Item #{$item->id} (Qty: {$qtyToReceive}) via Force Approve.");
                         
-                        // ✅ Check PO Completion
+                        // ✅ Check PO Completion (Smart Logic)
                         $po = $item->purchaseOrder;
+                        $po->refresh(); // Refresh items status
+
                         $pendingCount = $po->items()
                             ->whereRaw('ifnull(quantity_received, 0) < quantity_ordered')
+                            ->where('status', '!=', 'received')
                             ->whereNotIn('status', ['returned', 'inspection_failed', 'cancelled', 'rejected'])
                             ->count();
                             
                         if ($pendingCount == 0) {
-                            $po->status = 'completed';
+                            // All "active" items are done. Now determine Final Status based on composition.
+                            $successCount = $po->items()->where(function($q){
+                                $q->where('status', 'received')->orWhere('status', 'completed');
+                            })->count();
+                            $issueCount = $po->items()->whereIn('status', ['returned', 'inspection_failed'])->count();
+                            $rejectCount = $po->items()->whereIn('status', ['cancelled', 'rejected'])->count();
+                            $totalCount = $po->items()->count();
+
+                            if ($successCount > 0 && ($issueCount > 0 || $rejectCount > 0)) {
+                                // Mixed: Keep Open as Partial Receive
+                                $po->status = 'partial_receive';
+                                Log::info("API: PO #{$po->id} set to 'partial_receive' (Mixed Success & Issues).");
+                            } elseif ($successCount == 0 && $issueCount > 0) {
+                                // All Issues: Inspection Failed
+                                $po->status = 'inspection_failed';
+                                Log::info("API: PO #{$po->id} set to 'inspection_failed' (All Items have Issues).");
+                            } elseif ($successCount == 0 && $rejectCount > 0) {
+                                // All Rejected: Cancelled
+                                $po->status = 'cancelled';
+                                Log::info("API: PO #{$po->id} set to 'cancelled' (All Items Rejected).");
+                            } else {
+                                // All Good
+                                $po->status = 'completed';
+                                Log::info("API: Set PO #{$po->id} to 'completed'.");
+                            }
                             $po->save();
-                            Log::info("API: Set PO #{$po->id} to 'completed' after Force Approve.");
                         } else {
-                            // If partially done, ensure it's 'partial_receive' logic
-                            if ($po->status == 'ordered' || $po->status == 'pending') {
+                            // If pending > 0 (Still has items left)
+                            // Update status to reflect activity (e.g. from Rejected -> Partial)
+                            $validActiveStatuses = ['ordered', 'pending', 'shipped_from_supplier', 'rejected', 'cancelled', 'inspection_failed'];
+                            
+                            if (in_array($po->status, $validActiveStatuses)) {
                                 $po->status = 'partial_receive';
                                 $po->save();
                             }
                         }
+
+                        // ✅ Log History
+                        $this->addPoHistoryLog($po, 'Force Approved', "By {$request->inspector} (Qty: {$qtyToReceive})");
                         
+                        // ✅ NOTIFY: Trigger "Force Approve" Notification
+                        try {
+                            $notify = new \App\Notifications\PurchaseOrderUpdatedNotification(
+                                $po, 
+                                'force_approve', 
+                                ['note' => "ดำเนินการโดย: {$request->inspector}", 'item_id' => $item->id]
+                            );
+                            (new \App\Services\SynologyService())->notify($notify);
+                        } catch (\Exception $e) { Log::error("Failed to send ForceApprove Notify: " . $e->getMessage()); }
+
                         break;
 
                     case 'return': // 2. Return (User confirms return)
@@ -457,6 +522,20 @@ class PurchaseOrderController extends Controller
                         $item->save();
                         
                         Log::info("API: Returned Item #{$item->id}. Waiting for new PO alignment.");
+
+                        // ✅ Log History
+                        $this->addPoHistoryLog($item->purchaseOrder, 'Item Returned', "Item #{$item->id} returned by {$request->inspector}");
+
+                        // ✅ NOTIFY: Trigger "Return" Notification
+                        try {
+                            $notify = new \App\Notifications\PurchaseOrderUpdatedNotification(
+                                $item->purchaseOrder, 
+                                'return', 
+                                ['note' => "ดำเนินการโดย: {$request->inspector} (รายการ: {$item->item_description})", 'item_id' => $item->id]
+                            );
+                            (new \App\Services\SynologyService())->notify($notify);
+                        } catch (\Exception $e) { Log::error("Failed to send Return Notify: " . $e->getMessage()); }
+
                         break;
 
                     case 'inspection_recheck': // Alias from actual PU log
@@ -474,8 +553,11 @@ class PurchaseOrderController extends Controller
                         // ✅ Ensure PO is visible in Receive List
                         // ReceiveController filters for: shipped_from_supplier, partial_receive, contact_vendor
                         $po = $item->purchaseOrder;
-                        if (in_array($po->status, ['ordered', 'cancelled', 'pending', 'completed', 'partial_receive'])) {
-                            if ($po->status == 'completed' || $po->status == 'cancelled') {
+                        $validReopenStatuses = ['ordered', 'cancelled', 'pending', 'completed', 'partial_receive', 'rejected', 'inspection_failed'];
+                        
+                        if (in_array($po->status, $validReopenStatuses)) {
+                            // If it was Closed/Rejected -> Re-open to Partial Receive
+                            if (in_array($po->status, ['completed', 'cancelled', 'rejected', 'inspection_failed'])) {
                                 $po->status = 'partial_receive'; 
                                 $po->save();
                                 Log::info("API: Re-Opened PO #{$po->id} (Status: partial_receive) for Re-Check.");
@@ -487,7 +569,47 @@ class PurchaseOrderController extends Controller
                         }
 
                         Log::info("API: Reset Item #{$item->id} for Re-Check.");
+
+                        // ✅ Log History
+                        $this->addPoHistoryLog($item->purchaseOrder, 'Recheck Requested', "Item #{$item->id} recheck by {$request->inspector}");
+
+                        // ✅ NOTIFY: Trigger "Recheck" Notification
+                        try {
+                            $notify = new \App\Notifications\PurchaseOrderUpdatedNotification(
+                                $item->purchaseOrder, 
+                                'recheck', 
+                                ['note' => "ข้อความจากจัดซื้อ: {$request->inspector}", 'item_id' => $item->id]
+                            );
+                            (new \App\Services\SynologyService())->notify($notify);
+                        } catch (\Exception $e) { Log::error("Failed to send Recheck Notify: " . $e->getMessage()); }
+
                         break;
+
+                    case 'rejected': // 4. Rejected (PU confirms rejection)
+                         // Set Item Status
+                         $item->status = 'cancelled';
+                         // Use provided code or default to 1 (General)
+                         $item->rejection_code = $request->rejection_code ?? 1;
+                         $item->rejection_reason = $request->reason ?? $request->note ?? 'Rejected by PU';
+                         $item->save();
+
+                         // Update PO Status (Smart Logic - similar to force_approve but for rejection)
+                         $this->updatePoStatusAfterItemChange($item->purchaseOrder);
+
+                         // ✅ Log History
+                         $rejectedBy = $request->rejected_by ?? $request->inspector ?? 'PU Team';
+                         $this->addPoHistoryLog($item->purchaseOrder, 'Item Rejected', "Item #{$item->id} rejected by {$rejectedBy}: {$item->rejection_reason}");
+
+                         // ✅ NOTIFY: Trigger "Rejected" Notification (Item Level)
+                         try {
+                              $notify = new \App\Notifications\PurchaseOrderUpdatedNotification(
+                                  $item->purchaseOrder, 
+                                  'rejected', 
+                                  ['note' => "ปฏิเสธโดย: {$rejectedBy} (เหตุผล: {$item->rejection_reason})", 'item_id' => $item->id]
+                              );
+                              (new \App\Services\SynologyService())->notify($notify);
+                         } catch (\Exception $e) { Log::error("Failed to send Rejected Notify: " . $e->getMessage()); }
+                         break;
                         
                     default:
                         Log::warning("API: Unknown action '{$action}' for inspection result.");
@@ -513,9 +635,23 @@ class PurchaseOrderController extends Controller
         $po = PurchaseOrder::where('po_number', $request->po_code)->first();
     }
 
-    // B. Try matching by PR Number (if not found yet and pr_code provided)
+    // B. Try matching by PR Number (Priority: Active POs without PO Number)
     if (!$po && !empty($request->pr_code)) {
-        $po = PurchaseOrder::where('pr_number', $request->pr_code)->first();
+        // Prioritize: 1. Active Status, 2. No PO Number yet
+        $po = PurchaseOrder::where('pr_number', $request->pr_code)
+            ->whereNotIn('status', ['cancelled', 'rejected'])
+            ->where(function($q) {
+                $q->whereNull('po_number')->orWhere('po_number', '');
+            })
+            ->orderBy('id', 'desc')
+            ->first();
+
+        // Fallback: If no "clean" PO found, try any active PO (maybe updating existing one?)
+        if (!$po) {
+            $po = PurchaseOrder::where('pr_number', $request->pr_code)
+                 ->whereNotIn('status', ['cancelled', 'rejected'])
+                 ->first();
+        }
     }
 
     // C. Try matching by Item ID (Reliable fallback if we saved pr_item_id)
@@ -524,51 +660,16 @@ class PurchaseOrderController extends Controller
         if ($item) {
             
             // ✅ DETECT PO CHANGE (Item Moved to New PO - SPLITTING)
-            // Logic:
-            // 1. If Current PO has NO Code -> Just Assign (Handled by $po update below)
-            // 2. If Current PO HAS Code AND it differs from Webhook -> Move Item (Split)
-            $currentPoCode = $item->purchaseOrder->po_number ?? null;
-            $newPoCode = $request->po_code;
-            
-            if (!empty($newPoCode) && $currentPoCode && $currentPoCode !== $newPoCode) {
-                Log::info("API: Item #{$item->id} (PR Item {$request->pr_item_id}) indicates new PO Code '{$newPoCode}' (Current: {$currentPoCode}). Processing Move/Split...");
-                
-                // 1. Check if Target PO already exists
-                $targetPO = PurchaseOrder::where('po_number', $newPoCode)->first();
-                
-                if (!$targetPO) {
-                    // 2. If NOT exists -> Duplicate (Split) from Original PO
-                    Log::info("API: Target PO '{$newPoCode}' not found. Creating new Split PO from #{$item->purchase_order_id}...");
-                    
-                    $originalPO = $item->purchaseOrder;
-                    $targetPO = $originalPO->replicate(); 
-                    
-                    // Set New Details
-                    $targetPO->po_number = $newPoCode;
-                    $targetPO->status = 'ordered'; // Default status for new split PO
-                    // Reset created/updated timestamps will be handled by Eloquent, but logic:
-                    $targetPO->ordered_at = now();
-                    $targetPO->pu_data = array_merge($originalPO->pu_data ?? [], ['split_from' => $originalPO->po_number, 'split_at' => now()->toIso8601String()]);
-                    $targetPO->save();
-                    
-                    Log::info("API: Created Split PO #{$targetPO->id} (PO: {$newPoCode} / PR: {$targetPO->pr_number})");
-                }
-
-                // 3. Move Item to Target PO
-                $oldPOId = $item->purchase_order_id;
-                $item->purchase_order_id = $targetPO->id;
-                $item->save();
-                
-                Log::info("API: Moved Item #{$item->id} from PO #{$oldPOId} to PO #{$targetPO->id} ({$targetPO->po_number}).");
-                
-                // Switch context to New PO
-                $po = $targetPO; 
-
-            } else {
-                 // First assignment or Same Code -> Use current PO, will be updated below
-                 $po = $item->purchaseOrder;
+            // Logic handled by helper function now
+            if (!empty($request->po_code)) {
+                $this->processPoSplit($item, $request->po_code, $request->pr_item_id);
+                // ✅ FIX: Refresh item to clear relationship cache (so $item->purchaseOrder returns the NEW PO)
+                $item->refresh();
+                $item->unsetRelation('purchaseOrder'); 
             }
 
+            // switch context if moved (helper updates item, we need to update $po local var if needed)
+            $po = $item->purchaseOrder; 
             
              // ✅ RESET INSPECTION STATUS (Logic moved to 'recheck' action above, but kept here for legacy/simple updates)
             if ($request->status == 'shipped_from_supplier' || $request->status == 'arrived_at_hub') {
@@ -588,7 +689,13 @@ class PurchaseOrderController extends Controller
     if ($po) {
         // ✅ sync fields strict update: Always update if PU sends them
         if (!empty($request->po_code)) {
-            $po->po_number = $request->po_code;
+            // Check for potential duplicate before updating
+            $existingOwner = PurchaseOrder::where('po_number', $request->po_code)->where('id', '!=', $po->id)->first();
+            if ($existingOwner) {
+                Log::warning("API: PO Number Collision! {$request->po_code} already belongs to PO #{$existingOwner->id}. Skipping update for PO #{$po->id}.");
+            } else {
+                $po->po_number = $request->po_code;
+            }
         }
         if (!empty($request->pr_code)) {
             $po->pr_number = $request->pr_code;
@@ -676,5 +783,117 @@ class PurchaseOrderController extends Controller
         Log::warning("API: PO not found for code: " . ($request->po_code ?? $request->pr_code ?? 'N/A') . " / Item: " . $request->pr_item_id);
         return response()->json(['success' => false, 'message' => 'PO/PR Reference not found'], 404);
     }
+    }
+
+    // Helper to handle PO Splitting logic
+    private function processPoSplit($item, $newPoCode, $prItemId)
+    {
+        $currentPoCode = $item->purchaseOrder->po_number ?? null;
+
+        // Condition 1: PO Change (A -> B)
+        $isChange = ($currentPoCode && $currentPoCode !== $newPoCode);
+        
+        // Condition 2: Initial Assignment (Null -> A) BUT valid to split if PO has multiple items
+        // If we don't check this, the first item will just rename the whole PO, dragging pending items with it.
+        $isSplitRequired = false;
+        if (!$currentPoCode && $newPoCode) {
+            $otherItemsCount = $item->purchaseOrder->items()->where('id', '!=', $item->id)->count();
+            // If there are other items, we SHOULD split this one out to be safe/granular
+            if ($otherItemsCount > 0) {
+                $isSplitRequired = true;
+            }
+        }
+
+        if ($isChange || $isSplitRequired) {
+            Log::info("API: Item #{$item->id} (PR Item {$prItemId}) indicates new PO Code '{$newPoCode}' (Current: {$currentPoCode}). Processing Move/Split...");
+            
+            // 1. Check if Target PO already exists
+            $targetPO = PurchaseOrder::where('po_number', $newPoCode)->first();
+            
+            if (!$targetPO) {
+                // 2. If NOT exists -> Duplicate (Split) from Original PO
+                Log::info("API: Target PO '{$newPoCode}' not found. Creating new Split PO from #{$item->purchase_order_id}...");
+                
+                $originalPO = $item->purchaseOrder;
+                $targetPO = $originalPO->replicate(); 
+                
+                // Set New Details
+                $targetPO->po_number = $newPoCode;
+                $targetPO->status = 'ordered'; 
+                $targetPO->ordered_at = now();
+                $targetPO->pu_data = array_merge($originalPO->pu_data ?? [], ['split_from' => $originalPO->po_number, 'split_at' => now()->toIso8601String()]);
+                $targetPO->save();
+                
+                Log::info("API: Created Split PO #{$targetPO->id} (PO: {$newPoCode} / PR: {$targetPO->pr_number})");
+            }
+
+            // 3. Move Item to Target PO
+            $oldPOId = $item->purchase_order_id;
+            $item->purchase_order_id = $targetPO->id;
+            $item->save();
+            
+            Log::info("API: Moved Item #{$item->id} from PO #{$oldPOId} to PO #{$targetPO->id} ({$targetPO->po_number}).");
+            
+            return $targetPO;
+        }
+        
+        return null;
+    }
+
+    private function addPoHistoryLog($po, $event, $reason = '-')
+    {
+        $puData = $po->pu_data ?? [];
+        $history = $puData['history'] ?? [];
+        $history[] = [
+            'event' => $event,
+            'reason' => $reason,
+            'at' => now()->toIso8601String()
+        ];
+        $puData['history'] = $history;
+        $po->pu_data = $puData;
+        $po->saveQuietly(); // Use saveQuietly to avoid triggering observers/events if not needed, or just save()
+    }
+
+    // Helper: Logic to update PO Status after item change (Smart Completion Logic)
+    private function updatePoStatusAfterItemChange($po) 
+    {
+        $po->refresh(); // Refresh items status
+
+        $pendingCount = $po->items()
+            ->whereRaw('ifnull(quantity_received, 0) < quantity_ordered')
+            ->where('status', '!=', 'received')
+            ->whereNotIn('status', ['returned', 'inspection_failed', 'cancelled', 'rejected'])
+            ->count();
+            
+        if ($pendingCount == 0) {
+            // All "active" items are done. Now determine Final Status based on composition.
+            $successCount = $po->items()->where(function($q){
+                $q->where('status', 'received')->orWhere('status', 'completed');
+            })->count();
+            $issueCount = $po->items()->whereIn('status', ['returned', 'inspection_failed'])->count();
+            $rejectCount = $po->items()->whereIn('status', ['cancelled', 'rejected'])->count();
+
+            if ($successCount > 0 && ($issueCount > 0 || $rejectCount > 0)) {
+                // Mixed: Keep Open as Partial Receive
+                $po->status = 'partial_receive';
+            } elseif ($successCount == 0 && $issueCount > 0) {
+                // All Issues: Inspection Failed
+                $po->status = 'inspection_failed';
+            } elseif ($successCount == 0 && $rejectCount > 0) {
+                // All Rejected: Cancelled
+                $po->status = 'cancelled';
+            } else {
+                // All Good
+                $po->status = 'completed';
+            }
+            $po->save();
+        } else {
+            // If pending > 0 (Still has items left)
+            $validActiveStatuses = ['ordered', 'pending', 'shipped_from_supplier', 'rejected', 'cancelled', 'inspection_failed'];
+            if (in_array($po->status, $validActiveStatuses)) {
+                $po->status = 'partial_receive';
+                $po->save();
+            }
+        }
     }
 }

@@ -293,8 +293,13 @@ class PurchaseOrderController extends Controller
             throw new \Exception($errorMessage);
         }
 
-        $order->status = 'ordered';
-        $order->ordered_at = now();
+        // ✅ Prevent Status Rewind: Only set to 'ordered' if currently pending or starting fresh.
+        // If already shipped/completed, keep the current status (just a data sync).
+        $advancedStatuses = ['shipped_from_supplier', 'partial_receive', 'completed', 'inspection_failed', 'returned'];
+        if (!in_array($order->status, $advancedStatuses)) {
+            $order->status = 'ordered';
+            $order->ordered_at = now();
+        }
         // ❗️ FIXED: Removed the line that was incorrectly overwriting the requester ID.
         // $order->ordered_by_user_id = Auth::id(); // This was the bug.
 

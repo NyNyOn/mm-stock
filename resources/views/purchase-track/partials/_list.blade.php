@@ -1,14 +1,25 @@
 @foreach($purchaseOrders as $po)
     @php
         $isCompleted = $po->status === 'completed';
+        // ✅ Also Compact for Rejected/Inspection Failed items (Implicit & Explicit)
+        $implicitRejection = ($po->items->count() > 0 && $po->items->whereIn('status', ['cancelled', 'rejected'])->count() == $po->items->count());
+        $isRejectedContext = in_array($po->status, ['cancelled', 'inspection_failed', 'rejected']) || $implicitRejection;
+        
+        $isCompact = $isCompleted || $isRejectedContext;
+        
+        $statusTheme = $isRejectedContext ? 'red' : 'green';
     @endphp
 
-    @if($isCompleted)
-        {{-- Collapsed Summary for Completed Orders --}}
-        <div id="summary-{{$po->id}}" onclick="togglePo('{{$po->id}}')" class="bg-gradient-to-r from-green-50 to-white overflow-hidden shadow-sm sm:rounded-xl border border-green-200 cursor-pointer hover:shadow-md transition-all group p-4 flex items-center justify-between relative">
+    @if($isCompact)
+        {{-- Collapsed Summary for Completed/Rejected Orders --}}
+        <div id="summary-{{$po->id}}" onclick="togglePo('{{$po->id}}')" class="bg-gradient-to-r from-{{$statusTheme}}-50 to-white overflow-hidden shadow-sm sm:rounded-xl border border-{{$statusTheme}}-200 cursor-pointer hover:shadow-md transition-all group p-4 flex items-center justify-between relative mb-4">
             <div class="flex items-center gap-4">
-                 <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 shadow-sm group-hover:scale-110 transition-transform">
-                     <i class="fas fa-check"></i>
+                 <div class="w-10 h-10 rounded-full bg-{{$statusTheme}}-100 flex items-center justify-center text-{{$statusTheme}}-600 shadow-sm group-hover:scale-110 transition-transform">
+                     @if($isRejectedContext)
+                        <i class="fas fa-exclamation-triangle"></i>
+                     @else
+                        <i class="fas fa-check"></i>
+                     @endif
                  </div>
                  <div>
                     <div class="flex items-center gap-2">
@@ -17,7 +28,11 @@
                              {{ !empty($po->po_number) && !empty($po->pr_number) ? ' | ' : '' }}
                              {{ !empty($po->pr_number) ? 'PR: '.$po->pr_number : 'PO #'.$po->id }}
                          </span>
-                         <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200 shadow-sm animate-pulse">สำเร็จ</span>
+                         @if($isRejectedContext)
+                            <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full border border-red-200 shadow-sm">ถูกปฏิเสธ/พบปัญหา</span>
+                         @else
+                            <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200 shadow-sm animate-pulse">สำเร็จ</span>
+                         @endif
                     </div>
                      <p class="text-xs text-gray-500 mt-0.5"><i class="far fa-clock mr-1"></i> {{ $po->updated_at->format('d/m/Y H:i') }} (ล่าสุด)</p>
                  </div>
@@ -25,7 +40,11 @@
             <div class="flex items-center gap-3">
                  <div class="text-right hidden sm:block">
                      <p class="text-sm font-bold text-gray-700">{{ $po->items->first()->item_name }} {{ $po->items->count() > 1 ? '... (+'.($po->items->count()-1).')' : '' }}</p>
-                     <p class="text-xs text-gray-500">{{ $po->requester->department->name ?? '-' }}</p>
+                     @if($isRejectedContext) 
+                        <p class="text-xs text-red-500">{{ $po->items->whereIn('status', ['cancelled', 'rejected', 'inspection_failed', 'returned'])->count() }} รายการมีปัญหา</p>
+                     @else
+                        <p class="text-xs text-gray-500">{{ $po->requester->department->name ?? '-' }}</p>
+                     @endif
                  </div>
                  <button class="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 group-hover:text-indigo-600 shadow-sm">
                      <i class="fas fa-chevron-down"></i>
@@ -35,10 +54,10 @@
     @endif
 
     <!-- Card รายการสั่งซื้อ -->
-    <div id="card-{{$po->id}}" class="bg-white overflow-hidden shadow-md sm:rounded-xl border border-gray-200 {{ $isCompleted ? 'hidden' : '' }}">
-         @if($isCompleted)
-             <div class="bg-green-50 px-4 py-1 border-b border-green-100 flex justify-center cursor-pointer hover:bg-green-100 transition-colors" onclick="togglePo('{{$po->id}}')" title="คลิกเพื่อย่อเก็บ">
-                  <span class="text-xs font-bold text-green-700 flex items-center gap-1">
+    <div id="card-{{$po->id}}" class="bg-white overflow-hidden shadow-md sm:rounded-xl border border-gray-200 {{ $isCompact ? 'hidden' : '' }} mb-4">
+         @if($isCompact)
+             <div class="bg-{{$statusTheme}}-50 px-4 py-1 border-b border-{{$statusTheme}}-100 flex justify-center cursor-pointer hover:bg-{{$statusTheme}}-100 transition-colors" onclick="togglePo('{{$po->id}}')" title="คลิกเพื่อย่อเก็บ">
+                  <span class="text-xs font-bold text-{{$statusTheme}}-700 flex items-center gap-1">
                       <i class="fas fa-chevron-up"></i> ย่อรายละเอียด (Collapse)
                   </span>
              </div>
@@ -71,8 +90,8 @@
                                 <span class="text-gray-400 font-medium text-lg">-</span>
                             @endif
 
-                            {{-- 2. Show PO Number (if available) - HIDDEN if Returned --}}
-                            @if(!empty($po->po_number) && !$hasReturnedItems)
+                            {{-- 2. Show PO Number (if available) - ALWAYS SHOW --}}
+                            @if(!empty($po->po_number))
                                 <div class="flex items-center gap-1.5">
                                     <span class="text-[10px] uppercase font-bold text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded border border-gray-300 min-w-[24px] text-center">PO</span>
                                     <h3 class="text-lg font-bold text-gray-900 tracking-tight leading-none">{{ $po->po_number }}</h3>
@@ -143,15 +162,7 @@
                                     </span>
                                 @endif
 
-                                {{-- ✈️ Resend/Retry Button (User Request) --}}
-                                @if(in_array($po->status, ['ordered', 'approved', 'shipped_from_supplier', 'partial_receive', 'completed'])) 
-                                    <form action="{{ route('purchase-orders.retry-send', $po->id) }}" method="POST" class="inline-block" onsubmit="return confirm('ยืนยันการส่งข้อมูลซ้ำไปยัง PU (Resend)? \nใช้ในกรณีที่ข้อมูลไม่ตรงกันหรือ PU ไม่ได้รับข้อมูล');">
-                                        @csrf
-                                        <button type="submit" class="p-1.5 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors" title="ส่งข้อมูลซ้ำไปยัง PU (Resend Payload)">
-                                            <i class="fas fa-paper-plane"></i>
-                                        </button>
-                                    </form>
-                                @endif
+                                {{-- ✈️ Resend Button Removed (Issue Resolved) --}}
                             @else
                                 {{-- Cancelled Badge --}}
                                 <span class="px-3 py-1 ml-2 rounded text-xs font-bold bg-red-100 text-red-600 border border-red-200 flex items-center shadow-sm">
@@ -348,49 +359,73 @@
                             'desc' => !empty($po->po_number) ? 'ได้รับเลข PO เรียบร้อย' : (!empty($po->pr_number) ? 'รอออกเลข PO' : 'ส่งคำขอไปที่ PU'), 
                             'icon' => 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
                         ],
-                        'shipped_from_supplier' => ['label' => 'อยู่ระหว่างจัดส่ง', 'desc' => 'PU แจ้งส่งของ', 'icon' => 'M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0'],
                     ];
 
-                    // ✅ Inject Step 3: Problem/Return (if applicable)
-                    if ($hasIssues) {
-                        $steps['issue'] = [
-                            'label' => 'พบปัญหา/รอแก้ไข', 
-                            'desc' => 'รอ PO ใหม่ หรือ เคลมสินค้า', 
-                            'icon' => 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
-                        ];
-                    }
+                    // ✅ Check for "Implicit Full Rejection" (All items rejected but PO status might lag or be 'ordered')
+                    $totalItems = $po->items->count();
+                    $rejectedItemsCount = $po->items->whereIn('status', ['cancelled', 'rejected'])->count();
+                    $isFullyRejectedItems = ($totalItems > 0 && $totalItems == $rejectedItemsCount);
 
-                    $steps['completed'] = ['label' => 'รับของสำเร็จ', 'desc' => 'เข้าสต๊อกเรียบร้อย', 'icon' => 'M5 13l4 4L19 7'];
+                    $isRejected = in_array($po->status, ['cancelled', 'rejected']) || $isFullyRejectedItems;
+
+
+                    if ($isRejected) {
+                         // ✅ RED PATH: Timeline ends at Rejection
+                         $steps['rejected'] = [
+                            'label' => 'ถูกปฏิเสธ (Rejected)', 
+                            'desc' => 'ยกเลิก/ไม่ผ่านการอนุมัติ', 
+                            'icon' => 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z'
+                         ];
+                    } else {
+                        // ✅ GREEN PATH: Standard Shipping -> Complete/Issue
+                         $steps['shipped_from_supplier'] = ['label' => 'อยู่ระหว่างจัดส่ง', 'desc' => 'PU แจ้งส่งของ', 'icon' => 'M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0'];
+                         
+                         // Issue Step
+                         if ($hasIssues) {
+                             $steps['issue'] = [
+                                 'label' => 'พบปัญหา/รอแก้ไข', 
+                                 'desc' => 'รอ PO ใหม่ หรือ เคลมสินค้า', 
+                                 'icon' => 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+                             ];
+                         }
+                         $steps['completed'] = ['label' => 'รับของสำเร็จ', 'desc' => 'เข้าสต๊อกเรียบร้อย', 'icon' => 'M5 13l4 4L19 7'];
+                    }
 
                     $currentStatus = $po->status;
                     if ($currentStatus == 'partial_receive') $currentStatus = 'shipped_from_supplier'; 
                     if ($currentStatus == 'approved') $currentStatus = 'ordered';
                     if ($currentStatus == 'pending') $currentStatus = 'ordered'; 
-
+                    
                     $statusKeys = array_keys($steps);
                     $currentIndex = array_search($currentStatus, $statusKeys);
                     
-                    // Logic to set active index for Issue step
-                    if ($hasIssues && $currentIndex === false) {
+                    if ($isRejected) {
+                        $currentIndex = 1; // Always end at 'rejected'
+                    }
+                    
+                    // Logic to set active index for Issue step (active but not rejected)
+                    if (!$isRejected && $hasIssues && $currentIndex === false) {
                          if ($currentStatus != 'completed') {
                              $currentIndex = array_search('issue', $statusKeys);
                          }
                     }
 
                     // ✅ Force Issue Step if has issues (Override standard status logic except completed)
-                    if ($hasIssues && $currentStatus != 'completed') {
+                    if (!$isRejected && $hasIssues && $currentStatus != 'completed') {
                         $currentIndex = array_search('issue', $statusKeys);
                     }
 
                     if ($currentIndex === false && $po->status == 'ordered') $currentIndex = 0;
                     if ($po->status == 'completed') $currentIndex = count($steps) - 1;
+                    
+                    $barColor = $isRejected ? 'bg-red-500' : 'bg-green-500';
                 @endphp
 
                 <div class="relative">
                     <div class="absolute top-5 left-0 w-full h-1 bg-gray-200 -translate-y-1/2 rounded-full z-0"></div>
                     
                     {{-- ✅ Progress Bar fixed to start from center of first node to center of current node --}}
-                    <div class="absolute top-5 h-1 bg-green-500 -translate-y-1/2 rounded-full z-0 transition-all duration-1000 ease-out" 
+                    <div class="absolute top-5 h-1 {{ $barColor }} -translate-y-1/2 rounded-full z-0 transition-all duration-1000 ease-out" 
                          style="left: {{ 50 / count($steps) }}%; width: {{ $currentIndex * (100 / count($steps)) }}%;"></div>
 
                     <div class="relative z-10 flex justify-between w-full">
@@ -433,7 +468,7 @@
                             
                             // ✅ ITEM SEPARATION LOGIC
                             $isRejectedPage = request()->routeIs('purchase-track.rejected');
-                            $itemIsRejected = $item->status == 'cancelled';
+                            $itemIsRejected = in_array($item->status, ['cancelled', 'rejected', 'returned', 'inspection_failed']);
 
                             // If on Rejected Page, show ONLY rejected items (and maybe items that belong to a fully rejected PO)
                             // If whole PO is rejected, show all items? Or just rejected ones?

@@ -28,7 +28,8 @@ class ReceiveController extends Controller
                 'items' => function ($query) {
                     $query->where(function ($q) {
                         $q->whereNull('quantity_received')
-                          ->orWhereRaw('quantity_received < quantity_ordered');
+                          ->orWhereRaw('quantity_received < quantity_ordered')
+                          ->orWhere('status', 'pending_inspection'); // ✅ Show Rechecked Items
                     })
                     // ✅ Exclude Rejected/Cancelled items from the Receive View
                     ->whereNotIn('status', ['returned', 'cancelled', 'rejected', 'inspection_failed'])
@@ -43,7 +44,8 @@ class ReceiveController extends Controller
             ->whereHas('items', function ($query) {
                 $query->where(function ($q) {
                     $q->whereNull('quantity_received')
-                      ->orWhereRaw('quantity_received < quantity_ordered');
+                      ->orWhereRaw('quantity_received < quantity_ordered')
+                      ->orWhere('status', 'pending_inspection'); // ✅ Show Rechecked Items
                 })->whereNotIn('status', ['returned', 'cancelled', 'rejected', 'inspection_failed']); // ✅ Apply same filter to PO detection
             })
             ->orderBy('created_at', 'desc')
@@ -204,11 +206,37 @@ class ReceiveController extends Controller
                         })->count();
 
                     if ($pendingItemsCount == 0) {
-                        $purchaseOrder->update(['status' => 'completed']);
+                        // All "active" items are handled. Now determine Final Status based on composition.
+                        // Refresh relation to get latest statuses
+                        $purchaseOrder->refresh();
+                        
+                        $successCount = $purchaseOrder->items()->where(function($q){ 
+                            $q->where('status', 'received')->orWhere('status', 'completed'); 
+                        })->count();
+                        
+                        $issueCount = $purchaseOrder->items()->whereIn('status', ['returned', 'inspection_failed'])->count();
+                        $rejectCount = $purchaseOrder->items()->whereIn('status', ['cancelled', 'rejected'])->count();
+
+                        Log::info("DEBUG PO #{$purchaseOrder->id} Counts: Success={$successCount}, Issue={$issueCount}, Reject={$rejectCount}");
+
+                        if ($successCount > 0 && ($issueCount > 0 || $rejectCount > 0)) {
+                            // Mixed: Keep Open as Partial Receive
+                            $purchaseOrder->update(['status' => 'partial_receive']);
+                        } elseif ($successCount == 0 && $issueCount > 0) {
+                            // All Issues: Inspection Failed
+                            $purchaseOrder->update(['status' => 'inspection_failed']);
+                        } elseif ($successCount == 0 && $rejectCount > 0) {
+                            // All Rejected: Cancelled
+                            $purchaseOrder->update(['status' => 'cancelled']);
+                        } else {
+                            // All Good
+                            $purchaseOrder->update(['status' => 'completed']);
+                        }
                     } else {
-                        // If logic was previously completed but now we found pending (unlikely in this flow but safe)
+                        // If logic was previously completed but now we found pending
                         // Or just to set partial
-                        if ($purchaseOrder->status != 'completed') {
+                        $validActiveStatuses = ['ordered', 'pending', 'shipped_from_supplier', 'rejected', 'cancelled', 'inspection_failed'];
+                        if (in_array($purchaseOrder->status, $validActiveStatuses)) {
                              $purchaseOrder->update(['status' => 'partial_receive']);
                         }
                     }
@@ -307,6 +335,23 @@ class ReceiveController extends Controller
                          Log::info('[ReceiveController] Successfully sent inspection results to PU-HUB', [
                             'count' => count($inspections)
                         ]);
+
+                        // ✅ NOTIFICATION: Send "Problem Report" if there are rejected items
+                        try {
+                            $hasRejections = collect($inspections)->where('status', 'rejected')->isNotEmpty();
+                            if ($hasRejections) {
+                                // Find a PO to attach notification to (Use the first one involved)
+                                $firstPoId = array_key_first($poIdsToUpdate);
+                                $poForNotify = PurchaseOrder::find($firstPoId);
+                                
+                                if ($poForNotify) {
+                                    $notify = new \App\Notifications\PurchaseOrderUpdatedNotification($poForNotify, 'problem_report');
+                                    (new \App\Services\SynologyService())->notify($notify);
+                                }
+                            }
+                        } catch (\Exception $e) {
+                             Log::error("Failed to send Problem Report Notification: " . $e->getMessage());
+                        }
                     }
                 }
             } catch (\Exception $e) {

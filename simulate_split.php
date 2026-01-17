@@ -11,9 +11,10 @@ $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
 // 1. Setup Test Data
+$uniq = uniqid();
 $po = PurchaseOrder::create([
-    'po_number' => 'PO-TEST-ORIGINAL',
-    'pr_number' => 'PR-TEST-SHARED',
+    'po_number' => 'PO-TEST-' . $uniq,
+    'pr_number' => 'PR-TEST-' . $uniq,
     'status' => 'ordered',
     'ordered_by_user_id' => 1,
     'type' => 'scheduled'
@@ -22,16 +23,16 @@ $po = PurchaseOrder::create([
 $item1 = $po->items()->create([
     'item_description' => 'Item 1 (Stay)',
     'quantity_ordered' => 10,
-    'pr_item_id' => 9001
+    'pr_item_id' => 9001 + rand(0, 1000)
 ]);
 
 $item2 = $po->items()->create([
     'item_description' => 'Item 2 (Move)',
     'quantity_ordered' => 5,
-    'pr_item_id' => 9002
+    'pr_item_id' => 9002 + rand(0, 1000)
 ]);
 
-echo "Created PO #{$po->id} with Items 9001, 9002.\n";
+echo "Created PO #{$po->id} ({$po->po_number}) with Items...\n";
 
 // 2. Simulate Webhook for Item 2 -> New PO
 // Set temporary secret
@@ -40,10 +41,13 @@ echo "Created PO #{$po->id} with Items 9001, 9002.\n";
 $controller = app(\App\Http\Controllers\Api\PurchaseOrderController::class);
 $request = new \Illuminate\Http\Request();
 $request->replace([
-    'event' => 'item_status_updated',
-    'pr_item_id' => 9002,
-    'po_code' => 'PO-TEST-NEW-SPLIT', // New Code
-    'status' => 'shipped_from_supplier'
+    'event' => 'item_inspection_result', // Force Approve is usually inside this event or similar
+    'action' => 'force_approve',
+    'pr_item_id' => $item2->pr_item_id,
+    'po_code' => 'PO-NEW-' . $uniq, // New Code
+    'status' => 'force', // status is 'force' or just 'shipped' depending on logic? Controller uses $action=force_approve
+    'received_quantity' => 3, // Partial receive
+    'inspector' => 'SimAdmin'
 ]);
 $request->headers->set('X-Hub-Secret', 'test-secret'); 
 
