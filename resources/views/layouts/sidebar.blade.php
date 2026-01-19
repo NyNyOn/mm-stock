@@ -33,7 +33,7 @@
                 'color' => 'emerald',    
                 'items' => [
                     'equipment.index' => ['icon' => 'fa-laptop', 'title' => 'จัดการอุปกรณ์', 'permission' => 'equipment:view'],
-                    'receive.index' => ['icon' => 'fa-download', 'title' => 'รับเข้าอุปกรณ์', 'permission' => 'receive:view'],
+
                     'stock-checks.index' => ['icon' => 'fa-clipboard-list', 'title' => 'ตรวจนับสต็อก', 'permission' => 'stock-check:manage'],
                 ]
             ],
@@ -44,6 +44,7 @@
                 'items' => [
                     'purchase-orders.index' => ['icon' => 'fa-file-invoice-dollar', 'title' => 'ใบสั่งซื้อ', 'permission' => 'po:view'],
                     'purchase-track.index' => ['icon' => 'fa-truck-fast', 'title' => 'ติดตามพัสดุ', 'permission' => 'po:view', 'exact' => true],
+                    'receive.index' => ['icon' => 'fa-download', 'title' => 'รับเข้าอุปกรณ์', 'permission' => 'receive:view'],
                     // ✅ Shortcut Menu
                     'purchase-track.rejected' => ['icon' => 'fa-ban', 'title' => 'รายการที่ถูกปฏิเสธ', 'permission' => 'po:view'],
                 ]
