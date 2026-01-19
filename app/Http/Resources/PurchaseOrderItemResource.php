@@ -19,6 +19,8 @@ class PurchaseOrderItemResource extends JsonResource
             'id' => $this->id,
             // ✅ Send PU Hub Item ID (reference) if available
             'pr_item_id' => $this->pr_item_id,
+            // ✅ Add equipment_id for PU System
+            'equipment_id' => $this->equipment_id,
             
             // 1. แก้ไขชื่อสินค้า: เช็คก่อนว่ามี equipment ไหม
             // ถ้ามี: ใช้ชื่อจาก Equipment

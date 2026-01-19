@@ -91,29 +91,7 @@ class ReceiveController extends Controller
         
         try {
             foreach ($inputItems as $poItemId => $data) {
-                // ... (existing code, ensure it matches existing execution context) ...
-                if (!isset($data['selected'])) continue;
 
-                // ... (Logic to find Item, Equipment etc.) ...
-                
-                // (Skip to where we build inspections logic)
-                
-                    // ✅ TRACK PROBLEMS (Reject/Issue)
-                    if ($status === 'rejected') {
-                         $problemItemsByPo[$poItem->purchase_order_id][] = [
-                             'name' => $poItem->equipment->name ?? $poItem->item_description ?? 'Unknown',
-                             'reason' => $finalNotes,
-                             'status' => $poItem->inspection_status
-                         ];
-                    }
-
-                    $inspections[] = [
-                        'pr_item_id' => $poItem->pr_item_id,
-                        'status' => $status,
-                        'received_quantity' => $currentBatchQty, 
-                        'notes' => $finalNotes
-                    ];
-                }
                 // 1. เช็คว่า User ติ๊กเลือกรายการนี้ไหม? (Checkbox)
                 if (!isset($data['selected'])) {
                     continue; // ข้ามรายการที่ไม่ได้เลือก
