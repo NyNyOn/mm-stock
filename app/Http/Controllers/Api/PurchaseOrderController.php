@@ -506,7 +506,7 @@ class PurchaseOrderController extends Controller
                             $notify = new \App\Notifications\PurchaseOrderUpdatedNotification(
                                 $po, 
                                 'force_approve', 
-                                ['note' => "ดำเนินการโดย: {$request->inspector}", 'item_id' => $item->id]
+                                ['note' => "ดำเนินการโดย: {$request->inspector}", 'item_id' => $item->id, 'quantity' => $qtyToReceive]
                             );
                             (new \App\Services\SynologyService())->notify($notify);
                         } catch (\Exception $e) { Log::error("Failed to send ForceApprove Notify: " . $e->getMessage()); }

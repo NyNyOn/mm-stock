@@ -51,7 +51,7 @@ class ReceiveController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-             $currentDeptKey = Config::get('app.dept_key', 'it');
+             $currentDeptKey = Config::get('app.dept_key', 'mm');
              $departmentsConfig = Config::get('department_stocks.departments', []);
              $currentDeptName = $departmentsConfig[$currentDeptKey]['name'] ?? strtoupper($currentDeptKey);
 
@@ -84,11 +84,36 @@ class ReceiveController extends Controller
         $poIdsToUpdate = [];
         $processedCount = 0;
         $skippedItems = [];
+        $receivedItemsByPo = []; // ✅ Track items for notification
+        $problemItemsByPo = [];  // ✅ Track problem items for notification
 
         DB::beginTransaction();
         
         try {
             foreach ($inputItems as $poItemId => $data) {
+                // ... (existing code, ensure it matches existing execution context) ...
+                if (!isset($data['selected'])) continue;
+
+                // ... (Logic to find Item, Equipment etc.) ...
+                
+                // (Skip to where we build inspections logic)
+                
+                    // ✅ TRACK PROBLEMS (Reject/Issue)
+                    if ($status === 'rejected') {
+                         $problemItemsByPo[$poItem->purchase_order_id][] = [
+                             'name' => $poItem->equipment->name ?? $poItem->item_description ?? 'Unknown',
+                             'reason' => $finalNotes,
+                             'status' => $poItem->inspection_status
+                         ];
+                    }
+
+                    $inspections[] = [
+                        'pr_item_id' => $poItem->pr_item_id,
+                        'status' => $status,
+                        'received_quantity' => $currentBatchQty, 
+                        'notes' => $finalNotes
+                    ];
+                }
                 // 1. เช็คว่า User ติ๊กเลือกรายการนี้ไหม? (Checkbox)
                 if (!isset($data['selected'])) {
                     continue; // ข้ามรายการที่ไม่ได้เลือก
@@ -132,6 +157,12 @@ class ReceiveController extends Controller
                     $po = $poItem->purchaseOrder;
                     $poNum = $po->po_number ?? '-';
                     $prNum = $po->pr_number ?? '-';
+                    
+                    // ✅ Track for Notification
+                    $receivedItemsByPo[$poId][] = [
+                        'name' => $equipment->name,
+                        'qty' => $receiveNowQty
+                    ];
 
                     Transaction::create([
                         'equipment_id'    => $equipment->id,
@@ -311,6 +342,15 @@ class ReceiveController extends Controller
                         }
                     }
 
+                    // ✅ TRACK PROBLEMS (Reject/Issue)
+                    if ($status === 'rejected') {
+                         $problemItemsByPo[$poItem->purchase_order_id][] = [
+                             'name' => $poItem->equipment->name ?? $poItem->item_description ?? 'Unknown',
+                             'reason' => $finalNotes,
+                             'status' => $poItem->inspection_status
+                         ];
+                    }
+
                     $inspections[] = [
                         'pr_item_id' => $poItem->pr_item_id,
                         'status' => $status,
@@ -322,41 +362,51 @@ class ReceiveController extends Controller
                 if (!empty($inspections)) {
                     $result = $puHubService->confirmInspectionBatch($inspections);
                     
-                    // Check for failures in the response
-                    if (!empty($result['results']['failed'])) {
-                        $failedCount = count($result['results']['failed']);
-                        $failedItems = collect($result['results']['failed'])->pluck('reason', 'pr_item_id')->toArray();
-                        
-                        Log::warning('[ReceiveController] PU-HUB rejected some validations', ['failed' => $failedItems]);
-                        
-                        // Append warning to session
-                        session()->flash('warning', "บันทึกสำเร็จ แต่ PU-HUB แจ้งเตือนข้อผิดพลาด {$failedCount} รายการ (โปรดติดต่อฝ่ายจัดซื้อ)");
-                    } else {
+                    if (empty($result['results']['failed'])) {
                          Log::info('[ReceiveController] Successfully sent inspection results to PU-HUB', [
                             'count' => count($inspections)
                         ]);
+                    } elseif (!empty($result['results']['failed'])) {
+                         // Logic for failed items warning...
+                         $failedCount = count($result['results']['failed']);
+                         session()->flash('warning', "บันทึกสำเร็จ แต่ PU-HUB แจ้งเตือนข้อผิดพลาด {$failedCount} รายการ");
+                    }
+                }
 
-                        // ✅ NOTIFICATION: Send "Problem Report" if there are rejected items
-                        try {
-                            $hasRejections = collect($inspections)->where('status', 'rejected')->isNotEmpty();
-                            if ($hasRejections) {
-                                // Find a PO to attach notification to (Use the first one involved)
-                                $firstPoId = array_key_first($poIdsToUpdate);
-                                $poForNotify = PurchaseOrder::find($firstPoId);
-                                
-                                if ($poForNotify) {
-                                    $notify = new \App\Notifications\PurchaseOrderUpdatedNotification($poForNotify, 'problem_report');
-                                    (new \App\Services\SynologyService())->notify($notify);
-                                }
-                            }
-                        } catch (\Exception $e) {
-                             Log::error("Failed to send Problem Report Notification: " . $e->getMessage());
+            } catch (\Exception $e) {
+                Log::error('[ReceiveController] Failed to send inspection results to PU-HUB: ' . $e->getMessage());
+                session()->flash('warning', "บันทึกในระบบสำเร็จ แต่ไม่สามารถส่งข้อมูลไปยัง PU-HUB ได้ (Error: {$e->getMessage()})");
+            }
+
+            // ✅ NOTIFICATION: Send "Problem Report" (Issues/Rejections) separated by PO
+            try {
+                if (!empty($problemItemsByPo)) {
+                    foreach ($problemItemsByPo as $poId => $pItems) {
+                        $poForNotify = PurchaseOrder::find($poId);
+                        if ($poForNotify) {
+                            $notify = new \App\Notifications\PurchaseOrderUpdatedNotification($poForNotify, 'problem_report', ['problem_items' => $pItems]);
+                            (new \App\Services\SynologyService())->notify($notify);
+                            Log::info("[ReceiveController] Sent Problem Report for PO #{$poId} (Items: " . count($pItems) . ")");
                         }
                     }
                 }
             } catch (\Exception $e) {
-                Log::error('[ReceiveController] Failed to send inspection results to PU-HUB: ' . $e->getMessage());
-                session()->flash('warning', "บันทึกในระบบสำเร็จ แต่ไม่สามารถส่งข้อมูลไปยัง PU-HUB ได้ (Error: {$e->getMessage()})");
+                 Log::error("Failed to send Problem Report Notification: " . $e->getMessage());
+            }
+
+            // ✅ NOTIFICATION: Send "Stock Received" (Success)
+            try {
+                if (!empty($receivedItemsByPo)) {
+                     foreach ($receivedItemsByPo as $poId => $items) {
+                        $po = PurchaseOrder::find($poId);
+                        if ($po) {
+                             $notify = new \App\Notifications\PurchaseOrderUpdatedNotification($po, 'stock_received', ['received_items' => $items]);
+                             (new \App\Services\SynologyService())->notify($notify);
+                        }
+                     }
+                }
+            } catch (\Exception $e) {
+                Log::error("Failed to send Stock Received Notification: " . $e->getMessage());
             }
 
             if ($processedCount == 0) {

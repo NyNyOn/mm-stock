@@ -60,13 +60,17 @@ class PurchaseOrderUpdatedNotification extends Notification
             $reason = $this->purchaseOrder->pu_data['rejection_reason'] ?? 'ไม่ระบุเหตุผล';
             $body = "PU ปฏิเสธรายการนี้: {$reason}";
         } 
+        elseif ($this->action === 'stock_received') {
+            $title = "รับของเข้าสต๊อกแล้ว (Received)";
+            $body = "รายการสินค้าถูกเพิ่มเข้าคลังเรียบร้อยแล้ว";
+        }
         // ✅ NEW: Notifications for Issue Interaction
         elseif ($this->action === 'problem_report') { 
             $title = "พบปัญหาการรับของ";
             $body = "มีการแจ้งสินค้าเสียหาย/ไม่ครบ ส่งเรื่องให้จัดซื้อพิจารณาแล้ว";
         } elseif ($this->action === 'force_approve') {
-            $title = "จัดซื้ออนุมัติรับของ";
-            $body = "PU อนุมัติให้รับของได้ทันที (Force Approve)";
+            $title = "จัดซื้ออนุมัติรับของ (Force Approve)";
+            $body = "PU อนุมัติให้รับของได้ทันที";
         } elseif ($this->action === 'return') {
             $title = "ยืนยันการคืนของ";
             $body = "PU แจ้งให้ดำเนินการคืนของ (ห้ามรับเข้าสต๊อก)";
@@ -96,7 +100,7 @@ class PurchaseOrderUpdatedNotification extends Notification
         } elseif ($this->action === 'recheck') {
             $type = 'warning'; // Yellow
             $icon = 'fas fa-sync-alt';
-        } elseif ($this->action === 'force_approve') {
+        } elseif ($this->action === 'force_approve' || $this->action === 'stock_received') {
             $type = 'success'; // Green
             $icon = 'fas fa-check-circle';
         }
@@ -135,6 +139,9 @@ class PurchaseOrderUpdatedNotification extends Notification
             if ($this->action === 'ordered') {
                 $title = "✅ **PU ตอบรับใบสั่งซื้อแล้ว**";
                 $messageBody = "PU Hub ได้รับเรื่องและออกเลข PR/PO เรียบร้อยแล้ว";
+            } elseif ($this->action === 'stock_received') {
+                $title = "✅ **รับของเข้าสต๊อกแล้ว (Received)**";
+                $messageBody = "📦 **รายการสินค้าถูกเพิ่มเข้าคลังเรียบร้อยแล้ว**";
             } elseif ($this->action === 'shipped_from_supplier') {
                 $title = "🚚 **อัปเดตสถานะ: สินค้ากำลังจัดส่ง**";
                 $messageBody = "PU แจ้งว่า Supplier ได้จัดส่งสินค้าแล้ว";
@@ -196,10 +203,16 @@ class PurchaseOrderUpdatedNotification extends Notification
             }
             // 2. If Problem Report, show ONLY items with issues
             elseif ($this->action === 'problem_report') {
-                $displayItems = $displayItems->filter(function($item) {
-                     return in_array($item->status, ['cancelled', 'rejected', 'inspection_failed', 'returned']) || 
-                            in_array($item->inspection_status, ['damaged', 'wrong_item', 'quality_issue']);
-                });
+                if (isset($this->data['problem_items'])) {
+                    // Use passed specific items (names are pre-resolved)
+                    $displayItems = collect($this->data['problem_items']); // Collection of arrays
+                } else {
+                    // Fallback to scanning all issues (Legacy behavior)
+                    $displayItems = $displayItems->filter(function($item) {
+                         return in_array($item->status, ['cancelled', 'rejected', 'inspection_failed', 'returned']) || 
+                                in_array($item->inspection_status, ['damaged', 'wrong_item', 'quality_issue']);
+                    });
+                }
             }
             // 3. If standard Rejection (PO level), show rejected items if any (or all if PO rejected)
             elseif ($this->action === 'cancelled' || $this->action === 'rejected') {
@@ -208,41 +221,71 @@ class PurchaseOrderUpdatedNotification extends Notification
                      $displayItems = $rejectedItems;
                  }
             }
+            // 4. If Stock Received, show only received items provided in data
+            elseif ($this->action === 'stock_received' && !empty($this->data['received_items'])) {
+                $recItems = $this->data['received_items'];
+                $itemsList = "\n📦 **รายการสินค้าที่ได้รับ: (" . count($recItems) . " รายการ)**";
+                foreach ($recItems as $rItem) {
+                    $rName = $rItem['name'] ?? 'Unknown';
+                    $rQty = $rItem['qty'] ?? 0;
+                    $itemsList .= "\n- {$rName} (x{$rQty})";
+                }
+                // Clear displayItems to prevent double listing below (though we can just skip the loop below)
+                $displayItems = collect([]); 
+            }
 
             if ($displayItems->count() > 0) {
                 $itemsList = "\n📦 **รายการสินค้า: (" . $displayItems->count() . " รายการ)**";
                 foreach ($displayItems as $item) {
-                    $name = $item->equipment->name ?? $item->item_description ?? 'Unknown Item';
-                    $qty = $item->quantity_ordered;
-                    
-                    // Highlight Focused Item (if provided in expected data 'item_id')
-                    $focusMark = "";
-                    if (isset($this->data['item_id']) && $item->id == $this->data['item_id']) {
-                         $focusMark = "👉 ";
-                    }
-                    
-                    $itemsList .= "\n- {$focusMark}{$name} (x{$qty})";
-                    
-                    // Show Inspection Notes/Reason if relevant
-                    if (in_array($this->action, ['problem_report', 'return'])) {
-                        $reasons = [
-                            'damaged' => 'สินค้าเสียหาย',
-                            'wrong_item' => 'สินค้าผิดรุ่น',
-                            'quality_issue' => 'คุณภาพไม่ได้มาตรฐาน',
-                            'incomplete' => 'ของไม่ครบ',
-                            'returned' => 'ส่งคืน'
-                        ];
-                        $reason = $reasons[$item->inspection_status] ?? $reasons[$item->status] ?? $item->inspection_status;
+                    // Check if item is Array (Data) or Object (Model)
+                    if (is_array($item)) {
+                        // Handle passed data (Problem Items / Received Items)
+                        $name = $item['name'] ?? 'Unknown Item';
+                        $reason = $item['reason'] ?? $item['status'] ?? '';
+                        // Logic for passed data notes
+                        $itemsList .= "\n- {$name}";
+                        if ($reason) $itemsList .= " ⚠️ {$reason}";
                         
-                        $notePart = "";
-                        if ($reason) $notePart .= "⚠️ {$reason}";
-                        if ($item->inspection_notes) $notePart .= " ({$item->inspection_notes})";
+                    } else {
+                        // Handle Model Object
+                        $name = $item->equipment->name ?? $item->item_description ?? 'Unknown Item';
+                        $qty = $item->quantity_ordered;
                         
-                        if ($notePart) $itemsList .= " {$notePart}";
-                    }
-                    // Show Rejection Reason
-                    if ($item->status === 'cancelled' && $item->rejection_reason) {
-                        $itemsList .= " *({$item->rejection_reason})*";
+                        // ✅ Override quantity if provided (e.g. Force Approve with specific qty)
+                        if (isset($this->data['item_id']) && $item->id == $this->data['item_id'] && isset($this->data['quantity'])) {
+                            $qty = $this->data['quantity'];
+                        }
+                        
+                        // Highlight Focused Item (if provided in expected data 'item_id')
+                        $focusMark = "";
+                        if (isset($this->data['item_id']) && $item->id == $this->data['item_id']) {
+                             $focusMark = "👉 ";
+                        }
+                        
+                        $itemsList .= "\n- {$focusMark}{$name} (x{$qty})";
+                        
+                        // Show Inspection Notes/Reason if relevant
+                        if (in_array($this->action, ['problem_report', 'return'])) {
+                            $reasons = [
+                                'damaged' => 'สินค้าเสียหาย',
+                                'wrong_item' => 'สินค้าผิดรุ่น',
+                                'quality_issue' => 'คุณภาพไม่ได้มาตรฐาน',
+                                'incomplete' => 'ของไม่ครบ',
+                                'returned' => 'ส่งคืน'
+                            ];
+                            $stat = $item->inspection_status ?? $item->status;
+                            $reason = $reasons[$stat] ?? $stat;
+                            
+                            $notePart = "";
+                            if ($reason) $notePart .= "⚠️ {$reason}";
+                            if ($item->inspection_notes) $notePart .= " ({$item->inspection_notes})";
+                            
+                            if ($notePart) $itemsList .= " {$notePart}";
+                        }
+                        // Show Rejection Reason
+                        if ($item->status === 'cancelled' && $item->rejection_reason) {
+                            $itemsList .= " *({$item->rejection_reason})*";
+                        }
                     }
                 }
             }
