@@ -77,7 +77,7 @@
                 }
             })
             .then(response => {
-                if (response.redirected && response.url.includes('/login')) {
+                if (response.redirected) {
                     window.location.reload();
                     return Promise.reject('Session expired');
                 }
