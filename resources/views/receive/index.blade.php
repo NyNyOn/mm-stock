@@ -63,10 +63,6 @@
                 }
             })
             .then(response => {
-                if (response.redirected) {
-                     window.location.reload();
-                     return;
-                }
                 if (!response.ok) throw new Error('Network response was not ok');
                 return response.text();
             })

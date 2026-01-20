@@ -503,10 +503,6 @@
             if (!container) return;
             try {
                 const response = await fetch(`/purchase-orders/${orderId}/items-view`);
-                if (response.redirected) {
-                    window.location.reload();
-                    return;
-                }
                 container.innerHTML = await response.text();
             } catch (error) {
                 container.innerHTML = '<p class="text-red-500">Error refreshing list.</p>';
