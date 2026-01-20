@@ -41,6 +41,8 @@ class PurchaseOrderResource extends JsonResource
 
             'origin_department_id' => $this->whenLoaded('requester', fn() => $this->requester->department_id ?? null),
             'priority'             => $priority, 
+            'notes'                => $this->notes, // ✅ Send Full Notes
+            'resubmit_note'        => $request->input('resubmit_note'), // ✅ Send Specific Reply Note (if any)
             'items'                => PurchaseOrderItemResource::collection($this->whenLoaded('items')),
             
             // Legacy / Extra fields (Keep for backward compatibility or internal use if needed)

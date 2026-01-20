@@ -463,7 +463,7 @@
                     @foreach($po->items as $item)
                         @php
                             $equip = $item->equipment;
-                            $img = ($equip && $equip->images->isNotEmpty()) ? $equip->images->first()->image_url : asset('images/placeholder.webp');
+                            $img = $equip ? $equip->image_url : asset('images/placeholder.webp');
                             $itemName = $item->item_description ?? ($equip ? $equip->name : 'สินค้าไม่ระบุชื่อ');
                             
                             // ✅ ITEM SEPARATION LOGIC
