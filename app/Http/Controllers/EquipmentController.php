@@ -308,6 +308,9 @@ class EquipmentController extends Controller
         $locations = Location::orderBy('name')->get();
         $units = Unit::orderBy('name')->get();
         $equipment = new Equipment();
+        if (request()->ajax()) {
+            return view('equipment.partials._form', compact('equipment', 'categories', 'locations', 'units'));
+        }
         return view('equipment.create', compact('equipment', 'categories', 'locations', 'units'));
     }
 

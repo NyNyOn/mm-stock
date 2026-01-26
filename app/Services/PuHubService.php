@@ -94,4 +94,41 @@ class PuHubService
             throw $e;
         }
     }
+    /**
+     * แจ้งเตือน PU-HUB ว่าสินค้าส่งมาถึงแล้ว (Step 2)
+     * Endpoint: /api/v1/notify-hub-arrival
+     */
+    public function notifyHubArrival(array $payload): array
+    {
+        $endpoint = $this->baseUrl . (config('services.pu_hub.arrival_path') ?? '/api/v1/notify-hub-arrival');
+        
+        Log::info('DEBUG-STEP-2: Sending Goods Arrival Notification', [
+            'endpoint' => $endpoint,
+            'payload' => $payload
+        ]);
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->apiToken,
+                'Accept' => 'application/json',
+            ])->post($endpoint, $payload);
+
+            if ($response->successful()) {
+                Log::info('Goods Arrived: Notified EMN Success', $response->json());
+                return $response->json();
+            }
+
+            Log::error('Failed to notify Goods Arrival', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+
+            throw new \Exception('PU-HUB Arrival Notify Error: ' . $response->status());
+
+        } catch (\Exception $e) {
+            Log::error('Exception in notifyHubArrival: ' . $e->getMessage());
+            // throw $e; // อาจจะไม่ throw เพื่อให้ Process ทำงานต่อได้ หรือจะ throw ก็ได้แล้วแต่ Logic
+            return ['success' => false, 'error' => $e->getMessage()]; 
+        }
+    }
 }

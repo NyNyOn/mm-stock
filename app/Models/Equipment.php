@@ -177,6 +177,22 @@ class Equipment extends Model
             return $image->file_path;
         }
 
+        // ✅ Check if file_path is empty to prevent returning directory URL (images/)
+        if (empty($image->file_path) && empty($image->file_name)) {
+             return asset('images/placeholder.webp');
+        }
+
+        // ✅ Use NAS Route if available (Preferred)
+        if (!empty($image->file_name)) {
+            $deptKey = config('department_stocks.default_nas_dept_key', 'mm'); // Default to MM if not set
+            try {
+                return route('nas.image', ['deptKey' => $deptKey, 'filename' => $image->file_name]);
+            } catch (\Exception $e) {
+                // Fallback if route not defined
+            }
+        }
+
+        // Fallback to local path logic
         return url('images/' . $image->file_path);
     }
 }

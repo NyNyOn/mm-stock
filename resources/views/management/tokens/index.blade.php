@@ -80,11 +80,20 @@
 
                 {{-- PR Intake Path --}}
                 <div>
-                    <label for="pu_api_intake_path" class="block mb-2 text-sm font-medium text-gray-900">PR Intake Path</label>
+                    <label for="pu_api_intake_path" class="block mb-2 text-sm font-medium text-gray-900">PR Intake Path (สร้าง PR)</label>
                     <input type="text" id="pu_api_intake_path" name="pu_api_intake_path" 
                            value="{{ old('pu_api_intake_path', $puSettings['intake_path']) }}"
                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" 
                            placeholder="/intake/pr" required>
+                </div>
+
+                {{-- Arrival Notification Path --}}
+                <div>
+                    <label for="pu_api_arrival_path" class="block mb-2 text-sm font-medium text-gray-900">Arrival Notification Path (แจ้งของเข้า)</label>
+                    <input type="text" id="pu_api_arrival_path" name="pu_api_arrival_path" 
+                           value="{{ old('pu_api_arrival_path', $puSettings['arrival_path']) }}"
+                           class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" 
+                           placeholder="/api/v1/notify-hub-arrival">
                 </div>
 
                 {{-- Inspection Path --}}

@@ -22,6 +22,72 @@ window.addEventListener('load', function () {
 });
 // ✅✅✅ END: CORRECTED SECTION ✅✅✅
 
+// ==================================================================
+// --- GLOBAL SESSION TIMEOUT GUARD ---
+// Intercepts all Fetch and jQuery AJAX calls to detect redirects to the login page.
+// This prevents the "Nested Login Page" issue when session expires.
+// ==================================================================
+(function () {
+    // 1. Intercept Fetch API
+    const originalFetch = window.fetch;
+    window.fetch = async function (...args) {
+        try {
+            const response = await originalFetch(...args);
+
+            // Check if response URL has changed to login (Redirected)
+            if (response.redirected && response.url.includes('/login')) {
+                console.warn('[Session Guard] Session expired detected via Fetch (Redirect). Reloading...');
+                window.location.href = '/login';
+                return new Promise(() => { }); // Halt promise chain
+            }
+
+            // ✅ Check for 419 (CSRF) or 401 (Unauthorized)
+            if (response.status === 419 || response.status === 401) {
+                console.warn(`[Session Guard] Session expired detected via Fetch (Status ${response.status}). Redirecting to login...`);
+
+                // Optional: Show Alert before redirecting? User said "it becomes error".
+                // Better to just redirect smoothly or show a quick alert.
+                // Let's use SweetAlert if available, otherwise redirect.
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'เซสชั่นหมดอายุ',
+                        text: 'กรุณาเข้าสู่ระบบใหม่',
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        window.location.href = '/login';
+                    });
+                    return new Promise(() => { }); // Halt
+                } else {
+                    window.location.href = '/login';
+                    return new Promise(() => { }); // Halt
+                }
+            }
+
+            return response;
+        } catch (error) {
+            throw error;
+        }
+    };
+
+    // 2. Intercept jQuery AJAX (if available)
+    if (typeof $ !== 'undefined') {
+        $(document).ajaxComplete(function (event, xhr, settings) {
+            // Check responseURL (standard XHR property)
+            if (xhr.responseURL && xhr.responseURL.includes('/login')) {
+                console.warn('[Session Guard] Session expired detected via jQuery. Reloading...');
+                window.location.reload();
+            }
+            // Fallback: Check status code 401/419
+            if (xhr.status === 401 || xhr.status === 419) {
+                console.warn('[Session Guard] Session expired (401/419). Reloading...');
+                window.location.reload();
+            }
+        });
+    }
+})();
+
 
 function setupEventListeners() {
     const mobileOverlay = document.getElementById('mobile-overlay');

@@ -287,7 +287,7 @@ function deleteImage(imageId) {
 // ==========================================================================
 
 // ✅ Show Add Modal
-window.showAddModal = async function () {
+window.showAddModal = async function (initialName = null) {
     const modal = document.getElementById('add-equipment-modal');
     const modalBody = document.getElementById('add-form-content-wrapper');
 
@@ -311,7 +311,7 @@ window.showAddModal = async function () {
         if (modalBody) {
             modalBody.innerHTML = '<div class="p-10 text-center"><i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i><p class="mt-2 text-gray-500">กำลังโหลดฟอร์ม...</p></div>';
             try {
-                const response = await fetch('/equipment/create');
+                const response = await fetch('/equipment/create', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                 if (!response.ok) throw new Error('Network response was not ok');
                 const html = await response.text();
                 modalBody.innerHTML = html;
@@ -323,6 +323,16 @@ window.showAddModal = async function () {
                     // Initialize Select2 for Add Form
                     if (typeof $ !== 'undefined' && $.fn.select2) {
                         $(form).find('.select2').select2({ dropdownParent: $(modal), width: '100%' });
+                    }
+
+                    // ✅ Pre-fill Name if provided (from PU/Floating Link)
+                    if (initialName) {
+                        const nameInput = form.querySelector('input[name="name"]');
+                        if (nameInput) {
+                            nameInput.value = initialName;
+                            // Trigger input event to handle any listeners
+                            nameInput.dispatchEvent(new Event('input'));
+                        }
                     }
                 }
 

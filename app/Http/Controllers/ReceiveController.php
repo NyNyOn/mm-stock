@@ -142,6 +142,30 @@ class ReceiveController extends Controller
                         'qty' => $receiveNowQty
                     ];
 
+                    // (Step 2) ✅ Notify Arrival to PU-HUB
+                    // ERROR FIX: This step was trying to call '/api/v1/notify-hub-arrival' on the remote server, 
+                    // which is actually OUR OWN local webhook path. 
+                    // Per user feedback, "notify-hub-arrival is ours". 
+                    // So we should NOT be sending this request out. 
+                    // Commenting out to prevent 404 Error.
+                    /*
+                    try {
+                         $puHubService = app(\App\Services\PuHubService::class);
+                         $arrivalPayload = [
+                            'pr_item_id' => $poItem->pr_item_id, // ใช้ ID อ้างอิงจาก PU
+                            'status' => 'arrived_at_hub',
+                            'po_code' => $poNum,
+                            'pr_code' => $prNum,
+                            'received_quantity' => $receiveNowQty,
+                            'is_manual_pr' => false,
+                            'origin_item_id' => null
+                         ];
+                         $puHubService->notifyHubArrival($arrivalPayload);
+                    } catch (\Exception $e) {
+                         Log::warning("Step 2 (Arrival Notify) Failed for Item {$poItemId}: " . $e->getMessage());
+                    }
+                    */
+
                     Transaction::create([
                         'equipment_id'    => $equipment->id,
                         'user_id'         => Auth::id(),
@@ -524,5 +548,38 @@ class ReceiveController extends Controller
             Log::error("[ReceiveController::resend] Error: " . $e->getMessage());
             return redirect()->back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
+    }
+    public function linkEquipment(Request $request, $poItemId)
+    {
+        $this->authorize('receive:manage');
+
+        $request->validate([
+            'equipment_id' => 'nullable|exists:equipments,id',
+            'create_new' => 'nullable|boolean',
+        ]);
+
+        $poItem = PurchaseOrderItem::findOrFail($poItemId);
+
+        if ($request->create_new) {
+             // Redirect to create equipment page with pre-filled data (optional, or just go to create page)
+             // For now, let's assume they go to create page manually and come back to link.
+             return redirect()->route('equipments.create', ['from_po_item' => $poItemId]);
+        }
+
+        if ($request->equipment_id) {
+            $equipment = \App\Models\Equipment::findOrFail($request->equipment_id);
+
+            $poItem->equipment_id = $equipment->id;
+            // ✅ Sync Description to match System Master (User Requirement)
+            $poItem->item_description = $equipment->name;
+            $poItem->unit_name = $equipment->unit;
+            $poItem->save();
+            
+            Log::info("[ReceiveController] Linked PO Item #{$poItem->id} to Equipment #{$equipment->id} ({$equipment->name}) by User " . Auth::id());
+
+            return redirect()->back()->with('success', 'เชื่อมโยงอุปกรณ์เรียบร้อยแล้ว');
+        }
+
+        return redirect()->back()->with('error', 'กรุณาเลือกอุปกรณ์ที่จะเชื่อมโยง');
     }
 }

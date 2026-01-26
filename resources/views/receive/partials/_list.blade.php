@@ -87,10 +87,15 @@
                                                 | <span class="font-semibold text-gray-700">รับเข้าแล้ว:</span> <span class="font-bold text-green-600">{{ $item->quantity_received ?? 0 }}</span> {{ $unitName }}
                                             </p>
                                             @if(!$isLinked) 
-                                                <p class="text-red-500 font-medium flex items-center gap-1 mt-1">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                                    ไม่สามารถนำเข้าระบบได้ (ไม่มีรหัสอุปกรณ์ผูก)
-                                                </p> 
+                                                <div class="mt-2">
+                                                    <button type="button" onclick="openLinkModal({{ $itemId }}, '{{ addslashes($item->item_description) }}')"
+                                                            class="inline-flex items-center px-3 py-1.5 border border-indigo-300 text-xs font-bold rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors shadow-sm">
+                                                        <i class="fas fa-link mr-1.5"></i> เชื่อมโยงอุปกรณ์ (Link)
+                                                    </button>
+                                                    <p class="text-[10px] text-gray-500 mt-1 pl-1">
+                                                        ต้องเชื่อมโยงกับอุปกรณ์ในระบบก่อนจึงจะรับเข้าได้
+                                                    </p>
+                                                </div>
                                             @endif
                                         </div>
                                         <div id="hidden-inputs-{{ $itemId }}"></div>

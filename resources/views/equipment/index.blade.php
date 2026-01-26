@@ -245,14 +245,37 @@
                     <div class="flex flex-col items-end flex-shrink-0 space-y-2">
                          <span class="text-lg font-bold text-gray-800">{{ $item->quantity }}</span>
                          
-                         {{-- ❄️ ซ่อนปุ่มแก้ไขถ้า Locked --}}
-                         @if(!$shouldLock)
-                             <a href="#" onclick="event.preventDefault(); window.showEditModal ? showEditModal({{ $item->id }}) : alert('showEditModal function not found');" class="p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="แก้ไข">
-                                <i class="text-yellow-600 fas fa-edit"></i>
-                             </a>
-                         @else
-                            <span class="text-gray-400" title="ถูกระงับ"><i class="fas fa-lock"></i></span>
-                         @endif
+                         <div class="flex space-x-2">
+                             {{-- ❄️ Action Buttons (Show if not locked) --}}
+                             @if(!$shouldLock)
+                                 {{-- 1. Urgent Order --}}
+                                 <form action="{{ route('purchase-orders.addItemToUrgent', $item->id) }}" method="POST"
+                                       onsubmit="confirmAddItemToPo(event, this, 'ด่วน')"
+                                       data-equipment-name="{{ e($item->name) }}">
+                                     @csrf
+                                     <button type="submit" class="p-2 text-red-600 bg-red-100 rounded-lg hover:bg-red-200" title="สั่งด่วน">
+                                         <i class="fas fa-cart-arrow-down"></i>
+                                     </button>
+                                 </form>
+
+                                 {{-- 2. Scheduled Order --}}
+                                 <form action="{{ route('purchase-orders.addItemToScheduled', $item->id) }}" method="POST"
+                                       onsubmit="showQuantityModal(event, this)"
+                                       data-equipment-name="{{ e($item->name) }}">
+                                     @csrf
+                                     <button type="submit" class="p-2 text-blue-600 bg-blue-100 rounded-lg hover:bg-blue-200" title="สั่งตามรอบ">
+                                         <i class="fas fa-cart-plus"></i>
+                                     </button>
+                                 </form>
+
+                                 {{-- 3. Edit --}}
+                                 <a href="#" onclick="event.preventDefault(); window.showEditModal ? showEditModal({{ $item->id }}) : alert('showEditModal function not found');" class="p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="แก้ไข">
+                                    <i class="text-yellow-600 fas fa-edit"></i>
+                                 </a>
+                             @else
+                                <span class="text-gray-400 p-2" title="ถูกระงับ"><i class="fas fa-lock"></i></span>
+                             @endif
+                         </div>
                     </div>
                 </div>
             @empty

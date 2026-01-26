@@ -25,8 +25,11 @@
             @include('receive.partials._list')
         </div>
     </div>
-
+    @include('receive.partials.link_modal')
+    @include('partials.modals.add-equipment-modal')
+    
     @push('scripts')
+    <script src="{{ asset('js/equipment.js') }}"></script>
     <script>
         // Global references (Vanilla JS)
         // Note: These must be re-queried after AJAX/DOM updates if they were inside the partial
@@ -63,10 +66,22 @@
                 }
             })
             .then(response => {
+                if (response.redirected && response.url.includes('/login')) {
+                     window.location.reload();
+                     return null;
+                }
                 if (!response.ok) throw new Error('Network response was not ok');
                 return response.text();
             })
             .then(html => {
+                if (!html) return;
+                
+                // Extra safety: Check if HTML looks like a login page
+                if (html.includes('<x-guest' + '-layout>') || html.includes('name="login"') || html.includes('เข้าสู่ระบบ')) {
+                     window.location.reload();
+                     return;
+                }
+
                 const container = document.getElementById('receive-container');
                 if (container) {
                     // Simple replacement
@@ -366,6 +381,93 @@
             form.appendChild(csrfInput);
             document.body.appendChild(form);
             form.submit();
+        }
+
+        // --- LINK EQUIPMENT LOGIC ---
+        let searchTimeout;
+
+        function openLinkModal(poItemId, itemName) {
+            const modal = getEl('link-modal');
+            const form = getEl('link-form');
+            const nameSpan = getEl('link-item-name');
+            const searchInput = getEl('equipment-search');
+            
+            if(modal && form) {
+                form.action = `/receive/link-item/${poItemId}`;
+                nameSpan.textContent = itemName;
+                
+                // Store itemName on the create button for auto-fill
+                const createBtn = getEl('link-create-btn');
+                if(createBtn) {
+                   createBtn.dataset.initialName = itemName;
+                }
+                
+                // Reset State
+                searchInput.value = '';
+                getEl('selected-equipment-id').value = '';
+                getEl('selected-equipment-display').classList.add('hidden');
+                getEl('confirm-link-btn').disabled = true;
+                
+                modal.classList.remove('hidden');
+                searchInput.focus();
+            }
+        }
+
+        function hideLinkModal() {
+            const modal = getEl('link-modal');
+            if(modal) modal.classList.add('hidden');
+        }
+
+        // Live Search Logic
+        document.getElementById('equipment-search')?.addEventListener('input', function(e) {
+            const query = e.target.value;
+            const resultsDiv = getEl('search-results');
+            
+            clearTimeout(searchTimeout);
+            
+            if (query.length < 2) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            searchTimeout = setTimeout(() => {
+                fetch(`/ajax/inventory-live-search?q=${encodeURIComponent(query)}`) // Use existing AJAX endpoint
+                    .then(res => res.json())
+                    .then(data => {
+                        resultsDiv.innerHTML = '';
+                        if (data.length > 0) {
+                            data.forEach(item => {
+                                const div = document.createElement('div');
+                                div.className = 'p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100';
+                                div.innerHTML = `
+                                    <div class="font-bold text-gray-800 text-sm">${item.name}</div>
+                                    <div class="text-xs text-gray-500">${item.code || '-'} | Stock: ${item.quantity}</div>
+                                `;
+                                div.onclick = () => selectEquipment(item.id, item.name);
+                                resultsDiv.appendChild(div);
+                            });
+                            resultsDiv.classList.remove('hidden');
+                        } else {
+                            resultsDiv.innerHTML = '<div class="p-3 text-xs text-gray-400 text-center">ไม่พบข้อมูล</div>';
+                            resultsDiv.classList.remove('hidden');
+                        }
+                    })
+                    .catch(err => console.error(err));
+            }, 300);
+        });
+
+        function selectEquipment(id, name) {
+            getEl('selected-equipment-id').value = id;
+            getEl('equipment-search').value = name; // Show name in input
+            getEl('search-results').classList.add('hidden');
+            
+            // Show Feedback
+            const display = getEl('selected-equipment-display');
+            getEl('selected-name').textContent = name;
+            display.classList.remove('hidden');
+            
+            // Enable Button
+            getEl('confirm-link-btn').disabled = false;
         }
     </script>
     <style>

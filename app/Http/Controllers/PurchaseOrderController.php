@@ -239,6 +239,12 @@ class PurchaseOrderController extends Controller
 
         // แปลงข้อมูลเป็น Array
         $payload = $poData->toArray($request);
+        
+        // ✅ Fix: Force 'items' to be a plain array (Resolve ResourceCollection)
+        if (isset($payload['items']) && !is_array($payload['items'])) {
+            $payload['items'] = json_decode(json_encode($payload['items']), true);
+        }
+
         $payload['origin_department_id'] = $originDeptId;
         $payload['requestor_user_id'] = $order->ordered_by_user_id ?? Auth::id(); // ✅ Phase 1 Requirement
 
@@ -251,6 +257,50 @@ class PurchaseOrderController extends Controller
             if (!empty($order->pr_number)) {
                 $payload['pr_code'] = $order->pr_number;
                 Log::info("Sending Resubmit/Update for Existing PR: " . $order->pr_number);
+            }
+
+            // ✅ FILTER REJECTED ITEMS (Code 3)
+            // User Req: If Code 3 (Substitution) or Rejected, send ONLY specific items that were rejected.
+            // Assumption: 'rejection_code' persists on the item even after status reset to 'pending'.
+            $itemsPayload = collect($payload['items']);
+            $originalItems = $order->items; // Should match order of resource collection
+
+            // Find items that have a rejection code
+            $rejectedIndices = [];
+            foreach ($originalItems as $index => $item) {
+                // ✅ FILTER: Only include items with Rejection Code 3 (Unclear/Fixable) or similar.
+                // Exclude Fatal Codes: 1 (Not Needed), 2 (No Budget), 4 (Substitute - handled elsewhere?)
+                // User explicitly requested NOT to send Code 1 & 2 again.
+                // We allow Code 3 (Unclear) or 0/Null if it was somehow rejected without specific code but is being resubmitted.
+                if (!empty($item->rejection_code) && !in_array((int)$item->rejection_code, [1, 2, 4])) {
+                    $rejectedIndices[] = $index;
+                }
+            }
+
+            if (!empty($rejectedIndices)) {
+                $filteredItems = $itemsPayload->only($rejectedIndices)->values()->all();
+                
+                // ✅ Inject Note into Items (for Item-level visibility)
+                if ($request->filled('resubmit_note')) {
+                    $noteContent = "(" . $request->input('resubmit_note') . ")"; // Format: (User Message)
+                    foreach ($filteredItems as &$fItem) {
+                        $fItem['note'] = $noteContent;   // ✅ Spec: "Send as note" (Singular)
+                        $fItem['notes'] = $noteContent;  // Legacy/Backup
+                        // Also add legacy field if needed
+                        $fItem['resubmit_reason'] = $noteContent;
+                    }
+                }
+
+                $payload['items'] = $filteredItems;
+                Log::info("Resubmit: Filtered payload to " . count($filteredItems) . " rejected items.");
+            }
+
+            // ✅ ATTACH USER NOTE
+            // Map 'resubmit_note' from request to 'note' field for PU visibility
+            if ($request->filled('resubmit_note')) {
+                $formattedNote = "(" . $request->input('resubmit_note') . ")";
+                $payload['note'] = $formattedNote;
+                $payload['resubmit_note'] = $formattedNote; // Keep both just in case
             }
         }
 
@@ -276,6 +326,9 @@ class PurchaseOrderController extends Controller
         Log::info("Sending PO #{$order->id} to PU API.", [
             'payload_priority_sent' => $payload['priority'],
             'payload_origin_dept' => $payload['origin_department_id'],
+            'note' => $payload['note'] ?? null, // ✅ Show Note in Log
+            'items_count' => count($payload['items'] ?? []), // ✅ Show Items Count
+            'items_preview' => array_map(function($i) { return ['id' => $i['id'] ?? '?', 'name' => $i['item_name'] ?? '?', 'note' => $i['note'] ?? '']; }, $payload['items'] ?? []), // ✅ Preview Items (Updated key)
             'mapped_config' => $priorityConfig
         ]);
 
@@ -360,8 +413,25 @@ class PurchaseOrderController extends Controller
 
                 if ($matchedItem && $remotePrItemId) {
                     $matchedItem->pr_item_id = $remotePrItemId;
+                    
+                    // ✅ Sync Status from PU Response (Immediate Update)
+                    if (isset($remoteItem['status'])) {
+                        $remoteStatus = strtolower($remoteItem['status']);
+                        
+                        // Map PU Status to Local Status
+                        if (in_array($remoteStatus, ['rejected', 'cancelled'])) {
+                            $matchedItem->status = 'cancelled';
+                        } elseif ($remoteStatus === 'approved') {
+                            $matchedItem->status = 'ordered'; 
+                        } elseif ($remoteStatus === 'pending') {
+                             // Keep as ordered if parent is ordered, or pending. 
+                             // Usually sendPurchaseOrderToApi sets parent to 'ordered'.
+                             $matchedItem->status = 'ordered';
+                        }
+                    }
+
                     $matchedItem->save();
-                    // Log::info("Mapped Local Item #{$matchedItem->id} to PR Item ID: {$remotePrItemId}");
+                    // Log::info("Mapped Local Item #{$matchedItem->id} to PR Item ID: {$remotePrItemId} (Status: {$matchedItem->status})");
                 }
             }
         }

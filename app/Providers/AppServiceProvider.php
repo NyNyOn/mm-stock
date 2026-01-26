@@ -45,6 +45,9 @@ class AppServiceProvider extends ServiceProvider
                     'pu_api_priority_scheduled'   => 'services.pu_hub.priorities.scheduled',
                     'pu_api_priority_urgent'      => 'services.pu_hub.priorities.urgent',
                     'pu_api_priority_job'         => 'services.pu_hub.priorities.job',
+
+                    // New: Arrival Notification Path
+                    'pu_api_arrival_path'         => 'services.pu_hub.arrival_path',
                 ];
 
                 foreach ($puConfigMap as $dbKey => $configKey) {

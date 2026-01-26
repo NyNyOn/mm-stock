@@ -289,6 +289,9 @@ class PurchaseOrderController extends Controller
                     ]];
                 }
 
+                
+                $rejectedItemNames = []; // ✅ Track names for summary
+
                 // --- ITEM LEVEL LOGIC ---
                 if (!empty($rejectedItemsList) && is_array($rejectedItemsList)) {
                     foreach ($rejectedItemsList as $rItem) {
@@ -309,16 +312,27 @@ class PurchaseOrderController extends Controller
                         // Note: If payload includes item name, we could use it. 
                         // Assuming payload might have 'item_name' in future.
                         if (!$item && !empty($rItem['item_name'])) {
-                             $item = $po->items()->where('item_description', $rItem['item_name'])->first();
+                             $item = $po->items()->where('item_description', $rItem['item_description'] ?? $rItem['item_name'])->first();
                         }
                         
+                        $currentName = 'Unknown Item';
+
                         if ($item) {
                             $item->status = 'cancelled'; // Mark item as rejected
                             $item->rejection_code = $rItem['rejection_code'] ?? $mainRejectionCode;
                             $item->rejection_reason = $rItem['reason'] ?? $reason;
                             $item->save();
                             Log::info("Item Rejected: ID {$item->id} Code {$item->rejection_code}");
+
+                             // ✅ Log History for specific Item
+                             $currentName = $item->equipment ? $item->equipment->name : $item->item_description;
+                             $itemName = $currentName;
+                             $this->addPoHistoryLog($po, 'Item Rejected', "{$itemName} rejected by {$rejectedBy} (Reason: {$item->rejection_reason})");
+                        } else {
+                            // Try to get name from payload if item not found locally
+                            $currentName = $rItem['item_name'] ?? $rItem['item_description'] ?? ("Item #" . ($rItem['pr_item_id'] ?? '?'));
                         }
+                        $rejectedItemNames[] = $currentName;
                     }
 
                     // Check if ALL items are rejected
@@ -343,6 +357,16 @@ class PurchaseOrderController extends Controller
                         $item->rejection_code = $mainRejectionCode;
                         $item->rejection_reason = $reason;
                         $item->save();
+
+                        // ✅ Log History for specific Item (Even in Full Rejection)
+                        $itemName = $item->equipment ? $item->equipment->name : $item->item_description;
+                        $rejectedItemNames[] = $itemName; // Track for summary
+                        
+                        // Use $rejectedBy from inputs (need to capture it first or use fallback here)
+                        // Note: $rejectedBy is defined below in original code, so we use input directly here or move definition up.
+                        // Safest: Use input fallback here to avoid re-ordering large chunks.
+                        $actor = $request->rejected_by ?? $request->inspector ?? 'System'; 
+                        $this->addPoHistoryLog($po, 'Item Rejected', "{$itemName} rejected by {$actor} (Reason: {$reason})");
                     }
                 }
 
@@ -352,8 +376,9 @@ class PurchaseOrderController extends Controller
                 $po->pu_data = $puData;
                 $po->save();
                 
-                // ✅ Log History
-                $this->addPoHistoryLog($po, 'Rejected', "Reason: {$reason} (By {$rejectedBy})");
+                // ✅ Log History (Summary with Item Names)
+                $itemsStr = !empty($rejectedItemNames) ? " (".implode(', ', $rejectedItemNames).")" : "";
+                $this->addPoHistoryLog($po, 'Rejected', "Reason: {$reason}{$itemsStr} (By {$rejectedBy})");
 
                 // 🔔 Notify Rejection (Synology + In-App)
                 try {
@@ -448,7 +473,11 @@ class PurchaseOrderController extends Controller
                         $item->inspection_notes = "Force Approved by PU ({$request->inspector})";
                         $item->save();
                         
-                        Log::info("API: Auto-Received Item #{$item->id} (Qty: {$qtyToReceive}) via Force Approve.");
+                        $item->inspection_notes = "Force Approved by PU ({$request->inspector})";
+                        $item->save();
+                        
+                        $itemName = $item->equipment ? $item->equipment->name : $item->item_description;
+                        Log::info("API: Auto-Received Item '{$itemName}' via Force Approve.");
                         
                         // ✅ Check PO Completion (Smart Logic)
                         $po = $item->purchaseOrder;
@@ -499,7 +528,8 @@ class PurchaseOrderController extends Controller
                         }
 
                         // ✅ Log History
-                        $this->addPoHistoryLog($po, 'Force Approved', "By {$request->inspector} (Qty: {$qtyToReceive})");
+                        $itemName = $item->equipment ? $item->equipment->name : $item->item_description;
+                        $this->addPoHistoryLog($po, 'Force Approved', "{$itemName} - By {$request->inspector} (Qty: {$qtyToReceive})");
                         
                         // ✅ NOTIFY: Trigger "Force Approve" Notification
                         try {
@@ -524,7 +554,8 @@ class PurchaseOrderController extends Controller
                         Log::info("API: Returned Item #{$item->id}. Waiting for new PO alignment.");
 
                         // ✅ Log History
-                        $this->addPoHistoryLog($item->purchaseOrder, 'Item Returned', "Item #{$item->id} returned by {$request->inspector}");
+                        $itemName = $item->equipment ? $item->equipment->name : $item->item_description;
+                        $this->addPoHistoryLog($item->purchaseOrder, 'Item Returned', "{$itemName} returned by {$request->inspector}");
 
                         // ✅ NOTIFY: Trigger "Return" Notification
                         try {
@@ -571,7 +602,8 @@ class PurchaseOrderController extends Controller
                         Log::info("API: Reset Item #{$item->id} for Re-Check.");
 
                         // ✅ Log History
-                        $this->addPoHistoryLog($item->purchaseOrder, 'Recheck Requested', "Item #{$item->id} recheck by {$request->inspector}");
+                        $itemName = $item->equipment ? $item->equipment->name : $item->item_description;
+                        $this->addPoHistoryLog($item->purchaseOrder, 'Recheck Requested', "{$itemName} recheck by {$request->inspector}");
 
                         // ✅ NOTIFY: Trigger "Recheck" Notification
                         try {
@@ -598,7 +630,8 @@ class PurchaseOrderController extends Controller
 
                          // ✅ Log History
                          $rejectedBy = $request->rejected_by ?? $request->inspector ?? 'PU Team';
-                         $this->addPoHistoryLog($item->purchaseOrder, 'Item Rejected', "Item #{$item->id} rejected by {$rejectedBy}: {$item->rejection_reason}");
+                         $itemName = $item->equipment ? $item->equipment->name : $item->item_description;
+                         $this->addPoHistoryLog($item->purchaseOrder, 'Item Rejected', "{$itemName} rejected by {$rejectedBy}: {$item->rejection_reason}");
 
                          // ✅ NOTIFY: Trigger "Rejected" Notification (Item Level)
                          try {
@@ -686,7 +719,93 @@ class PurchaseOrderController extends Controller
         }
     }
 
+    // D. Auto-Create Scenario (Manual PR from PU / Floating PO)
+    if (!$po && !empty($request->po_code) && ($request->is_manual_pr || $request->origin_pr_number)) {
+        Log::info("API: Auto-Creating Manual PO for code: {$request->po_code}");
+
+        // 1. Find or Default User (System or Admin)
+        $adminUser = \App\Models\User::orderBy('id')->first();
+        
+        // 2. Create PO
+        $po = PurchaseOrder::create([
+            'po_number' => $request->po_code,
+            'pr_number' => $request->pr_code ?? 'PR-' . uniqid(),
+            'ordered_by_user_id' => $adminUser->id ?? 1,
+            'department_id' => 1, // Default Dept
+            'status' => 'pending', // Will be updated to 'shipped_from_supplier' below
+            'notes' => 'Auto-created from PU Hub Webhook (Manual PR)',
+        ]);
+
+        // 3. Create Item (Placeholder)
+        // We might not have item details, so we make a placeholder that requires linking
+        if (!empty($request->pr_item_id)) {
+             // ✅ Check for Auto-Link (origin_item_id)
+             $equipmentId = null;
+             $itemName = $request->item_name ?? "Manual Item #{$request->pr_item_id} (Waiting for Link)";
+             $unitName = $request->unit_name ?? 'ea';
+             
+             if (!empty($request->origin_item_id)) {
+                 $equipment = \App\Models\Equipment::find($request->origin_item_id);
+                 if ($equipment) {
+                     $equipmentId = $equipment->id;
+                     $itemName = $equipment->name;
+                     $unitName = $equipment->unit->name ?? 'ea'; // ✅ Fix: Access name from relationship
+                     Log::info("API: Auto-Linked Item #{$request->pr_item_id} to Equipment #{$equipment->id}");
+                 }
+             }
+
+             \App\Models\PurchaseOrderItem::create([
+                'purchase_order_id' => $po->id,
+                'item_description' => $itemName,
+                'quantity_ordered' => $request->received_quantity ?? 1,
+                'unit_name' => $unitName,
+                'pr_item_id' => $request->pr_item_id,
+                'equipment_id' => $equipmentId, // ✅ Auto-Link
+                'status' => 'pending'
+             ]);
+             // Refresh relation
+             $po->load('items');
+        }
+    }
+
     if ($po) {
+        // ✅ Manual PR: Ensure Item Exists!
+        // (Scenario: Multiple Webhooks for same PO -> Block D only runs for the first one)
+        if (!empty($request->pr_item_id) && ($request->is_manual_pr || $request->origin_pr_number)) {
+            // Check if this item exists in the PO
+            $existingItem = $po->items()->where('pr_item_id', $request->pr_item_id)->exists();
+            
+            if (!$existingItem) {
+                 Log::info("API: Adding Missing Manual Item #{$request->pr_item_id} to PO #{$po->id}");
+                 
+                 // ✅ Check for Auto-Link (origin_item_id)
+                 $equipmentId = null;
+                 $itemName = $request->item_name ?? "Manual Item #{$request->pr_item_id} (Waiting for Link)";
+                 $unitName = $request->unit_name ?? 'ea';
+                 
+                 if (!empty($request->origin_item_id)) {
+                     $equipment = \App\Models\Equipment::find($request->origin_item_id); // Assumes origin_item_id matches local ID (as per user req)
+                     if ($equipment) {
+                         $equipmentId = $equipment->id;
+                         $itemName = $equipment->name; // Sync Name
+                         $unitName = $equipment->unit->name ?? 'ea'; // ✅ Fix: Access name from relationship
+                         Log::info("API: Auto-Linked Item #{$request->pr_item_id} to Equipment #{$equipment->id}");
+                     }
+                 }
+
+                 \App\Models\PurchaseOrderItem::create([
+                    'purchase_order_id' => $po->id,
+                    'item_description' => $itemName,
+                    'quantity_ordered' => $request->received_quantity ?? 1,
+                    'unit_name' => $unitName,
+                    'pr_item_id' => $request->pr_item_id,
+                    'equipment_id' => $equipmentId, // ✅ Auto-Link
+                    'status' => 'pending'
+                 ]);
+                 // Refresh items to include new one in logic below
+                 $po->refresh();
+            }
+        }
         // ✅ sync fields strict update: Always update if PU sends them
         if (!empty($request->po_code)) {
             // Check for potential duplicate before updating
@@ -788,51 +907,64 @@ class PurchaseOrderController extends Controller
     // Helper to handle PO Splitting logic
     private function processPoSplit($item, $newPoCode, $prItemId)
     {
-        $currentPoCode = $item->purchaseOrder->po_number ?? null;
+        $currentPO = $item->purchaseOrder;
+        $currentPoCode = $currentPO->po_number ?? null;
 
-        // Condition 1: PO Change (A -> B)
+        if (!$newPoCode) return null;
+
+        // 1. Check if Target PO already exists (Merging Logic)
+        // If another PO already owns this code, we MUST join it.
+        $targetPO = PurchaseOrder::where('po_number', $newPoCode)
+            ->where('id', '!=', $currentPO->id)
+            ->first();
+
+        if ($targetPO) {
+             Log::info("API: Found existing Target PO '{$newPoCode}' (ID #{$targetPO->id}). Moving Item #{$item->id} from PO #{$currentPO->id} to join it.");
+             $item->purchase_order_id = $targetPO->id;
+             $item->save();
+             
+             // Check if old PO is empty and useless (no po number), then maybe cancel/delete it?
+             // For safety, we leave it for now, unless fully empty.
+             if ($currentPO->items()->count() == 0 && empty($currentPO->po_number)) {
+                 $currentPO->delete(); // Soft delete or just leave empty
+                 Log::info("API: Old PO #{$currentPO->id} is now empty and has no PO Number. Deleted/Cleaned up.");
+             }
+             
+             return $targetPO;
+        }
+
+        // 2. If NO Target PO, determine if we need to SPLIT from the current PO
+        // Condition: PO Change (A -> B) OR Initial Assignment (Null -> A) with mixed items
         $isChange = ($currentPoCode && $currentPoCode !== $newPoCode);
         
-        // Condition 2: Initial Assignment (Null -> A) BUT valid to split if PO has multiple items
-        // If we don't check this, the first item will just rename the whole PO, dragging pending items with it.
         $isSplitRequired = false;
-        if (!$currentPoCode && $newPoCode) {
-            $otherItemsCount = $item->purchaseOrder->items()->where('id', '!=', $item->id)->count();
-            // If there are other items, we SHOULD split this one out to be safe/granular
+        if (!$currentPoCode && $newPoCode && $currentPO) {
+            $otherItemsCount = $currentPO->items()->where('id', '!=', $item->id)->count();
+            // If there are other items, we SHOULD split this one out
             if ($otherItemsCount > 0) {
                 $isSplitRequired = true;
             }
         }
 
         if ($isChange || $isSplitRequired) {
-            Log::info("API: Item #{$item->id} (PR Item {$prItemId}) indicates new PO Code '{$newPoCode}' (Current: {$currentPoCode}). Processing Move/Split...");
+            Log::info("API: Item #{$item->id} (PR Item {$prItemId}) needs split/move to new PO Code '{$newPoCode}' (Current: {$currentPoCode}). Creating new PO...");
             
-            // 1. Check if Target PO already exists
-            $targetPO = PurchaseOrder::where('po_number', $newPoCode)->first();
+            // Create duplicate PO Structure
+            $targetPO = $currentPO->replicate(); 
+            $targetPO->po_number = $newPoCode;
+            $targetPO->status = 'ordered'; 
+            $targetPO->ordered_at = now();
+            // Clean history/data for new PO
+            $targetPO->pu_data = array_merge($currentPO->pu_data ?? [], ['split_from' => $currentPO->po_number ?? $currentPO->pr_number, 'split_at' => now()->toIso8601String()]);
+            $targetPO->push(); // save and reload
             
-            if (!$targetPO) {
-                // 2. If NOT exists -> Duplicate (Split) from Original PO
-                Log::info("API: Target PO '{$newPoCode}' not found. Creating new Split PO from #{$item->purchase_order_id}...");
-                
-                $originalPO = $item->purchaseOrder;
-                $targetPO = $originalPO->replicate(); 
-                
-                // Set New Details
-                $targetPO->po_number = $newPoCode;
-                $targetPO->status = 'ordered'; 
-                $targetPO->ordered_at = now();
-                $targetPO->pu_data = array_merge($originalPO->pu_data ?? [], ['split_from' => $originalPO->po_number, 'split_at' => now()->toIso8601String()]);
-                $targetPO->save();
-                
-                Log::info("API: Created Split PO #{$targetPO->id} (PO: {$newPoCode} / PR: {$targetPO->pr_number})");
-            }
+            Log::info("API: Created Split PO #{$targetPO->id} for '{$newPoCode}'");
 
-            // 3. Move Item to Target PO
-            $oldPOId = $item->purchase_order_id;
+            // Move Item
             $item->purchase_order_id = $targetPO->id;
             $item->save();
             
-            Log::info("API: Moved Item #{$item->id} from PO #{$oldPOId} to PO #{$targetPO->id} ({$targetPO->po_number}).");
+            Log::info("API: Moved Item #{$item->id} to PO #{$targetPO->id}.");
             
             return $targetPO;
         }

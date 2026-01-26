@@ -34,18 +34,32 @@ class PurchaseOrderResource extends JsonResource
         $jobRequesterId = \App\Models\Setting::where('key', 'automation_job_requester_id')->value('value');
 
         return [
-            // V2 Spec: requestor_user_id, origin_department_id, priority, items
-            // Fix: Prioritize 'automation_requester_id' (System User, e.g., 12) which is known to be valid in PU.
-            // If not set, try 'ordered_by_user_id', then Auth ID, then 1.
-            'requestor_user_id'    => $autoRequesterId ?? $this->ordered_by_user_id ?? $jobRequesterId ?? auth()->id() ?? 1,
-
-            'origin_department_id' => $this->whenLoaded('requester', fn() => $this->requester->department_id ?? null),
-            'priority'             => $priority, 
-            'notes'                => $this->notes, // ✅ Send Full Notes
-            'resubmit_note'        => $request->input('resubmit_note'), // ✅ Send Specific Reply Note (if any)
-            'items'                => PurchaseOrderItemResource::collection($this->whenLoaded('items')),
+            // ✅ Spec Field: requestor_id (Employee Code)
+            'requestor_id'         => optional($this->requester)->employeecode ?? (string)($this->ordered_by_user_id ?? 1),
             
-            // Legacy / Extra fields (Keep for backward compatibility or internal use if needed)
+            // ✅ Spec Field: requestor_fullname
+            'requestor_fullname'   => optional($this->requester)->fullname ?? 'System Admin',
+
+            // ✅ Spec Field: department_code
+            'department_code'      => optional(optional($this->requester)->department)->code ?? 'MM', // Default to MM
+
+            // ✅ Spec Field: urgency
+            'urgency'              => $priority, 
+
+            // ✅ Spec Field: origin_pr_number (Reference)
+            'origin_pr_number'     => $this->po_number,
+
+            // ✅ Spec Field: notes
+            'notes'                => $this->notes, 
+
+            // ✅ Spec Field: items (Array)
+            'items'                => PurchaseOrderItemResource::collection($this->whenLoaded('items')),
+
+            // --- Backward Compatibility / Legacy Fields ---
+            'requestor_user_id'    => $this->ordered_by_user_id,
+            'origin_department_id' => optional($this->requester)->department_id,
+            'priority'             => $priority,
+            'resubmit_note'        => $request->input('resubmit_note'),
             'id'                   => $this->id,
             'po_number'            => $this->po_number,
             'status'               => $this->status,
