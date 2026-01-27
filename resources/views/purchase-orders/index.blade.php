@@ -224,56 +224,70 @@
     </div>
 
 
-    <!-- Modal ตั้งค่ารอบอัตโนมัติ -->
+    <!-- Modal แสดงกำหนดการส่ง PO อัตโนมัติ (Read-only from PU Hub) -->
     <div id="autoPoScheduleModal" class="fixed inset-0 z-50 items-center justify-center hidden p-4 modal-backdrop-soft">
-        <div class="w-full max-w-lg soft-card rounded-2xl modal-content-wrapper animate-slide-up-soft">
-            <div class="flex items-center justify-between p-5 border-b">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold text-gray-900" id="modal-title">ตั้งเวลาตรวจสอบสต็อกอัตโนมัติ</h3>
-                    <button type="button" class="text-gray-400 hover:text-gray-500" onclick="closeModal('autoPoScheduleModal')">
-                        <span class="sr-only">Close</span>
-                        <i class="fas fa-times text-xl"></i>
-                    </button>
+        <div class="w-full max-w-md soft-card rounded-2xl modal-content-wrapper animate-slide-up-soft">
+            <div class="flex items-center justify-between p-5 border-b bg-gradient-to-r from-purple-50 to-blue-50">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900"><i class="fas fa-clock mr-2 text-purple-600"></i>กำหนดการส่ง PO อัตโนมัติ</h3>
+                    <p class="text-xs text-gray-500 mt-1">ข้อมูลจาก PU Hub</p>
                 </div>
+                <button type="button" class="text-gray-400 hover:text-gray-500" onclick="closeModal('autoPoScheduleModal')">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
             </div>
             <div class="p-6">
-                <p class="text-sm text-gray-600 mb-4">
-                    ระบบจะทำการตรวจสอบสต็อกสินค้าและสร้างใบสั่งซื้อ (PO) ตามวันและเวลาที่กำหนดนี้
-                </p>
-                <form id="auto-po-schedule-form" action="{{ route('settings.update.auto-po-schedule') }}" method="POST" class="mt-4 space-y-4" novalidate>
-                    @csrf
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {{-- Day Selection --}}
-                        <div>
-                            <label for="auto_po_day" class="block text-sm font-medium text-gray-700 mb-1">วันที่ของเดือน</label>
-                            <select id="auto_po_day" name="day" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                @for ($i = 1; $i <= 28; $i++)
-                                    <option value="{{ $i }}" {{ (isset($autoPoScheduleDay) && $autoPoScheduleDay == $i) ? 'selected' : '' }}>{{ $i }}</option>
-                                @endfor
-                            </select>
-                        </div>
-
-                        {{-- Time Selection --}}
-                        <div>
-                            <label for="auto_po_time" class="block text-sm font-medium text-gray-700 mb-1">เวลา (24 ชม.)</label>
-                            <div class="relative">
-                                <input type="text" id="auto_po_time" name="time" value="{{ $autoPoScheduleTime ?? '23:50' }}" 
-                                    class="block w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm pl-10 cursor-pointer bg-white" readonly>
-                                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
-                                    <i class="fas fa-clock"></i>
+                @if(isset($puDeadlineDay) && $puDeadlineDay)
+                    {{-- แสดงกำหนดการ PU --}}
+                    <div class="space-y-4">
+                        <div class="p-4 bg-purple-50 rounded-xl border border-purple-100">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
+                                    <i class="fas fa-building text-purple-600"></i>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-gray-500 block">PU Hub กำหนด</span>
+                                    <span class="text-lg font-bold text-purple-700">วันที่ {{ $puDeadlineDay }} เวลา {{ $puDeadlineTime ?? '23:00' }}</span>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="flex justify-end pt-4 space-x-2 border-t mt-4">
-                         <button type="button" class="px-4 py-2 font-medium text-gray-800 bg-gray-200 rounded-lg hover:bg-gray-300" onclick="closeModal('autoPoScheduleModal')">ปิด</button>
-                        <button type="submit" class="px-6 py-2 font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
-                            <i class="fas fa-save mr-2"></i> บันทึก
-                        </button>
+                        <div class="p-4 bg-green-50 rounded-xl border border-green-100">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                                    <i class="fas fa-paper-plane text-green-600"></i>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-gray-500 block">ระบบส่งอัตโนมัติ (ล่วงหน้า 1 วัน)</span>
+                                    <span class="text-lg font-bold text-green-700">วันที่ {{ $autoPoScheduleDay }} เวลา {{ $autoPoScheduleTime }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-xs text-gray-500 text-center pt-2">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            กำหนดการนี้ถูกตั้งค่าจาก PU Hub โดยอัตโนมัติ
+                        </div>
                     </div>
-                </form>
+                @else
+                    {{-- ยังไม่ได้รับกำหนดการจาก PU --}}
+                    <div class="text-center py-8">
+                        <div class="h-16 w-16 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-hourglass-half text-orange-500 text-2xl"></i>
+                        </div>
+                        <h4 class="text-lg font-bold text-gray-700 mb-2">รอกำหนดการจาก PU Hub</h4>
+                        <p class="text-sm text-gray-500">ระบบกำลังรอรับข้อมูลกำหนดการจากฝ่ายจัดซื้อ</p>
+                        <p class="text-xs text-orange-500 mt-3">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            เมื่อ PU ตั้งกำหนดการแล้ว ระบบจะแสดงข้อมูลที่นี่
+                        </p>
+                    </div>
+                @endif
+            </div>
+            <div class="flex justify-end p-4 bg-gray-50/50 rounded-b-2xl border-t">
+                <button type="button" class="px-5 py-2 font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300" onclick="closeModal('autoPoScheduleModal')">
+                    <i class="fas fa-times mr-1"></i> ปิด
+                </button>
             </div>
         </div>
     </div>

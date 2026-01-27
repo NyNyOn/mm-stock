@@ -87,6 +87,10 @@ class PurchaseOrderController extends Controller
         $autoPoScheduleDay = \App\Models\Setting::where('key', 'auto_po_schedule_day')->value('value') ?? 24;
         $autoPoScheduleTime = \App\Models\Setting::where('key', 'auto_po_schedule_time')->value('value') ?? '23:50';
 
+        // ✅ Get PU Deadline Settings (from PU Hub)
+        $puDeadlineDay = \App\Models\Setting::where('key', 'pu_deadline_day')->value('value');
+        $puDeadlineTime = \App\Models\Setting::where('key', 'pu_deadline_time')->value('value');
+
         return view('purchase-orders.index', compact(
             'scheduledOrder',
             'urgentOrders',
@@ -94,7 +98,9 @@ class PurchaseOrderController extends Controller
             'glpiOrders',
             'defaultDeptKey',
             'autoPoScheduleDay',
-            'autoPoScheduleTime'
+            'autoPoScheduleTime',
+            'puDeadlineDay',
+            'puDeadlineTime'
         ));
         } catch (\Exception $e) {
             Log::error('Error loading Purchase Orders index page: ' . $e->getMessage());

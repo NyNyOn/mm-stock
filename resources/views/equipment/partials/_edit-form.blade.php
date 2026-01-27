@@ -6,6 +6,7 @@
     'categories' => $categories,     // Collection of categories
     'locations' => $locations,       // Collection of locations
     'units' => $units,               // Collection of units
-    'defaultDeptKey' => $defaultDeptKey // <-- Added this line
+    'defaultDeptKey' => $defaultDeptKey, // <-- Added this line
+    'canEditQuantity' => $canEditQuantity ?? true // ✅ สิทธิ์แก้ไขจำนวนคงคลัง
 ])
 

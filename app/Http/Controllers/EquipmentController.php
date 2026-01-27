@@ -302,16 +302,27 @@ class EquipmentController extends Controller
     // --- create ---
     public function create()
     {
-        $this->authorize('equipment:manage');
+        // ✅ BYPASS: Super Admin (ID 9) หรือ Receive Process ไม่ต้องตรวจสอบสิทธิ์
+        $superAdminId = (int) config('app.super_admin_id', 9);
+        $isReceiveProcess = request()->has('from_receive') || request()->header('X-From-Receive');
+        
+        if (Auth::id() !== $superAdminId && !$isReceiveProcess) {
+            $this->authorize('equipment:create');
+        }
+        
         $this->switchToDefaultDb();
         $categories = Category::orderBy('name')->get();
         $locations = Location::orderBy('name')->get();
         $units = Unit::orderBy('name')->get();
         $equipment = new Equipment();
+        
+        // ✅ ส่ง canEditQuantity = true เสมอสำหรับ create form (ของใหม่)
+        $canEditQuantity = true;
+        
         if (request()->ajax()) {
-            return view('equipment.partials._form', compact('equipment', 'categories', 'locations', 'units'));
+            return view('equipment.partials._form', compact('equipment', 'categories', 'locations', 'units', 'canEditQuantity'));
         }
-        return view('equipment.create', compact('equipment', 'categories', 'locations', 'units'));
+        return view('equipment.create', compact('equipment', 'categories', 'locations', 'units', 'canEditQuantity'));
     }
 
     // --- show (AJAX for Details Modal) ---
@@ -393,20 +404,30 @@ class EquipmentController extends Controller
     // --- edit ---
     public function edit(Equipment $equipment)
     {
-        $this->authorize('equipment:manage');
+        // ✅ BYPASS: Super Admin (ID 9) ไม่ต้องตรวจสอบสิทธิ์
+        $superAdminId = (int) config('app.super_admin_id', 9);
+        $isSuperAdmin = (Auth::id() === $superAdminId);
+        
+        if (!$isSuperAdmin && !auth()->user()->can('equipment:update') && !auth()->user()->can('equipment:edit')) {
+            abort(403, 'คุณไม่มีสิทธิ์ในการแก้ไขอุปกรณ์');
+        }
         $this->switchToDefaultDb();
         $categories = Category::orderBy('name')->get();
         $locations = Location::orderBy('name')->get();
         $units = Unit::orderBy('name')->get();
         $equipment->load('images');
         $defaultDeptKey = $this->defaultDeptKey;
+        
+        // ✅ Super Admin สามารถแก้ไข quantity ได้เสมอ
+        $canEditQuantity = $isSuperAdmin || auth()->user()->can('equipment:edit');
 
         return view('equipment.partials._edit-form', compact(
             'equipment',
             'categories',
             'locations',
             'units',
-            'defaultDeptKey' 
+            'defaultDeptKey',
+            'canEditQuantity'
         ));
     }
 
@@ -475,12 +496,16 @@ class EquipmentController extends Controller
     // --- store ---
     public function store(Request $request)
     {
-        $this->authorize('equipment:manage');
+        // ✅ BYPASS: Super Admin (ID 9) หรือ Receive Process ไม่ต้องตรวจสอบสิทธิ์
+        $superAdminId = (int) config('app.super_admin_id', 9);
+        $isReceiveProcess = $request->input('is_receive_process') == '1';
+        
+        if (Auth::id() !== $superAdminId && !$isReceiveProcess) {
+            $this->authorize('equipment:create');
+        }
+        
         $this->switchToDefaultDb();
         $rules = $this->getValidationRules();
-        if (Gate::denies('edit-equipment-quantity')) {
-            $rules['quantity'] = 'sometimes|required|integer|min:0';
-        }
         $requestData = $request->all();
         $requestData['has_msds'] = $request->has('has_msds');
         $purchaseOrderItemId = $request->input('purchase_order_item_id');
@@ -573,16 +598,28 @@ class EquipmentController extends Controller
     // ✅✅✅ UPDATE: Logic ย้ายหมวดหมู่แบบฉลาด (Smart Category Move) ✅✅✅
     public function update(Request $request, Equipment $equipment)
     {
-        $this->authorize('equipment:manage');
+        // ✅ BYPASS: Super Admin (ID 9) ไม่ต้องตรวจสอบสิทธิ์
+        $superAdminId = (int) config('app.super_admin_id', 9);
+        $isSuperAdmin = (Auth::id() === $superAdminId);
+        
+        if (!$isSuperAdmin && !auth()->user()->can('equipment:update') && !auth()->user()->can('equipment:edit')) {
+            abort(403, 'คุณไม่มีสิทธิ์ในการแก้ไขอุปกรณ์');
+        }
+        
         $this->switchToDefaultDb();
 
         // เก็บ Category เดิมไว้ตรวจสอบ
         $oldCategoryId = $equipment->category_id;
         
         $rules = $this->getValidationRules($equipment->id);
-        if (Gate::denies('edit-equipment-quantity')) {
-            $rules['quantity'] = 'sometimes|required|integer|min:0';
+        
+        // ✅ ถ้าไม่มีสิทธิ์ equipment:edit และไม่ใช่ Super Admin จะแก้ไขจำนวนคงคลังไม่ได้
+        $canEditQuantity = $isSuperAdmin || auth()->user()->can('equipment:edit');
+        if (!$canEditQuantity) {
+            // ลบ quantity ออกจาก request เพื่อป้องกันการแก้ไข
+            $request->merge(['quantity' => $equipment->quantity]);
         }
+        
         $requestData = $request->all();
         $hasMsdsFromRequest = $request->has('has_msds');
         $requestData['has_msds'] = $hasMsdsFromRequest;
@@ -682,9 +719,15 @@ class EquipmentController extends Controller
 
     public function destroy(Equipment $equipment)
     {
-        $this->authorize('equipment:manage');
+        // ✅ BYPASS: Super Admin (ID 9) ไม่ต้องตรวจสอบสิทธิ์
+        $superAdminId = (int) config('app.super_admin_id', 9);
+        $isSuperAdmin = (Auth::id() === $superAdminId);
+        
+        if (!$isSuperAdmin) {
+            $this->authorize('equipment:delete');
+        }
+        
         $this->switchToDefaultDb();
-        $superAdminId = (int)config('app.super_admin_id');
         
         $userGroupSlug = Auth::user()->serviceUserRole?->userGroup?->slug;
         $slugLower = $userGroupSlug ? strtolower(str_replace(' ', '', $userGroupSlug)) : '';

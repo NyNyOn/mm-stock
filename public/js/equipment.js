@@ -314,6 +314,24 @@ window.showAddModal = async function (initialName = null, initialQty = null, lin
             modalBody.innerHTML = '<div class="p-10 text-center"><i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i><p class="mt-2 text-gray-500">กำลังโหลดฟอร์ม...</p></div>';
             try {
                 const response = await fetch('/equipment/create', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+
+                // ✅ ตรวจสอบ 403 Forbidden (ไม่มีสิทธิ์)
+                if (response.status === 403) {
+                    modalBody.innerHTML = `
+                        <div class="p-8 text-center">
+                            <div class="mx-auto mb-4 h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
+                                <i class="fas fa-lock text-red-500 text-2xl"></i>
+                            </div>
+                            <h4 class="text-lg font-bold text-gray-800 mb-2">ไม่มีสิทธิ์เข้าถึง</h4>
+                            <p class="text-sm text-gray-600">คุณไม่มีสิทธิ์ในการเพิ่มอุปกรณ์ใหม่</p>
+                            <p class="text-xs text-orange-500 mt-3">
+                                <i class="fas fa-phone-alt mr-1"></i> กรุณาติดต่อ Admin เพื่อขอสิทธิ์การใช้งาน
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+
                 if (!response.ok) throw new Error('Network response was not ok');
                 const html = await response.text();
                 modalBody.innerHTML = html;
@@ -382,7 +400,15 @@ window.showAddModal = async function (initialName = null, initialQty = null, lin
 
             } catch (e) {
                 console.error(e);
-                modalBody.innerHTML = '<p class="text-red-500 text-center">โหลดฟอร์มไม่สำเร็จ</p>';
+                modalBody.innerHTML = `
+                    <div class="p-8 text-center">
+                        <div class="mx-auto mb-4 h-16 w-16 rounded-full bg-yellow-100 flex items-center justify-center">
+                            <i class="fas fa-exclamation-triangle text-yellow-500 text-2xl"></i>
+                        </div>
+                        <h4 class="text-lg font-bold text-gray-800 mb-2">โหลดฟอร์มไม่สำเร็จ</h4>
+                        <p class="text-sm text-gray-600">กรุณาลองใหม่อีกครั้ง หรือติดต่อ Admin</p>
+                    </div>
+                `;
             }
         }
     }
@@ -417,6 +443,23 @@ window.showEditModal = async function (id) {
             let response = await fetch(`/ajax/equipment/${id}/edit-form`);
             if (!response.ok) response = await fetch(`/equipment/${id}/edit`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
 
+            // ✅ ตรวจสอบ 403 Forbidden (ไม่มีสิทธิ์)
+            if (response.status === 403) {
+                modalBody.innerHTML = `
+                    <div class="p-8 text-center">
+                        <div class="mx-auto mb-4 h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
+                            <i class="fas fa-lock text-red-500 text-2xl"></i>
+                        </div>
+                        <h4 class="text-lg font-bold text-gray-800 mb-2">ไม่มีสิทธิ์เข้าถึง</h4>
+                        <p class="text-sm text-gray-600">คุณไม่มีสิทธิ์ในการแก้ไขอุปกรณ์</p>
+                        <p class="text-xs text-orange-500 mt-3">
+                            <i class="fas fa-phone-alt mr-1"></i> กรุณาติดต่อ Admin เพื่อขอสิทธิ์การใช้งาน
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
             if (!response.ok) throw new Error('Failed to load edit form');
 
             const html = await response.text();
@@ -432,7 +475,15 @@ window.showEditModal = async function (id) {
             }
         } catch (error) {
             console.error("Edit Error:", error);
-            modalBody.innerHTML = '<p class="text-red-500 text-center p-4">โหลดฟอร์มแก้ไขไม่สำเร็จ</p>';
+            modalBody.innerHTML = `
+                <div class="p-8 text-center">
+                    <div class="mx-auto mb-4 h-16 w-16 rounded-full bg-yellow-100 flex items-center justify-center">
+                        <i class="fas fa-exclamation-triangle text-yellow-500 text-2xl"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-gray-800 mb-2">โหลดฟอร์มแก้ไขไม่สำเร็จ</h4>
+                    <p class="text-sm text-gray-600">กรุณาลองใหม่อีกครั้ง หรือติดต่อ Admin</p>
+                </div>
+            `;
         }
     }
 };

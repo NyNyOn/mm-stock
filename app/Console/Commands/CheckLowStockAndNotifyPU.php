@@ -174,6 +174,9 @@ class CheckLowStockAndNotifyPU extends Command
             \Illuminate\Support\Facades\Log::error('CRITICAL ERROR at step: ' . $e->getLine());
             \Illuminate\Support\Facades\Log::error('Error Message: ' . $e->getMessage());
             \Illuminate\Support\Facades\Log::error($e->getTraceAsString());
+
+            // 🔴 แจ้งเตือน Error ไปยัง Synology Chat
+            $this->notifySynologyError($e->getMessage());
         }
     }
 
@@ -227,6 +230,42 @@ class CheckLowStockAndNotifyPU extends Command
         } catch (\Exception $e) {
             $this->error('Exception sending Synology notification: ' . $e->getMessage());
             \Illuminate\Support\Facades\Log::error("EXCEPTION: sending Synology notification: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * แจ้งเตือน Error ไปยัง Synology Chat
+     * เมื่อระบบตรวจสอบสต็อกและส่ง PO ไม่ทำงาน
+     */
+    private function notifySynologyError(string $errorMessage)
+    {
+        $webhookUrl = config('services.synology.chat_webhook_url') ?? env('SYNOLOGY_CHAT_WEBHOOK_URL');
+
+        if (!$webhookUrl) {
+            \Illuminate\Support\Facades\Log::warning("[ErrorNotify] Synology Webhook URL NOT configured.");
+            return;
+        }
+
+        $webhookUrl = str_replace(['"', "'", '%22'], '', $webhookUrl);
+
+        $message = "🔴 **ระบบแจ้งเตือนปัญหา**\n\n";
+        $message .= "**ระบบตรวจสอบสต็อกต่ำและส่ง PO อัตโนมัติ ไม่ทำงาน!**\n\n";
+        $message .= "📍 **Error Message:**\n```\n{$errorMessage}\n```\n\n";
+        $message .= "⚠️ กรุณาติดต่อ **IT** เพื่อตรวจสอบการทำงาน\n";
+        $message .= "📅 เวลา: " . Carbon::now()->format('d/m/Y H:i:s');
+
+        try {
+            $response = Http::asForm()->post($webhookUrl, [
+                'payload' => json_encode(['text' => $message])
+            ]);
+
+            if ($response->successful()) {
+                \Illuminate\Support\Facades\Log::info("[ErrorNotify] Error notification sent to Synology Chat.");
+            } else {
+                \Illuminate\Support\Facades\Log::error("[ErrorNotify] Failed to send error notification: " . $response->body());
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("[ErrorNotify] Exception: " . $e->getMessage());
         }
     }
 }

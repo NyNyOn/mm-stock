@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\InspectionController;
 // ✅ เรียกใช้ Controller ผ่านชื่อเล่น (Alias) ที่เราตั้งไว้
 use App\Http\Controllers\Api\V1\EquipmentController as V1EquipmentController;
+use App\Http\Controllers\Api\ScheduleController;
 
 /*
 |--------------------------------------------------------------------------
@@ -78,6 +79,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // ✅ Webhook from PU (Now Secured with Token to track usage)
     Route::post('/notify-hub-arrival', [PurchaseOrderController::class, 'receiveHubNotification'])->name('api.v1.notify-hub-arrival');
 
+    // ✅ Schedule Sync API (รับกำหนดการจาก PU Hub)
+    Route::post('/schedule/sync', [ScheduleController::class, 'sync'])->name('api.v1.schedule.sync');
+    Route::get('/schedule', [ScheduleController::class, 'show'])->name('api.v1.schedule.show');
 
 });
 

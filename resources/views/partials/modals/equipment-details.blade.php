@@ -196,7 +196,7 @@
             </div>
             <div class="flex gap-3">
                 <button id="details-print-btn" type="button" class="group flex items-center px-5 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-bold text-gray-700 shadow-sm hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all"><i class="fas fa-qrcode mr-2 text-gray-400 group-hover:text-indigo-500 transition-colors"></i> Print QR</button>
-                @can('equipment:manage')
+                @if(auth()->user()->can('equipment:update') || auth()->user()->can('equipment:edit'))
                 <button 
                     id="details-edit-btn" 
                     type="button" 
@@ -205,7 +205,7 @@
                 >
                     <i class="fas fa-edit mr-2"></i> แก้ไขข้อมูล
                 </button>
-                @endcan
+                @endif
             </div>
         </div>
     </div>

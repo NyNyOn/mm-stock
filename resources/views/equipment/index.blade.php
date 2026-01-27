@@ -61,9 +61,11 @@
 
     <div class="flex items-center justify-between mb-6">
         <div></div>
+        @can('equipment:create')
         <a href="#" onclick="event.preventDefault(); window.showAddModal ? window.showAddModal() : alert('showAddModal function not found');" class="flex items-center px-4 py-3 text-sm font-medium text-white transition-all bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl hover:shadow-lg button-soft gentle-shadow">
             <i class="mr-2 text-sm fas fa-plus"></i><span>เพิ่มอุปกรณ์</span>
         </a>
+        @endcan
     </div>
 
     <div class="overflow-hidden soft-card rounded-2xl gentle-shadow">
@@ -184,12 +186,16 @@
                                             <i class="text-blue-600 fas fa-shopping-cart"></i>
                                         </button>
                                     </form>
+                                    @if(auth()->user()->can('equipment:update') || auth()->user()->can('equipment:edit'))
                                     <a href="#" onclick="event.preventDefault(); window.showEditModal ? showEditModal({{ $item->id }}) : alert('showEditModal function not found');" class="p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="แก้ไข"><i class="text-yellow-600 fas fa-edit"></i></a>
+                                    @endif
+                                    @can('equipment:delete')
                                     <form action="{{ route('equipment.destroy', $item->id) }}" method="POST" class="delete-form">
                                         @csrf
                                         @method('DELETE')
                                         <button type="button" class="delete-button p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="ลบ" data-equipment-name="{{ e($item->name) }}"><i class="text-red-600 fas fa-trash"></i></button>
                                     </form>
+                                    @endcan
                                 </div>
                             @else
                                 <span class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-400 bg-gray-100 rounded-md cursor-not-allowed">
@@ -269,9 +275,11 @@
                                  </form>
 
                                  {{-- 3. Edit --}}
+                                 @if(auth()->user()->can('equipment:update') || auth()->user()->can('equipment:edit'))
                                  <a href="#" onclick="event.preventDefault(); window.showEditModal ? showEditModal({{ $item->id }}) : alert('showEditModal function not found');" class="p-2 bg-gray-100 rounded-lg hover:bg-gray-200" title="แก้ไข">
                                     <i class="text-yellow-600 fas fa-edit"></i>
                                  </a>
+                                 @endif
                              @else
                                 <span class="text-gray-400 p-2" title="ถูกระงับ"><i class="fas fa-lock"></i></span>
                              @endif

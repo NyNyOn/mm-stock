@@ -153,7 +153,10 @@
                             <label for="quantity-{{ $uniqueSuffix }}" class="form-label mb-1.5">คงคลัง <span class="text-red-500">*</span></label>
                             <input type="text" id="quantity-{{ $uniqueSuffix }}" name="quantity" required value="{{ old('quantity', $equipment->quantity ?? 0) }}"
                                    inputmode="numeric" pattern="[0-9]*"
-                                   @cannot('edit-equipment-quantity') readonly class="input-form bg-gray-100 cursor-not-allowed" @else class="input-form" @endcannot>
+                                   @if(!($canEditQuantity ?? true)) readonly class="input-form bg-gray-100 cursor-not-allowed" @else class="input-form" @endif>
+                            @if(!($canEditQuantity ?? true))
+                                <small class="text-xs text-orange-500 mt-1 block"><i class="fas fa-lock mr-1"></i>คุณไม่มีสิทธิ์แก้ไขจำนวนคงคลัง</small>
+                            @endif
                             <div class="invalid-feedback"></div>
                         </div>
                         
