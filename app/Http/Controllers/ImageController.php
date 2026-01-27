@@ -55,8 +55,8 @@ class ImageController extends Controller
                     return $this->smbService->setShare($defaultShare)->get($filename);
 
                 } catch (\Symfony\Component\Process\Exception\ProcessFailedException $e2) {
-                    // Log the error from the second attempt (default share)
-                     Log::error("NAS Image: File '{$filename}' also not found in default share.", ['error' => $e2->getMessage()]); // Keep error
+                    // Log as warning instead of error to avoid log spam for missing placeholder images
+                     Log::warning("NAS Image: File '{$filename}' also not found in default share."); 
                      abort(404, 'Image not found in specified or default location.');
                 } catch (\Exception $e2) {
                     // Catch other potential exceptions during the second attempt

@@ -15,11 +15,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 // ✅✅✅ START: CORRECTED SECTION ✅✅✅
-// We now use addEventListener('load', ...) which is the correct and safe way
-// to handle the window load event without overwriting other scripts.
-window.addEventListener('load', function () {
+// Use DOMContentLoaded for faster perceived load time (don't wait for all images/scripts)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+        handleLoadingScreen();
+    });
+} else {
     handleLoadingScreen();
-});
+}
 // ✅✅✅ END: CORRECTED SECTION ✅✅✅
 
 // ==================================================================

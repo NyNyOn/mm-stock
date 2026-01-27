@@ -24,11 +24,26 @@ class PurchaseTrackController extends Controller
 
         $purchaseOrders = $this->fetchOrders($trackingStatuses);
 
-        if (request()->ajax()) {
-            return view('purchase-track.partials._list', compact('purchaseOrders'))->render();
+        // ✅ Optimization: Pre-fetch Settings to avoid N+1 in Loop
+        $automationRequesterId = \App\Models\Setting::where('key', 'automation_requester_id')->value('value');
+        $automationJobRequesterId = \App\Models\Setting::where('key', 'automation_job_requester_id')->value('value');
+        
+        // Eager Load these users if they exist
+        $automationUsers = [];
+        if ($automationRequesterId) $automationUsers['scheduled'] = \App\Models\User::find($automationRequesterId);
+        if ($automationJobRequesterId) {
+            $user = \App\Models\User::find($automationJobRequesterId);
+            $automationUsers['job_order'] = $user;
+            $automationUsers['job_order_glpi'] = $user;
         }
 
-        return view('purchase-track.index', compact('purchaseOrders'));
+        $viewData = compact('purchaseOrders', 'automationUsers');
+
+        if (request()->ajax()) {
+            return view('purchase-track.partials._list', $viewData)->render();
+        }
+
+        return view('purchase-track.index', $viewData);
     }
 
     public function rejectedIndex()
@@ -71,11 +86,25 @@ class PurchaseTrackController extends Controller
         ->orderBy('id', 'desc')
         ->paginate(10);
 
-        if (request()->ajax()) {
-            return view('purchase-track.partials._list', compact('purchaseOrders'))->render();
+        // ✅ Optimization: Pre-fetch Settings
+        $automationRequesterId = \App\Models\Setting::where('key', 'automation_requester_id')->value('value');
+        $automationJobRequesterId = \App\Models\Setting::where('key', 'automation_job_requester_id')->value('value');
+        
+        $automationUsers = [];
+        if ($automationRequesterId) $automationUsers['scheduled'] = \App\Models\User::find($automationRequesterId);
+        if ($automationJobRequesterId) {
+            $user = \App\Models\User::find($automationJobRequesterId);
+            $automationUsers['job_order'] = $user;
+            $automationUsers['job_order_glpi'] = $user;
         }
 
-        return view('purchase-track.rejected', compact('purchaseOrders'));
+        $viewData = compact('purchaseOrders', 'automationUsers');
+
+        if (request()->ajax()) {
+            return view('purchase-track.partials._list', $viewData)->render();
+        }
+
+        return view('purchase-track.rejected', $viewData);
     }
 
     private function fetchOrders($statuses)
@@ -87,7 +116,7 @@ class PurchaseTrackController extends Controller
                 // ✅ FILTER: Show ONLY Active (Non-Rejected) items in this view
                 $q->whereNotIn('status', $rejectedStatuses)
                   ->with(['equipment' => function ($eq) {
-                    $eq->withTrashed()->with(['category', 'unit', 'images']);
+                    $eq->withTrashed()->with(['category', 'unit', 'primaryImage', 'latestImage']);
                 }]);
             },
             'requester',   // ผู้ขอซื้อ

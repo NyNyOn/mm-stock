@@ -48,7 +48,7 @@
 
                         <div class="mt-4 text-center">
                             <span class="text-xs text-gray-500">หรือ</span>
-                            <a href="#" id="link-create-btn" onclick="event.preventDefault(); if(typeof closeModal === 'function'){ closeModal('link-modal'); } if(typeof showAddModal === 'function'){ showAddModal(this.dataset.initialName); } else { console.error('showAddModal not found'); }" class="text-xs text-indigo-600 hover:text-indigo-500 font-bold ml-1">
+                            <a href="#" id="link-create-btn" onclick="event.preventDefault(); if(typeof closeModal === 'function'){ closeModal('link-modal'); } if(typeof showAddModal === 'function'){ showAddModal(this.dataset.initialName, this.dataset.initialQty, this.dataset.linkPoItemId); } else { console.error('showAddModal not found'); }" class="text-xs text-indigo-600 hover:text-indigo-500 font-bold ml-1">
                                 + สร้างอุปกรณ์ใหม่ (New Equipment)
                             </a>
                         </div>

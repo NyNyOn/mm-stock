@@ -59,7 +59,7 @@
     <script>
         let autoRefreshInterval;
 
-        function fetchUpdates() {
+        window.fetchUpdates = function() {
             // Check if user is scrolling or interacting? Maybe not necessary for simple list.
             
             // Current URL (maintains pagination page=2 etc.)
@@ -113,7 +113,7 @@
             .catch(error => console.error('Auto-update failed:', error));
         }
 
-        function togglePo(id) {
+        window.togglePo = function(id) {
             const summary = document.getElementById('summary-' + id);
             const card = document.getElementById('card-' + id);
             
@@ -132,15 +132,15 @@
         document.addEventListener('DOMContentLoaded', () => {
              // Only run if tab is visible to save resources
              if (!document.hidden) {
-                 autoRefreshInterval = setInterval(fetchUpdates, 15000); // 15s
+                 autoRefreshInterval = setInterval(window.fetchUpdates, 15000); // 15s
              }
 
              document.addEventListener('visibilitychange', () => {
                  if (document.hidden) {
                      clearInterval(autoRefreshInterval);
                  } else {
-                     fetchUpdates(); // Fetch immediately on return
-                     autoRefreshInterval = setInterval(fetchUpdates, 15000);
+                     window.fetchUpdates(); // Fetch immediately on return
+                     autoRefreshInterval = setInterval(window.fetchUpdates, 15000);
                  }
              });
         });

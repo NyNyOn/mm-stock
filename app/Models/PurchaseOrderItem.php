@@ -46,6 +46,7 @@ class PurchaseOrderItem extends Model
         'inspection_notes',
         'rejection_code', // New
         'rejection_reason', // New
+        'origin_pr_number', // New - for tracking original PR in mixed PO
         // 'dept_key', // Removed
     ];
 

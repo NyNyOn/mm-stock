@@ -32,8 +32,8 @@
             </div>
         </div>
 
-        {{-- My Items Table --}}
-        <div class="overflow-x-auto">
+        {{-- My Items Table (Desktop) --}}
+        <div class="hidden md:block overflow-x-auto">
             <table class="min-w-full text-sm divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
@@ -83,7 +83,6 @@
                              {{ $transaction->transaction_date->format('d/m/Y') }}
                         </td>
                         <td class="px-6 py-4 text-center">
-                        <td class="px-6 py-4 text-center">
                             @if($transaction->status == 'return_requested')
                                 <span class="px-3 py-1 text-xs font-semibold bg-purple-100 text-purple-700 rounded-full border border-purple-200">
                                     <i class="fas fa-clock mr-1"></i> รอการยืนยัน
@@ -100,7 +99,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="5" class="px-6 py-10 text-center text-gray-500">
+                        <td colspan="6" class="px-6 py-10 text-center text-gray-500">
                             ไม่พบรายการยืมค้างส่งคืน
                         </td>
                     </tr>
@@ -108,11 +107,74 @@
                 </tbody>
             </table>
         </div>
+
+        {{-- My Items Cards (Mobile) --}}
+        <div class="block md:hidden space-y-4 p-4 bg-gray-50">
+            @forelse ($myItems as $transaction)
+                @php
+                    $imgUrl = 'https://placehold.co/100x100/e2e8f0/64748b?text=No+Image';
+                    if ($transaction->equipment && $transaction->equipment->images->isNotEmpty()) {
+                            $primaryImage = $transaction->equipment->images->firstWhere('is_primary', true) ?? $transaction->equipment->images->first();
+                            if($primaryImage) {
+                                $deptKey = config('department_stocks.default_nas_dept_key', 'mm');
+                                $imgUrl = route('nas.image', ['deptKey' => $deptKey, 'filename' => $primaryImage->file_name]);
+                            }
+                    }
+                    $remainingQty = abs($transaction->quantity_change) - ($transaction->returned_quantity ?? 0);
+                @endphp
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 relative overflow-hidden">
+                    <div class="flex items-start gap-4">
+                        <div class="h-16 w-16 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0 shadow-sm">
+                            <img src="{{ $imgUrl }}" class="h-full w-full object-cover">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-bold text-gray-800 line-clamp-1">{{ optional($transaction->equipment)->name }}</h3>
+                                    <p class="text-xs text-gray-500 mb-1">SN: {{ optional($transaction->equipment)->serial_number }}</p>
+                                </div>
+                                <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-bold">
+                                    {{ $transaction->transaction_date->format('d/m/y') }}
+                                </span>
+                            </div>
+                            
+                            <div class="flex items-center gap-2 mt-1">
+                                @if($transaction->type == 'borrow')
+                                    <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[10px] font-bold border border-indigo-100">ยืมใช่งาน</span>
+                                @else
+                                    <span class="px-2 py-0.5 bg-teal-50 text-teal-600 rounded-md text-[10px] font-bold border border-teal-100">เบิก(คืนได้)</span>
+                                @endif
+                                <span class="text-xs text-gray-400">|</span>
+                                <span class="text-xs font-bold text-gray-700">ค้างคืน: <span class="text-red-500">{{ $remainingQty }}</span></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 border-t border-gray-100 pt-3 flex justify-end">
+                         @if($transaction->status == 'return_requested')
+                            <span class="px-3 py-1.5 w-full text-center text-xs font-bold bg-purple-50 text-purple-600 rounded-lg border border-purple-100 animate-pulse">
+                                <i class="fas fa-clock mr-1"></i> แจ้งคืนแล้ว (รออนุมัติ)
+                            </span>
+                        @elseif($allowUserReturn)
+                            <button onclick="openReturnRequestModal({{ $transaction->id }}, '{{ optional($transaction->equipment)->name }}')" 
+                                class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-bold shadow-sm active:scale-95 transition-all">
+                                <i class="fas fa-check-circle mr-1"></i> แจ้งคืนอุปกรณ์
+                            </button>
+                        @else
+                             <span class="w-full text-center text-xs text-gray-400 italic">ติดต่อ Admin เพื่อคืน</span>
+                        @endif
+                    </div>
+                </div>
+            @empty
+                <div class="text-center py-10">
+                    <div class="bg-gray-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-box-open text-gray-300 text-2xl"></i>
+                    </div>
+                    <p class="text-gray-500 text-sm">ไม่พบรายการยืมค้างส่งคืน</p>
+                </div>
+            @endforelse
+        </div>
     </div>
-
-
-
-</div>
 
     {{-- ✅ Admin Section: All Borrowed Items --}}
     @if(isset($allBorrowedItems) && count($allBorrowedItems) > 0)
@@ -130,7 +192,8 @@
             </div>
         </div>
 
-        <div class="overflow-x-auto">
+        {{-- Admin Table (Desktop) --}}
+        <div class="hidden md:block overflow-x-auto">
             <table class="min-w-full text-sm divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
@@ -222,6 +285,59 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+
+        {{-- Admin Cards (Mobile) --}}
+        <div class="block md:hidden space-y-4 p-4 bg-gray-50">
+             @forelse ($allBorrowedItems as $transaction)
+                @php
+                    $imgUrl = 'https://placehold.co/100x100/e2e8f0/64748b?text=No+Image';
+                    if ($transaction->equipment && $transaction->equipment->images->isNotEmpty()) {
+                            $primaryImage = $transaction->equipment->images->firstWhere('is_primary', true) ?? $transaction->equipment->images->first();
+                            if($primaryImage) {
+                                $deptKey = config('department_stocks.default_nas_dept_key', 'mm');
+                                $imgUrl = route('nas.image', ['deptKey' => $deptKey, 'filename' => $primaryImage->file_name]);
+                            }
+                    }
+                    $remainingQty = abs($transaction->quantity_change) - ($transaction->returned_quantity ?? 0);
+                @endphp
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 relative overflow-hidden">
+                     {{-- User Header --}}
+                    <div class="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
+                        <div class="flex items-center">
+                            <span class="h-6 w-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-[10px] mr-2">
+                                {{ substr($transaction->user->fullname ?? 'U', 0, 1) }}
+                            </span>
+                            <span class="text-xs font-bold text-gray-800">{{ $transaction->user->fullname ?? 'Unknown' }}</span>
+                        </div>
+                        <span class="text-[10px] text-gray-400">{{ $transaction->transaction_date->format('d/m/y') }}</span>
+                    </div>
+
+                    <div class="flex items-start gap-3">
+                        <div class="h-14 w-14 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0">
+                            <img src="{{ $imgUrl }}" class="h-full w-full object-cover">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-bold text-gray-800 text-sm line-clamp-1">{{ optional($transaction->equipment)->name }}</h3>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-xs text-gray-500">ค้างคืน: <span class="font-bold text-red-500">{{ $remainingQty }}</span></span>
+                                @if($transaction->status == 'return_requested')
+                                    <span class="px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded text-[9px] font-bold border border-purple-200 animate-pulse">
+                                        ขอคืน
+                                    </span>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button onclick="openReceiveModal({{ $transaction->id }}, '{{ addslashes(optional($transaction->equipment)->name) }}', '{{ $transaction->status == 'return_requested' ? 'Unknown' : 'Good' }}')" 
+                            class="w-full mt-3 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-xs font-bold shadow-sm active:scale-95 transition-all">
+                            <i class="fas fa-hand-holding mr-1"></i> ยืนยันรับคืน
+                    </button>
+                </div>
+             @empty
+                <div class="text-center py-4 text-gray-400 text-sm">ไม่พบรายการยืมค้างในระบบ</div>
+             @endforelse
         </div>
     </div>
     @endif

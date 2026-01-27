@@ -89,6 +89,16 @@ class ReceiveController extends Controller
 
         DB::beginTransaction();
         
+        Log::info("DEBUG: Receive Process Started. User: " . Auth::id());
+        Log::info("DEBUG: Input Items Keys: " . json_encode(array_keys($inputItems)));
+        foreach($inputItems as $id => $data) {
+             if(isset($data['selected'])) {
+                 Log::info("DEBUG: Item $id SELECTED. Data: " . json_encode($data));
+             } else {
+                 Log::info("DEBUG: Item $id PRESENT but NOT SELECTED.");
+             }
+        }
+        
         try {
             foreach ($inputItems as $poItemId => $data) {
 
@@ -227,22 +237,17 @@ class ReceiveController extends Controller
             foreach (array_unique($poIdsToUpdate) as $poId) {
                 $purchaseOrder = PurchaseOrder::find($poId);
                 if ($purchaseOrder) {
-                    // Count items that are NOT fully handled yet
-                    // Handled = (received >= ordered) OR (status is returned/inspection_failed)
+                    $purchaseOrder->refresh(); // ✅ Ensure fresh data
+
+                    // 1. Check for Pending Items (Excluding Finalized Rejections)
                     $pendingItemsCount = $purchaseOrder->items()
                         ->where(function ($q) {
-                            // Conditions for being "Pending":
-                            // 1. Not yet received enough quantity
                             $q->whereRaw('ifnull(quantity_received, 0) < quantity_ordered')
-                              // 2. AND Status is NOT in a "Finalized Rejection" state
                               ->whereNotIn('status', ['returned', 'inspection_failed', 'cancelled', 'rejected']);
                         })->count();
 
                     if ($pendingItemsCount == 0) {
-                        // All "active" items are handled. Now determine Final Status based on composition.
-                        // Refresh relation to get latest statuses
-                        $purchaseOrder->refresh();
-                        
+                        // All items handled -> Determine Final Status
                         $successCount = $purchaseOrder->items()->where(function($q){ 
                             $q->where('status', 'received')->orWhere('status', 'completed'); 
                         })->count();
@@ -250,26 +255,26 @@ class ReceiveController extends Controller
                         $issueCount = $purchaseOrder->items()->whereIn('status', ['returned', 'inspection_failed'])->count();
                         $rejectCount = $purchaseOrder->items()->whereIn('status', ['cancelled', 'rejected'])->count();
 
-                        Log::info("DEBUG PO #{$purchaseOrder->id} Counts: Success={$successCount}, Issue={$issueCount}, Reject={$rejectCount}");
+                        $newStatus = 'completed';
 
                         if ($successCount > 0 && ($issueCount > 0 || $rejectCount > 0)) {
                             // Mixed: Keep Open as Partial Receive
-                            $purchaseOrder->update(['status' => 'partial_receive']);
+                            $newStatus = 'partial_receive';
                         } elseif ($successCount == 0 && $issueCount > 0) {
-                            // All Issues: Inspection Failed
-                            $purchaseOrder->update(['status' => 'inspection_failed']);
+                            $newStatus = 'inspection_failed';
                         } elseif ($successCount == 0 && $rejectCount > 0) {
-                            // All Rejected: Cancelled
-                            $purchaseOrder->update(['status' => 'cancelled']);
-                        } else {
-                            // All Good
-                            $purchaseOrder->update(['status' => 'completed']);
+                            $newStatus = 'cancelled';
                         }
+                        
+                        // ✅ Force update if changed
+                        if ($purchaseOrder->status !== $newStatus) {
+                            $purchaseOrder->update(['status' => $newStatus]);
+                            Log::info("Auto-Update PO #{$purchaseOrder->id} Status to {$newStatus}");
+                        }
+
                     } else {
-                        // If logic was previously completed but now we found pending
-                        // Or just to set partial
-                        $validActiveStatuses = ['ordered', 'pending', 'shipped_from_supplier', 'rejected', 'cancelled', 'inspection_failed'];
-                        if (in_array($purchaseOrder->status, $validActiveStatuses)) {
+                        // Still pending items -> Set to Partial Receive if currently in non-progress state
+                        if ($purchaseOrder->status !== 'partial_receive') {
                              $purchaseOrder->update(['status' => 'partial_receive']);
                         }
                     }
@@ -549,6 +554,32 @@ class ReceiveController extends Controller
             return redirect()->back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
     }
+
+    // ✅ New Search Method for Link Modal (No Quantity Filter)
+    public function searchEquipment(Request $request) {
+        $query = $request->input('q');
+        if (strlen($query) < 2) return response()->json([]);
+
+        $equipments = Equipment::with('unit')
+            ->where(function($q) use ($query) {
+                $q->where('name', 'LIKE', "%{$query}%")
+                  ->orWhere('part_no', 'LIKE', "%{$query}%")
+                  ->orWhere('serial_number', 'LIKE', "%{$query}%");
+            })
+            ->limit(20)
+            ->get()
+            ->map(function($item) {
+                return [
+                    'id' => $item->id,
+                    'name' => $item->name,
+                    'part_no' => $item->part_no,
+                    'quantity' => $item->quantity,
+                    'unit' => $item->unit ? $item->unit->name : ''
+                ];
+            });
+
+        return response()->json($equipments);
+    }
     public function linkEquipment(Request $request, $poItemId)
     {
         $this->authorize('receive:manage');
@@ -570,9 +601,10 @@ class ReceiveController extends Controller
             $equipment = \App\Models\Equipment::findOrFail($request->equipment_id);
 
             $poItem->equipment_id = $equipment->id;
-            // ✅ Sync Description to match System Master (User Requirement)
+            // ✅ Sync Description to match System Master
             $poItem->item_description = $equipment->name;
-            $poItem->unit_name = $equipment->unit;
+            // Fix: Safely access unit name (relationship)
+            $poItem->unit_name = $equipment->unit ? $equipment->unit->name : 'ea';
             $poItem->save();
             
             Log::info("[ReceiveController] Linked PO Item #{$poItem->id} to Equipment #{$equipment->id} ({$equipment->name}) by User " . Auth::id());

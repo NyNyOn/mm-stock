@@ -386,7 +386,7 @@
         // --- LINK EQUIPMENT LOGIC ---
         let searchTimeout;
 
-        function openLinkModal(poItemId, itemName) {
+        window.openLinkModal = function(poItemId, itemName, qty) {
             const modal = getEl('link-modal');
             const form = getEl('link-form');
             const nameSpan = getEl('link-item-name');
@@ -396,10 +396,14 @@
                 form.action = `/receive/link-item/${poItemId}`;
                 nameSpan.textContent = itemName;
                 
-                // Store itemName on the create button for auto-fill
+                // Store itemName and Qty on the create button for auto-fill
                 const createBtn = getEl('link-create-btn');
                 if(createBtn) {
                    createBtn.dataset.initialName = itemName;
+                   // ✅ Fix: Store Qty
+                   createBtn.dataset.initialQty = qty;
+                   // ✅ Fix: Store PO Item ID to auto-link after create
+                   createBtn.dataset.linkPoItemId = poItemId;
                 }
                 
                 // Reset State
@@ -431,17 +435,21 @@
             }
 
             searchTimeout = setTimeout(() => {
-                fetch(`/ajax/inventory-live-search?q=${encodeURIComponent(query)}`) // Use existing AJAX endpoint
+                // ✅ Use specialized endpoint for Receive (Includes 0 stock items)
+                fetch(`/receive/search-equipment?q=${encodeURIComponent(query)}`) 
                     .then(res => res.json())
                     .then(data => {
                         resultsDiv.innerHTML = '';
-                        if (data.length > 0) {
+                        if (Array.isArray(data) && data.length > 0) {
                             data.forEach(item => {
                                 const div = document.createElement('div');
-                                div.className = 'p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100';
+                                div.className = 'p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 transition-colors';
                                 div.innerHTML = `
-                                    <div class="font-bold text-gray-800 text-sm">${item.name}</div>
-                                    <div class="text-xs text-gray-500">${item.code || '-'} | Stock: ${item.quantity}</div>
+                                    <div class="flex justify-between items-center">
+                                        <div class="font-bold text-gray-800 text-sm">${item.name}</div>
+                                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">${item.part_no || 'N/A'}</span>
+                                    </div>
+                                    <div class="text-xs text-gray-500 mt-1">Stock: <span class="font-medium text-blue-600">${item.quantity}</span> ${item.unit || ''}</div>
                                 `;
                                 div.onclick = () => selectEquipment(item.id, item.name);
                                 resultsDiv.appendChild(div);

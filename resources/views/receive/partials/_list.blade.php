@@ -72,8 +72,15 @@
                                     
                                     <!-- 1. รูปภาพ (Image) -->
                                     <div class="p-4 md:w-20 md:text-center flex-shrink-0 flex items-center justify-center md:items-start md:justify-center bg-gray-50 md:bg-transparent">
-                                        <img src="{{ $imgUrl }}" onerror="this.onerror=null;this.src='{{ asset('images/placeholder.webp') }}';" 
-                                             class="w-20 h-20 md:w-16 md:h-16 rounded-xl object-cover border-2 border-gray-200 bg-white shadow-md">
+                                        @if($item->equipment && $item->equipment->trashed())
+                                            <div class="w-20 h-20 md:w-16 md:h-16 rounded-xl border-2 border-gray-200 bg-gray-100 flex flex-col items-center justify-center text-gray-400 shadow-sm">
+                                                <i class="fas fa-trash-alt text-lg mb-1"></i>
+                                                <span class="text-[9px] leading-tight text-center px-1">ถูกลบแล้ว</span>
+                                            </div>
+                                        @else
+                                            <img src="{{ $imgUrl }}" onerror="this.onerror=null;this.src='{{ asset('images/placeholder.webp') }}';" 
+                                                 class="w-20 h-20 md:w-16 md:h-16 rounded-xl object-cover border-2 border-gray-200 bg-white shadow-md">
+                                        @endif
                                     </div>
                                     
                                     <!-- 2. รายละเอียด (Details) -->
@@ -88,7 +95,8 @@
                                             </p>
                                             @if(!$isLinked) 
                                                 <div class="mt-2">
-                                                    <button type="button" onclick="openLinkModal({{ $itemId }}, '{{ addslashes($item->item_description) }}')"
+                                                    {{-- ✅ Fix: Pass Quantity to Pre-fill --}}
+                                                    <button type="button" onclick="window.openLinkModal({{ $itemId }}, {{ json_encode($item->item_description) }}, {{ $qtyToUse }})"
                                                             class="inline-flex items-center px-3 py-1.5 border border-indigo-300 text-xs font-bold rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors shadow-sm">
                                                         <i class="fas fa-link mr-1.5"></i> เชื่อมโยงอุปกรณ์ (Link)
                                                     </button>

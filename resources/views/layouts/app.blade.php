@@ -48,6 +48,19 @@
                 }
             }
         </script>
+        
+        {{-- ✅ Define Critical UI Functions Early to prevent ReferenceError --}}
+        <script>
+            function toggleSidebar() {
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('mobile-overlay');
+                if (sidebar && overlay) {
+                    sidebar.classList.toggle('-translate-x-full');
+                    overlay.classList.toggle('hidden');
+                }
+            }
+        </script>
+
         <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
         <link href="{{ asset('css/style.css') }}" rel="stylesheet">

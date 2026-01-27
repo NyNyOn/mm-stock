@@ -144,6 +144,13 @@ class PurchaseOrderController extends Controller
     public function runGlpiSync(Request $request)
     {
         $this->authorize('po:create');
+
+        // Validation: Check if Default Requester is set
+        $jobRequesterId = \App\Models\Setting::where('key', 'automation_job_requester_id')->value('value');
+        if (!$jobRequesterId) {
+             return back()->with('error', 'กรุณาตั้งชื่อผู้ทำรายการก่อนในปุ่มตั้งค่าผู้สั่ง');
+        }
+
         try {
             Artisan::call('app:sync-glpi-tickets');
             return redirect()->route('purchase-orders.index')->with('success', 'รันคำสั่งตรวจสอบใบงาน GLPI สำเร็จ!');

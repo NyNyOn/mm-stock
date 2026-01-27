@@ -72,7 +72,7 @@ class Transaction extends Model
 
     public function equipment(): BelongsTo
     {
-        return $this->belongsTo(Equipment::class);
+        return $this->belongsTo(Equipment::class)->withTrashed();
     }
 
     public function user(): BelongsTo

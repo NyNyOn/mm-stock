@@ -287,7 +287,7 @@ function deleteImage(imageId) {
 // ==========================================================================
 
 // ✅ Show Add Modal
-window.showAddModal = async function (initialName = null) {
+window.showAddModal = async function (initialName = null, initialQty = null, linkPoItemId = null) {
     const modal = document.getElementById('add-equipment-modal');
     const modalBody = document.getElementById('add-form-content-wrapper');
 
@@ -296,6 +296,8 @@ window.showAddModal = async function (initialName = null) {
         const existingForm = modal.querySelector('form');
         if (existingForm) {
             existingForm.reset();
+            delete existingForm.dataset.linkPoItemId; // Clear old link context
+
             existingForm.querySelectorAll('input[type="file"]').forEach(i => {
                 i.value = '';
                 try { i.files = (new DataTransfer()).files; } catch (e) { }
@@ -320,18 +322,60 @@ window.showAddModal = async function (initialName = null) {
                 const form = modalBody.querySelector('form');
                 if (form) {
                     attachFormEventListeners(form);
+
+                    // ✅ Store Link Context if provided
+                    if (linkPoItemId) {
+                        form.dataset.linkPoItemId = linkPoItemId;
+
+                        // ✅ Inject Hidden Input for Controller to know this is from Receive (Force Qty 0)
+                        let hiddenFlag = form.querySelector('input[name="is_receive_process"]');
+                        if (!hiddenFlag) {
+                            hiddenFlag = document.createElement('input');
+                            hiddenFlag.type = 'hidden';
+                            hiddenFlag.name = 'is_receive_process';
+                            form.appendChild(hiddenFlag);
+                        }
+                        hiddenFlag.value = '1';
+                    }
+
                     // Initialize Select2 for Add Form
                     if (typeof $ !== 'undefined' && $.fn.select2) {
                         $(form).find('.select2').select2({ dropdownParent: $(modal), width: '100%' });
                     }
 
-                    // ✅ Pre-fill Name if provided (from PU/Floating Link)
+                    // ✅ Pre-fill Name & Quantity if provided (from PU/Floating Link)
                     if (initialName) {
                         const nameInput = form.querySelector('input[name="name"]');
                         if (nameInput) {
                             nameInput.value = initialName;
                             // Trigger input event to handle any listeners
                             nameInput.dispatchEvent(new Event('input'));
+                        }
+                    }
+
+                    // ✅ FORCE ZERO STOCK IN RECEIVE MODE
+                    // If coming from Link (Receive), Initial Stock MUST be 0
+                    if (initialQty || linkPoItemId) {
+                        const qtyInput = form.querySelector('input[name="quantity"]');
+                        if (qtyInput) {
+                            qtyInput.value = 0; // ✅ Force 0 because we will receive later
+                            qtyInput.readOnly = true; // ✅ STRICT LOCK
+                            qtyInput.dispatchEvent(new Event('input'));
+
+                            // Visual Feedback: Locked
+                            qtyInput.classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
+
+                            // Add Label Helper
+                            const parent = qtyInput.closest('.form-group');
+                            if (parent) {
+                                let helper = parent.querySelector('.qty-helper-text');
+                                if (!helper) {
+                                    helper = document.createElement('small');
+                                    helper.className = 'qty-helper-text block mt-1 text-xs text-blue-600 font-bold';
+                                    parent.appendChild(helper);
+                                }
+                                helper.innerHTML = '<i class="fas fa-info-circle"></i> ระบบจะนำเข้าจำนวน ' + (initialQty || 'ตาม PO') + ' หน่วย เมื่อบันทึกรับเข้า';
+                            }
                         }
                     }
                 }
@@ -534,7 +578,39 @@ async function handleFormSubmit(event) {
                 throw new Error(result.message || 'Error');
             }
         } else {
-            await Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success');
+            // ✅ AUTO-LINK LOGIC: If we have a pending PO link context
+            if (form.dataset.linkPoItemId && result.equipment && result.equipment.id) {
+                try {
+                    Swal.fire({
+                        title: 'กำลังเชื่อมโยง...',
+                        text: 'กำลังผูกอุปกรณ์ที่สร้างใหม่เข้ากับรายการตรวจรับ',
+                        allowOutsideClick: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+
+                    const linkRes = await fetch(`/receive/link-item/${form.dataset.linkPoItemId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                        },
+                        body: JSON.stringify({ equipment_id: result.equipment.id })
+                    });
+
+                    if (linkRes.ok) {
+                        await Swal.fire('สำเร็จ', 'สร้างอุปกรณ์และเชื่อมโยงเรียบร้อยแล้ว', 'success');
+                    } else {
+                        console.error('Auto-link failed', await linkRes.text());
+                        await Swal.fire('สำเร็จแต่เชื่อมโยงไม่ผ่าน', 'สร้างอุปกรณ์แล้ว แต่การเชื่อมโยงอัตโนมัติล้มเหลว กรุณาเชื่อมโยงเอง', 'warning');
+                    }
+                } catch (linkError) {
+                    console.error('Auto-link error', linkError);
+                    await Swal.fire('สำเร็จแต่เชื่อมโยงไม่ผ่าน', 'สร้างอุปกรณ์แล้ว แต่เกิดข้อผิดพลาดในการเชื่อมโยง', 'warning');
+                }
+            } else {
+                await Swal.fire('สำเร็จ', 'บันทึกข้อมูลเรียบร้อย', 'success');
+            }
+
             window.location.reload();
         }
     } catch (e) {

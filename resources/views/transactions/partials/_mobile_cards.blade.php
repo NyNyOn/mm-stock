@@ -86,18 +86,25 @@
         <div class="p-4 flex gap-4">
             {{-- Image --}}
             <div class="flex-shrink-0">
-                <img class="h-16 w-16 rounded-lg object-cover border border-gray-200 bg-gray-100" 
-                     src="{{ $txn->equipment->latestImage ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}" 
-                     onerror="this.src='{{ asset('images/placeholder.webp') }}'">
+                @if($txn->equipment && $txn->equipment->trashed())
+                    <div class="h-16 w-16 rounded-lg border border-gray-200 bg-gray-100 flex flex-col items-center justify-center text-gray-400">
+                        <i class="fas fa-trash-alt text-sm mb-1"></i>
+                        <span class="text-[9px] text-center leading-none">ถูกลบ</span>
+                    </div>
+                @else
+                    <img class="h-16 w-16 rounded-lg object-cover border border-gray-200 bg-gray-100" 
+                         src="{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}" 
+                         onerror="this.src='{{ asset('images/placeholder.webp') }}'">
+                @endif
             </div>
 
             {{-- Info --}}
             <div class="flex-1 min-w-0 space-y-2">
                 <div>
                     <h4 class="text-sm font-bold text-gray-900 line-clamp-2 leading-tight">
-                        {{ $txn->equipment->name }}
+                        {{ optional($txn->equipment)->name ?? 'Unknown Equipment (Deleted)' }}
                     </h4>
-                    <p class="text-xs text-gray-500 font-mono mt-0.5">SN: {{ $txn->equipment->serial_number ?? '-' }}</p>
+                    <p class="text-xs text-gray-500 font-mono mt-0.5">SN: {{ optional($txn->equipment)->serial_number ?? '-' }}</p>
                 </div>
                 
                 {{-- Badges Row --}}
@@ -116,7 +123,7 @@
                 <div class="flex justify-between items-end mt-2">
                      {{-- Quantity --}}
                      <div class="text-sm font-bold {{ $isCancelled ? 'line-through text-gray-400' : ($txn->quantity_change < 0 ? 'text-red-600' : 'text-green-600') }}">
-                        {{ $txn->quantity_change > 0 ? '+' : '' }}{{ $txn->quantity_change }} {{ $txn->equipment->unit->name ?? 'หน่วย' }}
+                        {{ $txn->quantity_change > 0 ? '+' : '' }}{{ $txn->quantity_change }} {{ optional($txn->equipment)->unit->name ?? 'หน่วย' }}
                     </div>
 
                     {{-- Admin logic: Show User --}}
@@ -155,7 +162,7 @@
                              </div>
                          @endif
                     @elseif(Auth::id() === $txn->user_id)
-                        <button onclick="openRatingModal('{{ route('transactions.rate', $txn->id) }}', '{{ $txn->type == 'borrow' ? 'borrow' : ($txn->equipment->is_consumable ? 'one_way' : 'return_consumable') }}')" 
+                        <button onclick="openRatingModal('{{ route('transactions.rate', $txn->id) }}', '{{ $txn->type == 'borrow' ? 'borrow' : (optional($txn->equipment)->is_consumable ? 'one_way' : 'return_consumable') }}')" 
                                 class="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded text-xs font-bold transition-colors">
                             <i class="far fa-edit mr-1"></i> ประเมิน
                         </button>

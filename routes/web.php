@@ -130,6 +130,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/receive/resend/{poItem}', [ReceiveController::class, 'resendInspection'])
         ->name('receive.resend')
         ->middleware('can:receive:manage');
+    Route::get('/receive/search-equipment', [ReceiveController::class, 'searchEquipment'])
+        ->name('receive.search-equipment')
+        ->middleware('can:receive:view');
+
     Route::post('/receive/link-item/{poItem}', [ReceiveController::class, 'linkEquipment'])
         ->name('receive.link-item')
         ->middleware('can:receive:manage');

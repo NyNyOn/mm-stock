@@ -30,11 +30,10 @@
         @endif
     </div>
 
-    @push('scripts')
     <script>
         let autoRefreshInterval;
 
-        function togglePo(id) {
+        window.togglePo = function(id) {
             const summary = document.getElementById('summary-' + id);
             const card = document.getElementById('card-' + id);
             
@@ -49,7 +48,7 @@
             }
         }
 
-        function fetchUpdates() {
+        window.fetchUpdates = function() {
             const url = window.location.href;
             
             // 1. Capture Expanded State
@@ -92,17 +91,16 @@
 
         document.addEventListener('DOMContentLoaded', () => {
              if (!document.hidden) {
-                 autoRefreshInterval = setInterval(fetchUpdates, 15000); 
+                 autoRefreshInterval = setInterval(window.fetchUpdates, 15000); 
              }
              document.addEventListener('visibilitychange', () => {
                  if (document.hidden) {
                      clearInterval(autoRefreshInterval);
                  } else {
-                     fetchUpdates();
-                     autoRefreshInterval = setInterval(fetchUpdates, 15000);
+                     window.fetchUpdates();
+                     autoRefreshInterval = setInterval(window.fetchUpdates, 15000);
                  }
              });
         });
     </script>
-    @endpush
 @endsection

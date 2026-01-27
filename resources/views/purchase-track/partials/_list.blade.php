@@ -35,15 +35,58 @@
                          @endif
                     </div>
                      <p class="text-xs text-gray-500 mt-0.5"><i class="far fa-clock mr-1"></i> {{ $po->updated_at->format('d/m/Y H:i') }} (ล่าสุด)</p>
+
+                     {{-- ✅ Mobile View: Item & Stats --}}
+                     <div class="block sm:hidden mt-2 border-t border-gray-100 pt-2">
+                        <p class="text-sm font-bold text-gray-700 truncate w-full mb-1">
+                            {{ $po->items->first()?->item_description ?? 'ไม่มีรายการสินค้า' }}
+                        </p>
+                        <div class="flex flex-wrap items-center gap-2">
+                             @if($po->items->count() >= 1)
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-100 text-pink-600 border border-pink-200 shadow-sm animate-pulse whitespace-nowrap">
+                                    <i class="fas fa-heart text-[9px]"></i> รวม {{ $po->items->count() }}
+                                </span>
+                             @endif
+                             
+                             @if(!$isRejectedContext)
+                                @php
+                                    $mTotalOrdered = $po->items->sum('quantity_ordered');
+                                    $mTotalReceived = $po->items->sum('quantity_received');
+                                @endphp
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-600 border border-teal-100 shadow-sm">
+                                    <i class="fas fa-shopping-cart text-sky-400 text-[9px]"></i> 
+                                    <span>{{ number_format($mTotalReceived) }}/{{ number_format($mTotalOrdered) }}</span>
+                                </span>
+                             @endif
+                        </div>
+                     </div>
                  </div>
             </div>
             <div class="flex items-center gap-3">
                  <div class="text-right hidden sm:block">
-                     <p class="text-sm font-bold text-gray-700">{{ $po->items->first()->item_name }} {{ $po->items->count() > 1 ? '... (+'.($po->items->count()-1).')' : '' }}</p>
+                     <div class="flex items-center justify-end gap-2">
+                         <span class="text-sm font-bold text-gray-700 truncate max-w-[300px]" title="{{ $po->items->first()?->item_description }}">
+                            {{ $po->items->first()?->item_description ?? 'ไม่มีรายการสินค้า' }}
+                         </span>
+                         @if($po->items->count() >= 1)
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-pink-100 text-pink-600 border border-pink-200 shadow-sm animate-pulse whitespace-nowrap">
+                                <i class="fas fa-heart text-[9px]"></i> รวม {{ $po->items->count() }} รายการ
+                            </span>
+                         @endif
+                     </div>
                      @if($isRejectedContext) 
-                        <p class="text-xs text-red-500">{{ $po->items->whereIn('status', ['cancelled', 'rejected', 'inspection_failed', 'returned'])->count() }} รายการมีปัญหา</p>
+                        <p class="text-xs text-red-500 mt-0.5">{{ $po->items->whereIn('status', ['cancelled', 'rejected', 'inspection_failed', 'returned'])->count() }} รายการมีปัญหา</p>
                      @else
-                        <p class="text-xs text-gray-500">{{ $po->requester->department->name ?? '-' }}</p>
+                        @php
+                            $totalOrdered = $po->items->sum('quantity_ordered');
+                            $totalReceived = $po->items->sum('quantity_received');
+                        @endphp
+                        <div class="mt-1 flex justify-end">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-600 border border-teal-100 shadow-sm transition-transform hover:scale-105">
+                                <i class="fas fa-shopping-cart text-sky-400 text-[9px]"></i> 
+                                <span class="tracking-wide">รับแล้ว {{ number_format($totalReceived) }}/{{ number_format($totalOrdered) }} ชิ้น</span>
+                            </span>
+                        </div>
                      @endif
                  </div>
                  <button class="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 group-hover:text-indigo-600 shadow-sm">
@@ -82,6 +125,23 @@
                                 <div class="flex items-center gap-1.5">
                                     <span class="text-[10px] uppercase font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 min-w-[24px] text-center">PR</span>
                                     <h3 class="text-lg font-bold text-blue-700 tracking-tight leading-none">{{ $po->pr_number }}</h3>
+                                    
+                                    {{-- ✅ Show Other PRs (Mixed) --}}
+                                    @php
+                                        $otherPrs = $po->items->pluck('origin_pr_number')
+                                            ->filter()
+                                            ->unique()
+                                            ->filter(fn($p) => $p !== $po->pr_number);
+                                    @endphp
+                                    @if($otherPrs->isNotEmpty())
+                                        <div class="hidden sm:flex items-center gap-1 ml-2 border-l border-gray-300 pl-2 flex-wrap max-w-[500px]">
+                                            @foreach($otherPrs as $extraPr)
+                                                <span class="text-[10px] font-bold text-blue-600 bg-white px-1.5 py-0.5 rounded border border-blue-200 shadow-sm" title="รวมรายการจาก PR นี้">
+                                                    + {{ $extraPr }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
                             @endif
 
@@ -190,20 +250,29 @@
                         @php
                             $displayName = 'N/A';
                             $targetUser = null;
+
                             if ($po->type === 'urgent') {
                                 if ($po->requester) $targetUser = $po->requester;
                                 elseif ($po->orderedBy) $targetUser = $po->orderedBy;
                                 elseif ($po->ordered_by_user_id || $po->requester_id) { $targetUser = \App\Models\User::find($po->ordered_by_user_id ?? $po->requester_id); }
                             } else {
-                                $settingKey = match($po->type) { 'scheduled' => 'automation_requester_id', 'job_order', 'job_order_glpi' => 'automation_job_requester_id', default => null };
-                                if ($settingKey) $settingUserId = \App\Models\Setting::where('key', $settingKey)->value('value');
-                                if (isset($settingUserId)) $targetUser = \App\Models\User::find($settingUserId);
+                                // ✅ Optimization: Use pre-fetched automation users
+                                if (isset($automationUsers[$po->type])) {
+                                    $targetUser = $automationUsers[$po->type];
+                                }
                             }
+                            
                             if ($targetUser) {
                                 $displayName = $targetUser->name;
+                                
+                                // ✅ Optimization: Cache LDAP Lookup (avoid N+1 cross-db query)
                                 try { 
-                                     $ldapUser = \Illuminate\Support\Facades\DB::table('depart_it_db.sync_ldap')->where('username', $displayName)->first();
-                                     if ($ldapUser && !empty($ldapUser->fullname)) $displayName = $ldapUser->fullname; 
+                                     $ldapName = \Illuminate\Support\Facades\Cache::remember('ldap_name_'.$displayName, 60*60*24, function() use ($displayName) {
+                                         $ldapUser = \Illuminate\Support\Facades\DB::table('depart_it_db.sync_ldap')->where('username', $displayName)->first();
+                                         return $ldapUser ? $ldapUser->fullname : null;
+                                     });
+                                     
+                                     if ($ldapName) $displayName = $ldapName; 
                                 } catch (\Exception $e) {}
                             }
                         @endphp
@@ -459,7 +528,7 @@
                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
                     รายการสินค้า ({{ $po->items->count() }})
                 </h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     @foreach($po->items as $item)
                         @php
                             $equip = $item->equipment;
@@ -476,18 +545,46 @@
                             if ($isRejectedPage && !$itemIsRejected) continue;
                             if (!$isRejectedPage && $itemIsRejected) continue;
                         @endphp
-                        <div class="flex items-start gap-4 bg-white p-4 rounded-lg border {{ $itemIsRejected ? 'border-red-300 ring-2 ring-red-50' : 'border-gray-200' }} shadow-sm hover:shadow-md transition-shadow h-full">
-                            <div class="h-16 w-16 rounded-lg bg-gray-100 border border-gray-200 flex-shrink-0 overflow-hidden">
-                                <img src="{{ $img }}" class="h-full w-full object-cover">
+                        <div class="flex items-start gap-3 bg-white p-3 rounded-lg border {{ $itemIsRejected ? 'border-red-300 ring-2 ring-red-50' : 'border-gray-200' }} shadow-sm hover:shadow-md transition-shadow h-full">
+                            <div class="flex flex-col gap-1 w-24 flex-shrink-0 items-center">
+                                <div class="h-24 w-full rounded-lg bg-gray-100 border border-gray-200 overflow-hidden relative group">
+                                    @if($equip && $equip->trashed())
+                                        <div class="h-full w-full flex flex-col items-center justify-center text-gray-400 bg-gray-100 p-2">
+                                            <i class="fas fa-trash-alt text-xl mb-1"></i>
+                                            <span class="text-[10px]">อุปกรณ์ถูกลบไปแล้ว</span>
+                                        </div>
+                                    @else
+                                        <img src="{{ $img }}" class="h-full w-full object-cover" 
+                                             title="Debug: EquipID: {{ $equip ? $equip->id : 'null' }} | Images: {{ $equip ? $equip->images->count() : '0' }}">
+                                    @endif
+                                </div>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <p class="text-sm font-bold text-gray-900 line-clamp-2 leading-snug" title="{{ $itemName }}">
+                                <div class="flex flex-wrap items-center gap-2 mb-1">
+                                    {{-- ✅ Origin PR Badge (Moved to Content Area) --}}
+                                    @if(!empty($item->origin_pr_number))
+                                        <span class="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded text-[10px] font-bold border border-indigo-100 whitespace-nowrap">
+                                            {{ $item->origin_pr_number }}
+                                        </span>
+                                    @endif
+                                    
+                                    @if($item->quantity_received > 0)
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 whitespace-nowrap">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                            รับแล้ว {{ $item->quantity_received }}
+                                        </span>
+                                    @endif
+                                </div>
+
+                                <p class="text-sm font-bold text-gray-900 leading-snug" title="{{ $itemName }}">
                                     {{ $itemName }}
                                 </p>
                                 <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
                                     <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium whitespace-nowrap">
                                         สั่ง {{ $item->quantity_ordered }}
                                     </span>
+
+                                    {{-- ✅ Origin PR Badge Moved to Image Column --}}
                                     
                                     {{-- Rejected Item Badge --}}
                                     @if($itemIsRejected)
@@ -497,12 +594,7 @@
                                         </span>
                                     @endif
 
-                                    @if($item->quantity_received > 0)
-                                        <span class="text-green-600 flex items-center gap-1 font-medium whitespace-nowrap">
-                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                            รับแล้ว {{ $item->quantity_received }}
-                                        </span>
-                                    @endif
+
 
                                     @if($item->status == 'returned')
                                         <span class="text-orange-600 flex items-center gap-1 font-medium whitespace-nowrap" title="{{ $item->inspection_notes }}">

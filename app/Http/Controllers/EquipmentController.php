@@ -513,7 +513,6 @@ class EquipmentController extends Controller
 
             if ($lastCategoryCheck && $lastCategoryCheck->completed_at) {
                 $daysDiff = $lastCategoryCheck->completed_at->diffInDays(now());
-                // ถ้ารอบการนับล่าสุดยังไม่หมดอายุ (เช่น ไม่เกิน 105 วัน) ให้ใช้วันที่นั้น เพื่อให้รอบตรงกัน
                 if ($daysDiff < 105) {
                     $initialCheckDate = $lastCategoryCheck->completed_at;
                 }
@@ -521,8 +520,13 @@ class EquipmentController extends Controller
         }
         $validatedData['last_stock_check_at'] = $initialCheckDate;
 
+        // ✅ HANDLE RECEIVE PROCESS CREATION (prevent double stock)
+        $isReceiveProcess = $request->input('is_receive_process') == '1';
+        if ($isReceiveProcess) {
+            $validatedData['quantity'] = 0; // Force 0 Initial Stock (Receive Process will add it)
+        }
 
-        DB::transaction(function () use ($validatedData, $request, &$equipment, $purchaseOrderItemId) { 
+        DB::transaction(function () use ($validatedData, $request, &$equipment, $purchaseOrderItemId, $isReceiveProcess) { 
             $validatedData['model'] = trim(($validatedData['model_name'] ?? '') . ' ' . ($validatedData['model_number'] ?? ''));
             $validatedData['has_msds'] = $request->has('has_msds');
             $msdsData = $this->handleMsdsUpload($request);
@@ -530,7 +534,8 @@ class EquipmentController extends Controller
             $equipment = Equipment::create($validatedData);
             $this->handleImageUploads($request, $equipment);
 
-            if ($equipment->quantity > 0) {
+            // Only create transaction if NOT from receive process (because Receive Process will create its own)
+            if ($equipment->quantity > 0 && !$isReceiveProcess) {
                 Transaction::create([
                     'equipment_id'    => $equipment->id,
                     'user_id'         => Auth::id(), 
@@ -541,6 +546,7 @@ class EquipmentController extends Controller
                     'status'          => 'completed', 
                     ]);
             }
+
 
             if ($purchaseOrderItemId) {
                 $poItem = PurchaseOrderItem::find($purchaseOrderItemId);
@@ -559,7 +565,7 @@ class EquipmentController extends Controller
         }
 
         if ($request->wantsJson()) {
-            return response()->json(['success' => true, 'message' => $message]);
+            return response()->json(['success' => true, 'message' => $message, 'equipment' => $equipment]);
         }
         return redirect()->route('equipment.index')->with('success', $message);
     }

@@ -133,6 +133,9 @@ class TransactionController extends Controller
             $statusFilter = $request->query('status', $defaultTab);
 
             $query = Transaction::with(['equipment.latestImage', 'user', 'handler', 'rating'])
+                                ->whereHas('equipment', function ($q) {
+                                    $q->whereNull('deleted_at');
+                                })
                                 ->orderBy('transaction_date', 'desc');
 
             if ($statusFilter == 'admin_pending') {

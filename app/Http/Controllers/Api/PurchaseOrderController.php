@@ -713,8 +713,12 @@ class PurchaseOrderController extends Controller
                       $item->inspection_status = null;
                       $item->inspection_notes = null;
                       $item->status = 'shipped_from_supplier'; // ✅ Undo 'returned' status so it shows up in Receive Page again
-                      $item->save();
                  }
+            }
+            // ✅ Always update origin_pr_number if provided (for mixed PO tracking)
+            if (!empty($request->origin_pr_number) || !empty($request->pr_code)) {
+                 $item->origin_pr_number = $request->origin_pr_number ?? $request->pr_code;
+                 $item->save();
             }
         }
     }
@@ -783,12 +787,13 @@ class PurchaseOrderController extends Controller
                  $itemName = $request->item_name ?? "Manual Item #{$request->pr_item_id} (Waiting for Link)";
                  $unitName = $request->unit_name ?? 'ea';
                  
+                 // ✅ RESTORED: Auto-Link if origin_item_id is present (User Request)
                  if (!empty($request->origin_item_id)) {
-                     $equipment = \App\Models\Equipment::find($request->origin_item_id); // Assumes origin_item_id matches local ID (as per user req)
+                     $equipment = \App\Models\Equipment::find($request->origin_item_id); 
                      if ($equipment) {
                          $equipmentId = $equipment->id;
-                         $itemName = $equipment->name; // Sync Name
-                         $unitName = $equipment->unit->name ?? 'ea'; // ✅ Fix: Access name from relationship
+                         $itemName = $equipment->name; 
+                         $unitName = $equipment->unit->name ?? 'ea'; 
                          Log::info("API: Auto-Linked Item #{$request->pr_item_id} to Equipment #{$equipment->id}");
                      }
                  }
@@ -799,7 +804,8 @@ class PurchaseOrderController extends Controller
                     'quantity_ordered' => $request->received_quantity ?? 1,
                     'unit_name' => $unitName,
                     'pr_item_id' => $request->pr_item_id,
-                    'equipment_id' => $equipmentId, // ✅ Auto-Link
+                    'origin_pr_number' => $request->origin_pr_number ?? $request->pr_code, // ✅ Save Origin PR
+                    'equipment_id' => $equipmentId, // ✅ Auto-Link if found
                     'status' => 'pending'
                  ]);
                  // Refresh items to include new one in logic below
@@ -952,6 +958,12 @@ class PurchaseOrderController extends Controller
             // Create duplicate PO Structure
             $targetPO = $currentPO->replicate(); 
             $targetPO->po_number = $newPoCode;
+            
+            // ✅ If item has origin_pr_number, use it as the main PR for this new Split PO
+            if (!empty($item->origin_pr_number)) {
+                 $targetPO->pr_number = $item->origin_pr_number;
+            }
+
             $targetPO->status = 'ordered'; 
             $targetPO->ordered_at = now();
             // Clean history/data for new PO

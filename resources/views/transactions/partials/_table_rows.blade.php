@@ -38,22 +38,28 @@
             <div class="flex items-start space-x-3">
                 {{-- รูปภาพ --}}
                 <div class="flex-shrink-0 h-10 w-10 group-hover:scale-105 transition-transform duration-200">
-                    <img class="h-10 w-10 rounded-lg object-cover border border-gray-200 shadow-sm" 
-                         src="{{ $txn->equipment->latestImage ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}" 
-                         alt=""
-                         onerror="this.src='{{ asset('images/placeholder.webp') }}'">
+                    @if($txn->equipment && $txn->equipment->trashed())
+                        <div class="h-10 w-10 rounded-lg border border-gray-200 bg-gray-100 flex items-center justify-center text-gray-400" title="อุปกรณ์ถูกลบไปแล้ว">
+                            <i class="fas fa-trash-alt text-xs"></i>
+                        </div>
+                    @else
+                        <img class="h-10 w-10 rounded-lg object-cover border border-gray-200 shadow-sm" 
+                             src="{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}" 
+                             alt=""
+                             onerror="this.src='{{ asset('images/placeholder.webp') }}'">
+                    @endif
                 </div>
                 
                 {{-- ข้อความรายละเอียด --}}
                 <div class="flex flex-col min-w-0">
-                    <span class="text-sm font-bold text-gray-800 truncate" title="{{ $txn->equipment->name }}">
-                        {{ $txn->equipment->name }}
+                    <span class="text-sm font-bold text-gray-800 truncate" title="{{ optional($txn->equipment)->name }}">
+                        {{ optional($txn->equipment)->name ?? 'Unknown Equipment (Deleted)' }}
                     </span>
                     
                     <div class="flex flex-wrap items-center gap-2 mt-1">
                         {{-- Serial Number Badge --}}
                         <span class="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 font-mono">
-                            SN: {{ $txn->equipment->serial_number ?? '-' }}
+                            SN: {{ optional($txn->equipment)->serial_number ?? '-' }}
                         </span>
 
                         {{-- Purpose Badge (แสดงวัตถุประสงค์อย่างเดียว) --}}
@@ -107,7 +113,7 @@
                 <span class="text-sm font-bold {{ $isCancelled ? 'line-through text-gray-400' : ($txn->quantity_change < 0 ? 'text-red-600' : 'text-green-600') }}">
                     {{ $txn->quantity_change > 0 ? '+' : '' }}{{ $txn->quantity_change }}
                 </span>
-                <span class="text-[10px] text-gray-400">{{ $txn->equipment->unit->name ?? 'หน่วย' }}</span>
+                <span class="text-[10px] text-gray-400">{{ optional($txn->equipment)->unit->name ?? 'หน่วย' }}</span>
             </div>
         </td>
 
@@ -187,13 +193,13 @@
                         <button onclick="openRatingModal([{
                                     id: {{ $txn->id }},
                                     submit_url: '{{ route('transactions.rate', $txn->id) }}',
-                                    type: '{{ $txn->type == 'borrow' ? 'borrow' : ($txn->equipment->is_consumable ? 'one_way' : 'return_consumable') }}',
+                                    type: '{{ $txn->type == 'borrow' ? 'borrow' : (optional($txn->equipment)->is_consumable ? 'one_way' : 'return_consumable') }}',
                                     equipment: {
-                                        name: '{{ addslashes($txn->equipment->name) }}',
-                                        serial_number: '{{ $txn->equipment->serial_number }}',
-                                        category_id: {{ $txn->equipment->category_id ?? 'null' }}
+                                        name: '{{ addslashes(optional($txn->equipment)->name ?? '') }}',
+                                        serial_number: '{{ optional($txn->equipment)->serial_number }}',
+                                        category_id: {{ optional($txn->equipment)->category_id ?? 'null' }}
                                     },
-                                    equipment_image_url: '{{ $txn->equipment->latestImage ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}'
+                                    equipment_image_url: '{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}'
                                 }])" 
                                 class="text-indigo-600 hover:text-indigo-800 text-xs font-bold hover:underline transition-all flex items-center justify-center gap-1 mx-auto">
                             <i class="far fa-edit"></i> ประเมิน

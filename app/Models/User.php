@@ -52,10 +52,18 @@ class User extends Authenticatable
       * Relationship to ServiceUserRole (it_stock_db)
       * (จากไฟล์ตัวอย่างที่ถูกต้อง)
       */
-     public function serviceUserRole()
-     {
-         return $this->hasOne(ServiceUserRole::class, 'user_id', 'id');
-     }
+    public function serviceUserRole()
+    {
+        // Explicitly define the table with database name for cross-DB compatibility
+        $serviceRoleModel = new ServiceUserRole();
+        $connectionName = $serviceRoleModel->getConnectionName();
+        $databaseName = config("database.connections.{$connectionName}.database");
+        $table = $serviceRoleModel->getTable();
+        $fullTableName = $databaseName . '.' . $table;
+
+        return $this->hasOne(ServiceUserRole::class, 'user_id', 'id')
+                    ->from($fullTableName);
+    }
 
      /**
       * Relationship to Transactions (it_stock_db) where this user is the requestor
