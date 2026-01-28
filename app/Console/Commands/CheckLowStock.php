@@ -16,6 +16,11 @@ class CheckLowStock extends Command
 
     public function handle()
     {
+        // DISABLED: Conficts with 'stock:monthly-check' (Automated PO).
+        // This command steals items into a local Pending PO, preventing the API-based Monthly Check from processing them.
+        Log::info('CheckLowStock: (DISABLED) Job skipped to allow Monthly Check to run.');
+        return 0;
+
         $this->info('Checking for low stock items...');
         Log::info('CheckLowStock: Starting job.');
 

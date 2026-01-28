@@ -139,7 +139,8 @@ class PurchaseOrderController extends Controller
     {
         $this->authorize('po:create');
         try {
-            Artisan::call('app:check-low-stock');
+            // ✅ Use new command with --draft-only to just populate the list (no auto-submit)
+            Artisan::call('stock:monthly-check', ['--draft-only' => true]);
             return redirect()->route('purchase-orders.index')->with('success', 'รันคำสั่งตรวจสอบสต็อกต่ำสำเร็จแล้ว!');
         } catch (\Exception $e) {
             Log::error('Manual stock check failed: ' . $e->getMessage());
@@ -167,7 +168,7 @@ class PurchaseOrderController extends Controller
     }
 
     // --- Helper Function to Send PO Data ---
-    private function sendPurchaseOrderToApi(PurchaseOrder $order, Request $request)
+    public function sendPurchaseOrderToApi(PurchaseOrder $order, Request $request, bool $suppressNotification = false)
     {
         // 1. ตรวจสอบว่าเปิดใช้งาน API หรือไม่ (Bypass Check)
         $apiEnabled = config('services.pu_hub.enabled', true);
@@ -450,11 +451,13 @@ class PurchaseOrderController extends Controller
         }
 
         // 🔔 Notification: PU Received & PR/PO Assigned (Sync)
-        try {
-            (new \App\Services\SynologyService())->notify(
-                new \App\Notifications\PurchaseOrderUpdatedNotification($order, 'ordered')
-            );
-        } catch (\Exception $e) { Log::error("Notify PU Sync Error: " . $e->getMessage()); }
+        if (!$suppressNotification) {
+            try {
+                (new \App\Services\SynologyService())->notify(
+                    new \App\Notifications\PurchaseOrderUpdatedNotification($order, 'ordered')
+                );
+            } catch (\Exception $e) { Log::error("Notify PU Sync Error: " . $e->getMessage()); }
+        }
 
         return [
             'success' => true,

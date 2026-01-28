@@ -17,7 +17,7 @@ class CheckLowStockAndNotifyPU extends Command
      *
      * @var string
      */
-    protected $signature = 'stock:monthly-check {--force : Force run without checking schedule}';
+    protected $signature = 'stock:monthly-check {--force : Force run without checking schedule} {--draft-only : Create PO but do not auto-submit to API}';
 
     /**
      * The console command description.
@@ -32,52 +32,76 @@ class CheckLowStockAndNotifyPU extends Command
     public function handle()
     {
         $isForce = $this->option('force');
-        // \Illuminate\Support\Facades\Log::info("Running stock:monthly-check. Force: " . ($isForce ? 'Yes' : 'No'));
+        $isDraftOnly = $this->option('draft-only');
 
-        // 0. Check Schedule (if not forced)
-        if (!$isForce) {
+        // 0. Check Schedule (if not forced AND not draft-only)
+        if (!$isForce && !$isDraftOnly) {
             // Default: 24th of month at 23:50
             $scheduleDay = \App\Models\Setting::where('key', 'auto_po_schedule_day')->value('value') ?? 24;
             $scheduleTime = \App\Models\Setting::where('key', 'auto_po_schedule_time')->value('value') ?? '23:50';
 
-            $now = Carbon::now();
+            // ✅ Fix: Force Timezone to Asia/Bangkok for consistency
+            $now = Carbon::now('Asia/Bangkok');
             
-            // \Illuminate\Support\Facades\Log::info("Checking Schedule. Now: {$now->format('d H:i')}, Scheduled: Day {$scheduleDay} Time {$scheduleTime}");
-
             // Check if today is the scheduled day
             if ($now->day != $scheduleDay) {
-                // \Illuminate\Support\Facades\Log::info("Skipped: Not the scheduled day.");
                 return;
             }
 
             // Check time (compare H:i)
             if ($now->format('H:i') !== $scheduleTime) {
-                // \Illuminate\Support\Facades\Log::info("Skipped: Not the scheduled time.");
                 return;
             }
+
+            // ✅ Fix: Use Setting to track monthly run instead of 'existing PO' check
+            // This prevents manual 'scheduled' POs (like from Webhooks) from blocking the monthly run
+            $lastRunMonth = \App\Models\Setting::where('key', 'last_auto_po_run_month')->value('value');
+            $currentMonth = $now->format('Y-m');
+
+            if ($lastRunMonth === $currentMonth) {
+                \Illuminate\Support\Facades\Log::info("Skipped: Monthly check already ran for {$currentMonth}.");
+                return;
+            }
+        } else {
+            $now = Carbon::now('Asia/Bangkok');
         }
 
         $this->info('Starting monthly stock check...');
         \Illuminate\Support\Facades\Log::info("Starting stock check processing...");
 
         // 1. Find Low Stock Items
-        $lowStockItems = Equipment::whereColumn('quantity', '<=', 'min_stock')
-            ->where('min_stock', '>', 0) // Ensure we only check items that track stock
-            // ✅ Anti-Duplicate Logic: Prevent re-ordering if item is already in an active PO
-            ->whereDoesntHave('purchaseOrderItems.purchaseOrder', function ($query) {
-                $query->whereIn('status', [
+        $query = Equipment::whereColumn('quantity', '<=', 'min_stock')
+            ->where('min_stock', '>', 0);
+
+        // ✅ Anti-Duplicate Logic: Prevent re-ordering if item is already in an active PO
+        // ONLY applies to Automatic Run (!force). Manual run (User) can override.
+        if (!$isForce) {
+            $query->whereDoesntHave('purchaseOrderItems.purchaseOrder', function ($q) {
+                $q->whereIn('status', [
                     'pending', 
                     'ordered', 
                     'approved', 
                     'shipped_from_supplier', 
                     'partial_receive'
                 ]);
-            })
-            ->get();
+            });
+        }
+
+        $lowStockItems = $query->get();
 
         if ($lowStockItems->isEmpty()) {
             $this->info('No low stock items found.');
             \Illuminate\Support\Facades\Log::info("Result: No low stock items found.");
+            // ✅ Mark as run even if no items, to prevents re-running every minute? 
+            // Actually, if no items, we might WANT to run again if items become low later today?
+            // User requirement: "Monthly Check" -> implies one-shot.
+            // Let's mark it as run to be safe and avoid log spam.
+            if (!$isForce && !$isDraftOnly) {
+                 \App\Models\Setting::updateOrCreate(
+                    ['key' => 'last_auto_po_run_month'],
+                    ['value' => $now->format('Y-m')]
+                );
+            }
             return;
         }
 
@@ -88,50 +112,47 @@ class CheckLowStockAndNotifyPU extends Command
         DB::beginTransaction();
 
         try {
-            // 1.1 Check if a pending scheduled PO already exists for this month
-            // This prevents duplicate POs if the script runs multiple times or force run is used repeatedly
-            $currentMonth = Carbon::now()->format('Y-m');
-            $existingPO = PurchaseOrder::where('type', 'scheduled')
-                // ->where('status', 'pending') // REMOVED: Check ALL statuses to prevent duplicate monthly orders
-                ->whereYear('created_at', Carbon::now()->year)
-                ->whereMonth('created_at', Carbon::now()->month)
-                ->first();
+            // ✅ "Existing PO" Check removed (Handled by Settings)
+            
+            // 2. Create Purchase Order (Original Logic)
 
-            if ($existingPO) {
-                $this->warn("A scheduled Purchase Order already exists for this month (PO: {$existingPO->po_number}). Skipping creation.");
-                \Illuminate\Support\Facades\Log::info("SKIPPED: Scheduled PO exists: {$existingPO->po_number}");
-                DB::rollBack(); // Nothing done yet, but good practice to clear transaction context if any
-                return;
-            }
 
-            // 2. Create Purchase Order
-            $poNumber = 'PO-AUTO-' . Carbon::now()->format('YmdHis');
-            \Illuminate\Support\Facades\Log::info("STEP 2: Preparing PO Data for {$poNumber}");
+            // 2. Create Purchase Order (Mimic Manual Creation)
+            // Leave po_number NULL and status 'pending' to act like "Check Low Stock" button.
+            // The API call later will assign the number and change status to 'ordered'.
             
             // Get Auto Requester ID from settings
             $requesterId = \App\Models\Setting::where('key', 'automation_requester_id')->value('value');
             \Illuminate\Support\Facades\Log::info("DEBUG: Settings Requester ID: " . json_encode($requesterId));
 
-            // Fallback: If no auto user set, try to use first admin or user ID 1 (Risky but better than crashing)
-            // Or leave null if DB allows. However, typically we need a user.
             if (!$requesterId) {
-                // Try to find a user to assign to
                 $u = \App\Models\User::first();
                 $requesterId = $u ? $u->id : null;
-                \Illuminate\Support\Facades\Log::info("DEBUG: Fallback Requester ID: " . json_encode($requesterId));
             }
 
             $poData = [
-                'po_number' => $poNumber,
-                'status' => 'ordered', // ✅ CHANGED: Auto-submit to 'ordered'
+                'po_number' => null, // Let API assign it
+                'status' => 'pending', // Pending submission
                 'type' => 'scheduled', 
                 'ordered_at' => Carbon::now(),
                 'notes' => 'Auto-generated monthly stock check for ' . Carbon::now()->format('F Y'),
                 'ordered_by_user_id' => $requesterId,
             ];
-            \Illuminate\Support\Facades\Log::info("STEP 3: Creating PurchaseOrder with data: " . json_encode($poData));
 
-            $purchaseOrder = PurchaseOrder::create($poData);
+            // ✅ Find existing Pending Scheduled PO to reuse (Cart behavior)
+            $purchaseOrder = PurchaseOrder::where('type', 'scheduled')
+                ->where('status', 'pending')
+                ->latest() // Get the most recent one if duplicates exist
+                ->first();
+
+            if ($purchaseOrder) {
+                 \Illuminate\Support\Facades\Log::info("STEP 3: Reusing Existing Pending PO #{$purchaseOrder->id}");
+                 // Update timestamp or notes if needed? Maybe not.
+            } else {
+                 \Illuminate\Support\Facades\Log::info("STEP 3: Creating New Pending PurchaseOrder");
+                 $purchaseOrder = PurchaseOrder::create($poData);
+            }
+            $poNumber = "PENDING-{$purchaseOrder->id}"; // Temporary placeholder for logs
             \Illuminate\Support\Facades\Log::info("STEP 4: PurchaseOrder Created. ID: " . $purchaseOrder->id);
 
             $totalAmount = 0;
@@ -148,21 +169,69 @@ class CheckLowStockAndNotifyPU extends Command
                 
                 if ($orderQty <= 0) $orderQty = 1; // Ensure at least 1
 
-                PurchaseOrderItem::create([
-                    'purchase_order_id' => $purchaseOrder->id,
-                    'equipment_id' => $item->id,
-                    'quantity_ordered' => $orderQty,
-                    'unit_price' => 0, // Unknown price
-                    'total_price' => 0,
-                ]);
+                // ✅ Check if item already exists in this PO (Merge/Skip)
+                $existingItem = $purchaseOrder->items()->where('equipment_id', $item->id)->first();
+                
+                if ($existingItem) {
+                    \Illuminate\Support\Facades\Log::info("   -> Item {$item->id} already in PO. Updating Qty.");
+                    // Optional: Update quantity? Or just skip? User wants "Low Stock Check"
+                    // If we just skip, and they consumed more, maybe they want updated Qty?
+                    // Let's update Qty to new calculation.
+                    $existingItem->quantity_ordered = $orderQty;
+                    $existingItem->save();
+                    $itemsList[] = "- {$item->name} (Updated Qty: {$orderQty})";
+                } else {
+                    PurchaseOrderItem::create([
+                        'purchase_order_id' => $purchaseOrder->id,
+                        'equipment_id' => $item->id,
+                        'quantity_ordered' => $orderQty,
+                        'unit_price' => 0, // Unknown price
+                        'total_price' => 0,
+                    ]);
+                    $itemsList[] = "- {$item->name} (Qty: {$orderQty})";
+                }
 
-                $itemsList[] = "- {$item->name} (Qty: {$orderQty})";
+                // $itemsList[] = "- {$item->name} (Qty: {$orderQty})"; // REMOVED: Duplicate addition
             }
             \Illuminate\Support\Facades\Log::info("STEP 6: Items added. Committing DB Transaction.");
 
             DB::commit();
-            $this->info("Purchase Order {$poNumber} created successfully.");
             \Illuminate\Support\Facades\Log::info("STEP 7: DB Transaction Committed.");
+
+            // ✅ DRAFT ONLY MODE: Stop here (Manual Check Button Usage)
+            if ($this->option('draft-only')) {
+                $this->info("DRAFT MODE: Pending PO created/updated. Stopping before API submission.");
+                \Illuminate\Support\Facades\Log::info("CheckLowStock: Draft PO #{$purchaseOrder->id} created/updated. User must submit manually.");
+                return;
+            }
+
+            // ✅ TRIGGER API SUBMISSION (Like pressing "Submit PO")
+            \Illuminate\Support\Facades\Log::info("STEP 7.5: Submitting PO to PU Hub API...");
+            
+            try {
+                $controller = new \App\Http\Controllers\PurchaseOrderController();
+                $request = new \Illuminate\Http\Request(); // Empty request
+                
+            // Call the public method to send to API
+                // ✅ Pass TRUE to suppress the standard "PU Accepted" notification
+                // because we will send our own Custom "Automated Monthly Stock Check" notification below.
+                $controller->sendPurchaseOrderToApi($purchaseOrder, $request, true);
+                
+                // Refresh to get the assigned PO Number from API
+                $purchaseOrder->refresh();
+                $poNumber = $purchaseOrder->po_number; 
+                
+                $this->info("PO Submitted to API. Assigned Number: {$poNumber}");
+                \Illuminate\Support\Facades\Log::info("API Submission Success. PO Number: {$poNumber}");
+
+            } catch (\Exception $e) {
+                $this->error("Failed to submit to API: " . $e->getMessage());
+                \Illuminate\Support\Facades\Log::error("API Submission Failed: " . $e->getMessage());
+                // Continue to notify Synology, but maybe warn about failure?
+                // The Synology msg shows $po->po_number. If NULL, it will show empty.
+            }
+            
+            $this->info("Purchase Order processed successfully.");
 
             // 3. Notify Synology Chat
             \Illuminate\Support\Facades\Log::info("STEP 8: Sending Notification.");
@@ -195,24 +264,30 @@ class CheckLowStockAndNotifyPU extends Command
 
         \Illuminate\Support\Facades\Log::info("DEBUG: Webhook URL: " . $webhookUrl);
 
-        $message = "📢 **Automated Monthly Stock Check**\n";
-        $message .= "Purchase Order: **{$po->po_number}** has been created.\n";
-        $message .= "Total Items: **" . count($items) . "**\n\n";
-        $message .= "**Items List:**\n";
+        $message = "📢 **ตรวจสอบสต็อกรายเดือนอัตโนมัติ**\n";
+        $message .= "เลขที่ใบสั่งซื้อ: **{$po->po_number}** สร้างสำเร็จแล้ว\n";
+        $message .= "จำนวนรายการทั้งหมด: **" . count($items) . "** รายการ\n\n";
+        $message .= "**รายการสินค้า:**\n";
         
         // Limit items in chat to avoid huge messages
         $displayItems = array_slice($items, 0, 10);
         $message .= implode("\n", $displayItems);
         
         if (count($items) > 10) {
-            $message .= "\n...and " . (count($items) - 10) . " more items.";
+            $message .= "\n...และอีก " . (count($items) - 10) . " รายการ";
         }
 
-        $message .= "\n\nPlease review and process in the system.";
+        $message .= "\n\nกรุณาตรวจสอบและดำเนินการในระบบ";
 
         try {
+            // ✅ Fix: Fallback to PR Number if PO Number is waiting for approval
+            $displayNumber = $po->po_number ?? $po->pr_number ?? 'รอเลขที่ (PR Created)';
+            $message = str_replace("**{$po->po_number}**", "**{$displayNumber}**", $message);
+
             \Illuminate\Support\Facades\Log::info("DEBUG: Sending POST request to Synology (Form URL Encoded)...");
             
+            // Note: sleep(2) removed as we now suppress the duplicate notification cleanly.
+
             // ✅ Fix: Synology expects form-data with 'payload' key containing JSON string
             $response = Http::asForm()->post($webhookUrl, [
                 'payload' => json_encode(['text' => $message])

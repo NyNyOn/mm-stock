@@ -147,6 +147,14 @@ class PurchaseTrackController extends Controller
             'orderedBy'    // ผู้กดสั่ง (Admin/System)
         ])
         ->whereIn('status', $statuses)
+        // ✅ FILTER: Hide "Draft" Pending POs (Manual Check) from Tracking
+        // Show Pending ONLY if it's a Resubmit or has a PR/PO Number assigned.
+        ->where(function($query) {
+             $query->where('status', '!=', 'pending')
+                   ->orWhereNotNull('po_number')
+                   ->orWhereNotNull('pr_number')
+                   ->orWhere('pu_data->is_resubmit', true);
+        })
         // ✅ FILTER: Ensure we only get POs that actually have active items left
         ->whereHas('items', function($q) use ($rejectedStatuses) {
             $q->whereNotIn('status', $rejectedStatuses);

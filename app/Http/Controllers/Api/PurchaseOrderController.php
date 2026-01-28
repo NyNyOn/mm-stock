@@ -413,6 +413,75 @@ class PurchaseOrderController extends Controller
             }
         }
 
+        // --------------------------------------------------------
+        // Handler for PO COMPLETED (Phase 3.2 - Final Price & Status)
+        // --------------------------------------------------------
+        if ($eventType === 'po_completed') {
+            $poCode = $request->input('po_code');
+            $completedAt = $request->input('completed_at');
+            $supplierName = $request->input('supplier_name');
+            $itemsList = $request->input('items', []);
+
+            Log::info("API: Received PO Completion for PO: {$poCode}");
+
+            $po = PurchaseOrder::where('po_number', $poCode)->first();
+
+            if ($po) {
+                // 1. Update Header Info
+                if ($supplierName && $supplierName !== 'Unknown') {
+                    $po->supplier_name = $supplierName;
+                }
+                
+                // 2. Process Items (Update Price)
+                foreach ($itemsList as $rItem) {
+                    // Try to match item by name or other heuristic
+                    // Since we don't have ID in this payload snippet, we rely on name.
+                    // Ideally, we should match exact string.
+                    $itemName = $rItem['item_name'];
+                    $unitPrice = $rItem['unit_price'] ?? 0;
+                    
+                    // Finds the item
+                    $item = $po->items()
+                        ->where('item_description', $itemName)
+                        ->first();
+
+                    if ($item) {
+                        $item->unit_price = $unitPrice;
+                        // $item->quantity_received = $rItem['quantity']; // Optional: Sync Qty?
+                        $item->save();
+                        
+                        // Update Master Equipment Price if linked
+                        if ($item->equipment_id && $unitPrice > 0) {
+                            $equipment = $item->equipment;
+                            $equipment->price = $unitPrice;
+                            $equipment->save();
+                        }
+                    }
+                }
+
+                // 3. Mark as Completed (if not already)
+                if ($po->status !== 'completed') {
+                    $po->status = 'completed';
+                    // $po->completed_at = $completedAt; // If column exists
+                    $po->save();
+                    Log::info("API: Set PO #{$po->id} to 'completed' via Webhook.");
+                    
+                    // Notify
+                    try {
+                         $notification = new \App\Notifications\PurchaseOrderUpdatedNotification($po, 'completed');
+                         (new \App\Services\SynologyService())->notify($notification);
+                    } catch (\Exception $e) {}
+                }
+
+                // Log History
+                $this->addPoHistoryLog($po, 'Completed', "PO Completed by PU (Total Items: ".count($itemsList).")");
+
+                return response()->json(['success' => true, 'message' => 'PO marked as completed and prices updated.']);
+            }
+            
+            return response()->json(['success' => false, 'message' => 'PO not found'], 404);
+        }
+
         // --- HANDLER FOR REJECTION RESPONSES (Phase 3) ---
         if ($eventType === 'item_inspection_result') {
             Log::info("API: Processing Inspection Result Action: {$action}");
