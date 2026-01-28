@@ -580,6 +580,43 @@ class EquipmentController extends Controller
                         'status' => 'received',
                         'quantity_received' => $equipment->quantity 
                     ]);
+                    
+                    // ✅ Update PO Status Logic (copied from ReceiveController)
+                    $po = $poItem->purchaseOrder;
+                    if ($po) {
+                        $po->refresh();
+                        $pendingItemsCount = $po->items()
+                            ->where(function ($q) {
+                                $q->whereRaw('ifnull(quantity_received, 0) < quantity_ordered')
+                                  ->whereNotIn('status', ['returned', 'inspection_failed', 'cancelled', 'rejected']);
+                            })->count();
+
+                        if ($pendingItemsCount == 0) {
+                            $successCount = $po->items()->where(function($q){ 
+                                $q->where('status', 'received')->orWhere('status', 'completed'); 
+                            })->count();
+                            
+                            $issueCount = $po->items()->whereIn('status', ['returned', 'inspection_failed'])->count();
+                            $rejectCount = $po->items()->whereIn('status', ['cancelled', 'rejected'])->count();
+
+                            $newStatus = 'completed';
+                            if ($successCount > 0 && ($issueCount > 0 || $rejectCount > 0)) {
+                                $newStatus = 'partial_receive';
+                            } elseif ($successCount == 0 && $issueCount > 0) {
+                                $newStatus = 'inspection_failed';
+                            } elseif ($successCount == 0 && $rejectCount > 0) {
+                                $newStatus = 'cancelled';
+                            }
+                            
+                            if ($po->status !== $newStatus) {
+                                $po->update(['status' => $newStatus]);
+                            }
+                        } else {
+                            if ($po->status !== 'partial_receive') {
+                                $po->update(['status' => 'partial_receive']);
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -763,6 +800,25 @@ class EquipmentController extends Controller
                 try { Storage::disk('public')->delete($equipment->msds_file_path); }
                 catch (\Exception $e) { Log::warning('MSDS file deletion failed during destroy(): ' . $e->getMessage(), ['path' => $equipment->msds_file_path]); }
             }
+
+            // ✅ PREVENT: "Deleted Equipment blocks Re-receive" Issue
+            // เมื่อลบอุปกรณ์ ให้เคลียร์ค่า equipment_id ใน PO Item ที่ผูกกันอยู่
+            // และรีเซ็ตสถานะเป้น 'pending' เพื่อให้ User สามารถกดรับของใหม่ได้
+            $relatedPoItems = \App\Models\PurchaseOrderItem::where('equipment_id', $equipment->id)->get();
+            foreach ($relatedPoItems as $poItem) {
+                $poItem->update([
+                    'equipment_id' => null,
+                    'status' => 'pending',
+                    'quantity_received' => 0
+                ]);
+                
+                // เปิด PO Status กลับมาเป็น 'partial_receive' เพื่อให้เห็นในหน้า Receive
+                $po = $poItem->purchaseOrder;
+                if ($po && !in_array($po->status, ['shipped_from_supplier', 'partial_receive', 'contact_vendor'])) {
+                    $po->update(['status' => 'partial_receive']);
+                }
+            }
+
             $equipment->delete();
         });
         $message = 'ลบข้อมูลอุปกรณ์และไฟล์ที่เกี่ยวข้องสำเร็จแล้ว!';

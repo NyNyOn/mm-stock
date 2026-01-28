@@ -18,7 +18,7 @@
 
             {{-- Equipment Info --}}
             <div class="flex items-start space-x-4">
-                <img id="modal-tx-image" src="{{ asset('images/placeholder.webp') }}" alt="Equipment Image" class="flex-shrink-0 object-cover w-24 h-24 border rounded-lg gentle-shadow bg-gray-50">
+                <img id="modal-tx-image" src="{{ asset('images/no-image.png') }}" alt="Equipment Image" class="flex-shrink-0 object-cover w-24 h-24 border rounded-lg gentle-shadow bg-gray-50">
                 <div class="flex-grow">
                     <p class="text-xs font-semibold text-gray-500 uppercase">อุปกรณ์</p>
                     <p id="modal-tx-equipment-name" class="text-lg font-bold text-gray-800 break-words">...</p>

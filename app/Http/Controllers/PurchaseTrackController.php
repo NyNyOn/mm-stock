@@ -37,7 +37,19 @@ class PurchaseTrackController extends Controller
             $automationUsers['job_order_glpi'] = $user;
         }
 
-        $viewData = compact('purchaseOrders', 'automationUsers');
+        // ✅ Optimization: Pre-fetch Equipment Status for Placeholder Logic
+        $itemNames = $purchaseOrders->pluck('items')->flatten()->pluck('item_description')->filter()->unique();
+        $equipmentStatusMap = \App\Models\Equipment::withTrashed()
+            ->whereIn('name', $itemNames)
+            ->select('name', 'deleted_at')
+            ->get()
+            ->groupBy('name')
+            ->map(function ($group) {
+                if ($group->contains(fn($e) => is_null($e->deleted_at))) return 'active'; // มี Active
+                return 'trashed'; // มีแต่ Trashed
+            });
+
+        $viewData = compact('purchaseOrders', 'automationUsers', 'equipmentStatusMap');
 
         if (request()->ajax()) {
             return view('purchase-track.partials._list', $viewData)->render();
@@ -98,7 +110,19 @@ class PurchaseTrackController extends Controller
             $automationUsers['job_order_glpi'] = $user;
         }
 
-        $viewData = compact('purchaseOrders', 'automationUsers');
+        // ✅ Optimization: Pre-fetch Equipment Status for Placeholder Logic
+        $itemNames = $purchaseOrders->pluck('items')->flatten()->pluck('item_description')->filter()->unique();
+        $equipmentStatusMap = \App\Models\Equipment::withTrashed()
+            ->whereIn('name', $itemNames)
+            ->select('name', 'deleted_at')
+            ->get()
+            ->groupBy('name')
+            ->map(function ($group) {
+                if ($group->contains(fn($e) => is_null($e->deleted_at))) return 'active'; 
+                return 'trashed'; 
+            });
+
+        $viewData = compact('purchaseOrders', 'automationUsers', 'equipmentStatusMap');
 
         if (request()->ajax()) {
             return view('purchase-track.partials._list', $viewData)->render();

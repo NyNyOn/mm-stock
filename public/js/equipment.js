@@ -880,9 +880,22 @@ function initializeStepper(form, suffix) {
         const prev = document.getElementById(`prev-step-btn-${suffix}`);
         const next = document.getElementById(`next-step-btn-${suffix}`);
         const sub = document.getElementById(`submit-btn-${suffix}`);
-        if (prev) prev.classList.toggle('hidden', step === 1);
-        if (next) next.classList.toggle('hidden', step === total);
-        if (sub) sub.classList.toggle('hidden', step !== total);
+
+        if (prev) {
+            prev.classList.toggle('hidden', step === 1);
+            prev.style.display = (step === 1) ? 'none' : ''; // Force hide
+        }
+
+        if (next) {
+            const isLastStep = step >= total;
+            next.classList.toggle('hidden', isLastStep);
+            next.style.display = isLastStep ? 'none' : ''; // Force hide
+        }
+
+        if (sub) {
+            const isLastStep = step >= total;
+            sub.classList.toggle('hidden', !isLastStep); // Show on last step
+        }
     };
 
     const nextBtn = document.getElementById(`next-step-btn-${suffix}`);
@@ -930,13 +943,78 @@ function handleMsdsCheckboxChange(e) {
 async function openMsdsModal(form) {
     const suffix = form.id.split('-').pop();
     const detailsInput = document.getElementById(`msds_details_hidden-${suffix}`);
-    const { value: text } = await Swal.fire({
-        input: 'textarea',
-        inputLabel: 'รายละเอียด MSDS',
-        inputValue: detailsInput.value,
-        showCancelButton: true
+    const fileHiddenInput = document.getElementById(`msds_file_hidden-${suffix}`);
+    const statusLabel = document.getElementById(`msds-file-status-${suffix}`);
+
+    // Create HTML for Swal
+    const htmlContent = `
+        <div class="text-left p-1 space-y-4">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">
+                    <i class="fas fa-align-left mr-1 text-gray-500"></i> รายละเอียด MSDS
+                </label>
+                <textarea id="swal-msds-details" class="swal2-textarea w-full border border-gray-300 rounded-lg p-2 text-sm"
+                          style="min-height: 100px; margin: 0;"
+                          placeholder="รายละเอียดสารเคมี, ข้อควรระวัง...">${detailsInput.value || ''}</textarea>
+            </div>
+            <div class="border-t border-gray-200 pt-3">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-paperclip mr-1 text-gray-500"></i> อัปโหลดไฟล์ใหม่
+                </label>
+                <input type="file" id="swal-msds-file" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                       accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png">
+                <div id="swal-file-preview" class="mt-2 text-xs text-gray-500">
+                    ${fileHiddenInput.files.length > 0
+            ? '<i class="fas fa-check-circle text-green-500"></i> รออัปโหลด: ' + fileHiddenInput.files[0].name
+            : '<i class="fas fa-info-circle"></i> ปัจจุบัน: ' + (statusLabel.innerText.replace('ไฟล์ปัจจุบัน:', '').trim() || 'ไม่มีไฟล์ใหม่')}
+                </div>
+            </div>
+        </div>
+    `;
+
+    const { value: result } = await Swal.fire({
+        title: 'จัดการข้อมูล MSDS',
+        html: htmlContent,
+        showCancelButton: true,
+        confirmButtonText: 'บันทึก',
+        cancelButtonText: 'ยกเลิก',
+        focusConfirm: false,
+        didOpen: () => {
+            const fileInput = Swal.getPopup().querySelector('#swal-msds-file');
+            const preview = Swal.getPopup().querySelector('#swal-file-preview');
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length > 0) {
+                    preview.innerHTML = `<i class="fas fa-check-circle text-green-500"></i> เลือกแล้ว: ${fileInput.files[0].name}`;
+                } else {
+                    preview.innerHTML = '<i class="fas fa-info-circle"></i> ไม่ได้เลือกไฟล์ใหม่';
+                }
+            });
+        },
+        preConfirm: () => {
+            return {
+                details: document.getElementById('swal-msds-details').value,
+                files: document.getElementById('swal-msds-file').files
+            };
+        }
     });
-    if (text !== undefined) detailsInput.value = text;
+
+    if (result) {
+        // 1. Update Details
+        detailsInput.value = result.details;
+
+        // 2. Update File (Sync to main form hidden input)
+        if (result.files.length > 0) {
+            fileHiddenInput.files = result.files; // Assign FileList directly
+            // Update UI Status
+            statusLabel.innerHTML = `ไฟล์ใหม่รออัปโหลด: <span class="text-green-600 font-medium">${result.files[0].name}</span>`;
+        }
+
+        // 3. Show Success Toast
+        const Toast = Swal.mixin({
+            toast: true, position: 'top-end', showConfirmButton: false, timer: 3000
+        });
+        Toast.fire({ icon: 'success', title: 'บันทึกข้อมูล MSDS แล้ว (กดบันทึกที่ฟอร์มหลักเพื่อยืนยัน)' });
+    }
 }
 
 // ==========================================================================

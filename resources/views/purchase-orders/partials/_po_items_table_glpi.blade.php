@@ -26,7 +26,7 @@ It expects:
                             {{-- Logic to determine the correct image URL --}}
                             @php
                                 $equipment = $item->equipment; // Get the related equipment model (if linked)
-                                $imageUrl = asset('images/placeholder.webp'); // Default placeholder image
+                                $imageUrl = asset('images/no-image.png'); // Default placeholder image
                                 $debugSource = 'Default Placeholder'; // Debug variable
 
                                 // <!-- DEBUG: Check initial values -->
@@ -89,7 +89,7 @@ It expects:
                             <img src="{{ $imageUrl }}"
                                  alt="{{ $item->item_description ?? (optional($equipment)->name ?? 'Item Image') }}"
                                  class="object-cover w-12 h-12 rounded-md gentle-shadow border border-gray-100 bg-white" {{-- Added bg-white --}}
-                                 onerror="this.onerror=null; this.src='{{ asset('images/placeholder.webp') }}'; console.error('Image failed to load:', this.src)"> {{-- Final fallback on error + Console log --}}
+                                 onerror="this.onerror=null; this.src='{{ asset('images/no-image.png') }}'; console.error('Image failed to load:', this.src)"> {{-- Final fallback on error + Console log --}}
                         </td>
                         <td class="p-3 align-top">
                             {{-- Display item description or equipment name --}}
@@ -159,7 +159,7 @@ It expects:
             @php
                 // Image Logic Copy for Mobile (Simplified for reuse if possible but keeping inline for safety)
                 $equipment = $item->equipment;
-                $imageUrl = asset('images/placeholder.webp');
+                $imageUrl = asset('images/no-image.png');
                 if ($equipment && isset($equipment->images) && $equipment->images->isNotEmpty()) {
                     $primaryImage = $equipment->images->firstWhere('is_primary', true) ?? $equipment->images->first();
                     $imageFileName = $primaryImage->file_name ?? null;
@@ -177,7 +177,7 @@ It expects:
                         <img src="{{ $imageUrl }}" 
                              alt="Item Image" 
                              class="w-full h-full object-contain p-1"
-                             onerror="this.onerror=null; this.src='{{ asset('images/placeholder.webp') }}';">
+                             onerror="this.onerror=null; this.src='{{ asset('images/no-image.png') }}';">
                     </div>
                     
                     {{-- Content --}}

@@ -37,7 +37,7 @@
                         @php
                             $remaining = abs($item->quantity_change) - $item->returned_quantity;
                             
-                            $imgUrl = asset('images/placeholder.webp');
+                            $imgUrl = asset('images/no-image.png');
                             if ($item->equipment && $item->equipment->latestImage) {
                                 $deptKey = config('department_stocks.default_nas_dept_key', 'mm');
                                 $imgUrl = route('nas.image', ['deptKey' => $deptKey, 'filename' => $item->equipment->latestImage->file_name]);
@@ -97,7 +97,7 @@
                 @forelse ($returnableItems as $item)
                     @php
                         $remaining = abs($item->quantity_change) - $item->returned_quantity;
-                        $imgUrl = asset('images/placeholder.webp');
+                        $imgUrl = asset('images/no-image.png');
                         if ($item->equipment && $item->equipment->latestImage) {
                             $deptKey = config('department_stocks.default_nas_dept_key', 'mm');
                             $imgUrl = route('nas.image', ['deptKey' => $deptKey, 'filename' => $item->equipment->latestImage->file_name]);
@@ -288,7 +288,7 @@
                 <tbody class="divide-y divide-gray-100 bg-white">
                     @forelse ($pendingReturns as $return)
                     @php
-                        $adminImgUrl = asset('images/placeholder.webp');
+                        $adminImgUrl = asset('images/no-image.png');
                         if ($return->originalTransaction && $return->originalTransaction->equipment && $return->originalTransaction->equipment->latestImage) {
                             $deptKey = config('department_stocks.default_nas_dept_key', 'mm');
                             $filename = $return->originalTransaction->equipment->latestImage->file_name;

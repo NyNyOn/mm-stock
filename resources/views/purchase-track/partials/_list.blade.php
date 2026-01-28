@@ -532,7 +532,7 @@
                     @foreach($po->items as $item)
                         @php
                             $equip = $item->equipment;
-                            $img = $equip ? $equip->image_url : asset('images/placeholder.webp');
+                            $img = $equip ? $equip->image_url : asset('images/no-image.png');
                             $itemName = $item->item_description ?? ($equip ? $equip->name : 'สินค้าไม่ระบุชื่อ');
                             
                             // ✅ ITEM SEPARATION LOGIC
@@ -548,14 +548,37 @@
                         <div class="flex items-start gap-3 bg-white p-3 rounded-lg border {{ $itemIsRejected ? 'border-red-300 ring-2 ring-red-50' : 'border-gray-200' }} shadow-sm hover:shadow-md transition-shadow h-full">
                             <div class="flex flex-col gap-1 w-24 flex-shrink-0 items-center">
                                 <div class="h-24 w-full rounded-lg bg-gray-100 border border-gray-200 overflow-hidden relative group">
-                                    @if($equip && $equip->trashed())
+                                    @if(!$item->equipment_id)
+                                        {{-- ✅ Unlinked: Intelligent Logic --}}
+                                        @php
+                                            $matchStatus = $equipmentStatusMap[$item->item_description] ?? null;
+                                        @endphp
+                                        @if($matchStatus === 'active')
+                                            <div class="h-full w-full flex flex-col items-center justify-center bg-yellow-50 border-2 border-dashed border-yellow-300 text-yellow-600" title="พบชื่อซ้ำในระบบ (รอเชื่อมโยง)">
+                                                <i class="fas fa-link text-xl mb-1 animate-pulse"></i>
+                                                <span class="text-[9px] font-bold text-center px-1">รอเชื่อมโยง</span>
+                                            </div>
+                                        @elseif($matchStatus === 'trashed')
+                                            <div class="h-full w-full flex flex-col items-center justify-center bg-red-50 border-2 border-dashed border-red-300 text-red-500" title="พบข้อมูลแต่ถูกลบไปแล้ว">
+                                                <i class="fas fa-exclamation-triangle text-xl mb-1"></i>
+                                                <span class="text-[9px] font-bold text-center px-1">ข้อมูลถูกลบ</span>
+                                            </div>
+                                        @else
+                                            <div class="h-full w-full flex flex-col items-center justify-center bg-indigo-50 border-2 border-dashed border-indigo-200 text-indigo-400">
+                                                <i class="fas fa-box-open text-xl mb-1 animate-pulse"></i>
+                                                <span class="text-[9px] font-bold text-center px-1">รอสร้าง</span>
+                                            </div>
+                                        @endif
+                                    @elseif($equip && $equip->trashed())
                                         <div class="h-full w-full flex flex-col items-center justify-center text-gray-400 bg-gray-100 p-2">
                                             <i class="fas fa-trash-alt text-xl mb-1"></i>
                                             <span class="text-[10px]">อุปกรณ์ถูกลบไปแล้ว</span>
                                         </div>
+                                    @elseif(!$img)
+                                         <img src="{{ asset('images/no-image.png') }}" class="h-full w-full object-cover">
                                     @else
-                                        <img src="{{ $img }}" class="h-full w-full object-cover" 
-                                             title="Debug: EquipID: {{ $equip ? $equip->id : 'null' }} | Images: {{ $equip ? $equip->images->count() : '0' }}">
+                                        <img src="{{ $img }}" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                             onerror="this.onerror=null; this.src='{{ asset('images/no-image.png') }}'">
                                     @endif
                                 </div>
                             </div>

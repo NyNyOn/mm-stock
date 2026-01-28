@@ -58,7 +58,7 @@
                                     $isLinked = !is_null($item->equipment);
                                     $itemId = (int) $item->id;
                                     $qtyToUse = (int) $remaining; 
-                                    $imgUrl = ($item->equipment && $item->equipment->latestImage) ? $item->equipment->latestImage->image_url : asset('images/placeholder.webp');
+                                    $imgUrl = ($item->equipment && $item->equipment->latestImage) ? $item->equipment->latestImage->image_url : asset('images/no-image.png');
                                     $itemName = $item->item_description ?? ($item->equipment->name ?? 'N/A');
                                     $unitName = $item->equipment->unit->name ?? 'หน่วย';
                                 @endphp
@@ -77,8 +77,35 @@
                                                 <i class="fas fa-trash-alt text-lg mb-1"></i>
                                                 <span class="text-[9px] leading-tight text-center px-1">ถูกลบแล้ว</span>
                                             </div>
+                                        @elseif(!$item->equipment_id)
+                                            <!-- DEBUG: UPDATED PLACEHOLDER LOGIC (ID: {{ $item->id }}) -->
+                                            @php
+                                                $matchStatus = $equipmentStatusMap[$item->item_description] ?? null;
+                                            @endphp
+                                            
+                                            @if($matchStatus === 'active')
+                                                {{-- 🔗 Found Active Match --}}
+                                                <div class="w-20 h-20 md:w-16 md:h-16 rounded-xl border-2 border-dashed border-yellow-300 bg-yellow-50 flex flex-col items-center justify-center text-yellow-600 shadow-inner" 
+                                                     title="พบชื่อซ้ำในระบบ (รอเชื่อมโยง)">
+                                                    <i class="fas fa-link text-xl mb-1 animate-pulse"></i>
+                                                    <span class="text-[8px] leading-tight text-center px-1 font-bold">รอเชื่อมโยง</span>
+                                                </div>
+                                            @elseif($matchStatus === 'trashed')
+                                                {{-- 🗑 Found Trashed Match --}}
+                                                <div class="w-20 h-20 md:w-16 md:h-16 rounded-xl border-2 border-dashed border-red-300 bg-red-50 flex flex-col items-center justify-center text-red-500 shadow-inner"
+                                                     title="พบข้อมูลแต่ถูกลบไปแล้ว (ตรวจสอบ)">
+                                                    <i class="fas fa-exclamation-triangle text-xl mb-1"></i>
+                                                    <span class="text-[8px] leading-tight text-center px-1 font-bold">ข้อมูลถูกลบ</span>
+                                                </div>
+                                            @else
+                                                {{-- ✨ No Match: Waiting for Creation --}}
+                                                <div class="w-20 h-20 md:w-16 md:h-16 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 flex flex-col items-center justify-center text-indigo-400 shadow-inner">
+                                                    <i class="fas fa-box-open text-xl mb-1 animate-pulse"></i>
+                                                    <span class="text-[8px] leading-tight text-center px-1 font-semibold text-indigo-500">รอสร้าง</span>
+                                                </div>
+                                            @endif
                                         @else
-                                            <img src="{{ $imgUrl }}" onerror="this.onerror=null;this.src='{{ asset('images/placeholder.webp') }}';" 
+                                            <img src="{{ $imgUrl }}" onerror="this.onerror=null;this.src='{{ asset('images/no-image.png') }}';" 
                                                  class="w-20 h-20 md:w-16 md:h-16 rounded-xl object-cover border-2 border-gray-200 bg-white shadow-md">
                                         @endif
                                     </div>

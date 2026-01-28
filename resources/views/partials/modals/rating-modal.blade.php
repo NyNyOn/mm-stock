@@ -181,7 +181,7 @@
         document.getElementById('rating-item-sn').innerText = item.equipment?.serial_number ? `SN: ${item.equipment.serial_number}` : 'SN: -';
         
         const imgEl = document.getElementById('rating-item-img');
-        if (item.equipment_image_url) { imgEl.src = item.equipment_image_url; } else { imgEl.src = "{{ asset('images/placeholder.webp') }}"; }
+        if (item.equipment_image_url) { imgEl.src = item.equipment_image_url; } else { imgEl.src = "{{ asset('images/no-image.png') }}"; }
 
         // ✅ Determine Questions Source
         let questions = [];

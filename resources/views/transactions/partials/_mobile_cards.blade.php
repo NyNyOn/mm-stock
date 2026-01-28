@@ -93,8 +93,8 @@
                     </div>
                 @else
                     <img class="h-16 w-16 rounded-lg object-cover border border-gray-200 bg-gray-100" 
-                         src="{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}" 
-                         onerror="this.src='{{ asset('images/placeholder.webp') }}'">
+                         src="{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/no-image.png') }}" 
+                         onerror="this.src='{{ asset('images/no-image.png') }}'">
                 @endif
             </div>
 

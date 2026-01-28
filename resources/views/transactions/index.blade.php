@@ -280,7 +280,7 @@
         
         // Reset & Show Loading
         document.getElementById('modalEquipment').innerText = 'กำลังโหลด...';
-        document.getElementById('modalImg').src = '{{ asset("images/placeholder.webp.gif") }}';
+        document.getElementById('modalImg').src = '{{ asset("images/no-image.png") }}';
         modal.classList.remove('hidden');
 
         try {
@@ -400,7 +400,7 @@
                 if(txn.equipment?.latest_image?.image_url) {
                     imgEl.src = txn.equipment.latest_image.image_url; 
                 } else {
-                    imgEl.src = '{{ asset("images/placeholder.webp") }}';
+                    imgEl.src = '{{ asset("images/no-image.png") }}';
                 }
             } else {
                 document.getElementById('modalEquipment').innerText = 'ไม่พบข้อมูล';

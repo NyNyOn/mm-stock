@@ -93,7 +93,7 @@
                                         <img src="{{ $item->image_url }}" 
                                              alt="{{ $item->name }}" 
                                              class="w-full h-full object-cover"
-                                             onerror="this.onerror=null; this.src='{{ asset('images/placeholder.webp') }}';">
+                                             onerror="this.onerror=null; this.src='{{ asset('images/no-image.png') }}';">
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">

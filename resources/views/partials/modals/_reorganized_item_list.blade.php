@@ -9,7 +9,7 @@
         @php
             $primaryImage = null;
             $imageFileName = null;
-            $imageUrl = asset('images/placeholder.webp'); // Default
+            $imageUrl = asset('images/no-image.png'); // Default
             $debugSource = 'Default Placeholder';
             $debugPrimaryFound = 'No';
             $debugImageCollectionCount = 0;
@@ -95,7 +95,7 @@
         {{-- ส่วนรูปภาพ (ใช้ $imageUrl ที่สร้างขึ้นใหม่) --}}
         <img src="{{ $imageUrl }}" alt="{{ $item->name }}"
              class="flex-shrink-0 object-cover w-16 h-16 rounded-lg gentle-shadow"
-             onerror="this.onerror=null; this.src='{{ asset('images/placeholder.webp') }}'; console.error('Modal Img Fail:', this.src);"> {{-- Added fallback --}}
+             onerror="this.onerror=null; this.src='{{ asset('images/no-image.png') }}'; console.error('Modal Img Fail:', this.src);"> {{-- Added fallback --}}
 
         {{-- ส่วนรายละเอียดหลัก --}}
         <div class="flex-grow min-w-0">

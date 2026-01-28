@@ -25,7 +25,7 @@
 
                             {{-- ✅✅✅ START: FINAL CLEAN LOGIC ✅✅✅ --}}
                             @php
-                                $imageUrl = asset('images/placeholder.webp'); // Default
+                                $imageUrl = asset('images/no-image.png'); // Default
 
                                 // 1. พยายามหารูปภาพหลัก/ล่าสุดจาก $item (Controller Eager load มาแล้ว)
                                 $displayImage = optional($item->primaryImage)->exists
@@ -62,7 +62,7 @@
                             <img src="{{ $imageUrl }}"
                                  alt="{{ $item->name }}"
                                  class="object-cover w-12 h-12 rounded-lg"
-                                 onerror="this.onerror=null; this.src='{{ asset('images/placeholder.webp') }}';">
+                                 onerror="this.onerror=null; this.src='{{ asset('images/no-image.png') }}';">
                             {{-- ✅✅✅ END: FINAL CLEAN LOGIC ✅✅✅ --}}
                             
                             <div>
@@ -128,7 +128,7 @@
                 <div class="flex gap-4 mb-4 pl-2">
                     {{-- Image Logic (Copied from desktop) --}}
                     @php
-                        $imageUrl = asset('images/placeholder.webp');
+                        $imageUrl = asset('images/no-image.png');
                         $displayImage = optional($item->primaryImage)->exists ? $item->primaryImage : $item->latestImage; 
                         if (optional($displayImage)->exists) {
                             $imageUrl = $displayImage->image_url;
@@ -148,7 +148,7 @@
                     @endphp
                     <div class="flex-shrink-0 w-20 h-20 bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
                         <img src="{{ $imageUrl }}" alt="{{ $item->name }}" class="w-full h-full object-contain p-1"
-                             onerror="this.onerror=null; this.src='{{ asset('images/placeholder.webp') }}';">
+                             onerror="this.onerror=null; this.src='{{ asset('images/no-image.png') }}';">
                     </div>
 
                     <div class="flex-1 min-w-0">

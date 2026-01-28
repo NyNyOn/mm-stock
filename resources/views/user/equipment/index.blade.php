@@ -82,7 +82,7 @@
                                         <div class="relative flex items-center justify-center w-full h-32 overflow-hidden bg-gray-100 dark:bg-gray-700 group">
                                             @php 
                                                 $imageFileName = $item->primary_image_file_name_manual ?? null;
-                                                $imageUrl = $imageFileName ? url("nas-images/{$result['dept_key']}/{$imageFileName}") : asset('images/placeholder.webp');
+                                                $imageUrl = $imageFileName ? url("nas-images/{$result['dept_key']}/{$imageFileName}") : asset('images/no-image.png');
                                             @endphp
                                             <img src="{{ $imageUrl }}" alt="{{ $item->name }}" 
                                                  class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" 
@@ -163,7 +163,7 @@
                         <div class="relative flex items-center justify-center w-full h-48 overflow-hidden bg-gray-100 rounded-t-2xl dark:bg-gray-700 group">
                             @php 
                                 $imageFileName = $item->primary_image_file_name_manual ?? null;
-                                $imageUrl = $imageFileName ? url("nas-images/{$currentDeptKey}/{$imageFileName}") : asset('images/placeholder.webp');
+                                $imageUrl = $imageFileName ? url("nas-images/{$currentDeptKey}/{$imageFileName}") : asset('images/no-image.png');
                             @endphp
                             <img src="{{ $imageUrl }}" alt="{{ $item->name }}" 
                                  class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" 

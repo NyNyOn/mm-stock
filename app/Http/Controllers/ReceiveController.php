@@ -55,11 +55,23 @@ class ReceiveController extends Controller
              $departmentsConfig = Config::get('department_stocks.departments', []);
              $currentDeptName = $departmentsConfig[$currentDeptKey]['name'] ?? strtoupper($currentDeptKey);
 
+            // ✅ Optimization: Pre-fetch Equipment Status for Placeholder Logic
+            $itemNames = $pendingPOs->pluck('items')->flatten()->pluck('item_description')->filter()->unique();
+            $equipmentStatusMap = \App\Models\Equipment::withTrashed()
+                ->whereIn('name', $itemNames)
+                ->select('name', 'deleted_at')
+                ->get()
+                ->groupBy('name')
+                ->map(function ($group) {
+                    if ($group->contains(fn($e) => is_null($e->deleted_at))) return 'active'; // มี Active
+                    return 'trashed'; // มีแต่ Trashed
+                });
+
             if (request()->ajax()) {
-                return view('receive.partials._list', compact('pendingPOs', 'currentDeptName'))->render();
+                return view('receive.partials._list', compact('pendingPOs', 'currentDeptName', 'equipmentStatusMap'))->render();
             }
 
-            return view('receive.index', compact('pendingPOs', 'currentDeptName'));
+            return view('receive.index', compact('pendingPOs', 'currentDeptName', 'equipmentStatusMap'));
 
         } catch (\Exception $e) {
             Log::error("[ReceiveController::index] Error: " . $e->getMessage());

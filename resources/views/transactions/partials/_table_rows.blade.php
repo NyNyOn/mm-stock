@@ -44,9 +44,9 @@
                         </div>
                     @else
                         <img class="h-10 w-10 rounded-lg object-cover border border-gray-200 shadow-sm" 
-                             src="{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}" 
+                             src="{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/no-image.png') }}" 
                              alt=""
-                             onerror="this.src='{{ asset('images/placeholder.webp') }}'">
+                             onerror="this.src='{{ asset('images/no-image.png') }}'">
                     @endif
                 </div>
                 
@@ -199,7 +199,7 @@
                                         serial_number: '{{ optional($txn->equipment)->serial_number }}',
                                         category_id: {{ optional($txn->equipment)->category_id ?? 'null' }}
                                     },
-                                    equipment_image_url: '{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/placeholder.webp') }}'
+                                    equipment_image_url: '{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/no-image.png') }}'
                                 }])" 
                                 class="text-indigo-600 hover:text-indigo-800 text-xs font-bold hover:underline transition-all flex items-center justify-center gap-1 mx-auto">
                             <i class="far fa-edit"></i> ประเมิน

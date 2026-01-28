@@ -315,8 +315,10 @@
                                 @endif
                             </small>
                         </div>
-                        <input type="hidden" name="msds_details" id="msds_details_hidden-{{ $uniqueSuffix }}" value="{{ old('msds_details', $equipment->msds_T ?? '') }}">
-                    </div>
+                            <input type="hidden" name="msds_details" id="msds_details_hidden-{{ $uniqueSuffix }}" value="{{ old('msds_details', $equipment->msds_T ?? '') }}">
+                            {{-- ✅ New Hidden File Input for MSDS --}}
+                            <input type="file" name="msds_file" id="msds_file_hidden-{{ $uniqueSuffix }}" class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png">
+                        </div>
                 </fieldset>
 
                 <fieldset class="p-6 bg-white rounded-xl border border-gray-200 shadow-sm hidden">

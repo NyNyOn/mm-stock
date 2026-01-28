@@ -105,15 +105,25 @@
         
         function rebindModalListener() {
             const modal = document.getElementById('reject-modal');
-             if (modal) {
-                 // Remove old (implicit by replacement)
-                 // Add new
-                 modal.onclick = function(e) {
-                     if (e.target.id === 'reject-modal') {
+            if (modal) {
+                modal.onclick = null; // Clear old click listener if any
+                
+                // ✅ Fix: Use mousedown/mouseup to prevent closing when dragging text (Select All)
+                modal.onmousedown = function(e) {
+                    if (e.target.id === 'reject-modal') {
+                        modal.dataset.mouseDownOnOverlay = 'true';
+                    } else {
+                        modal.dataset.mouseDownOnOverlay = 'false';
+                    }
+                };
+
+                modal.onmouseup = function(e) {
+                    if (e.target.id === 'reject-modal' && modal.dataset.mouseDownOnOverlay === 'true') {
                         hideRejectModal();
-                     }
-                 };
-             }
+                    }
+                    modal.dataset.mouseDownOnOverlay = 'false'; // Reset
+                };
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
