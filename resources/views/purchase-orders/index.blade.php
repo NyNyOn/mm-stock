@@ -306,8 +306,9 @@
         }
         
         // Initialize Flatpickr if not already initialized
-        if (!document.getElementById('auto_po_time')._flatpickr) {
-            flatpickr("#auto_po_time", {
+        const autoPoTimeInput = document.getElementById('auto_po_time');
+        if (autoPoTimeInput && !autoPoTimeInput._flatpickr) {
+            flatpickr(autoPoTimeInput, {
                 enableTime: true,
                 noCalendar: true,
                 dateFormat: "H:i",
@@ -498,6 +499,18 @@
                     });
                     const result = await response.json();
                     if (!response.ok) throw new Error(result.message);
+                    if (result.po_deleted) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'ลบสำเร็จ!',
+                            text: 'ใบสั่งซื้อถูกลบเนื่องจากไม่มีรายการเหลืออยู่',
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                        window.location.reload(); // Reload to remove the PO card
+                        return;
+                    }
+                    
                     await Swal.fire({
                         icon: 'success',
                         title: 'ลบสำเร็จ!',

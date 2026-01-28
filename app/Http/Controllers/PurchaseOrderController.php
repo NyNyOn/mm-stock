@@ -119,10 +119,10 @@ class PurchaseOrderController extends Controller
         }
         try {
             DB::transaction(function () use ($purchaseOrder) {
-                // อัปเดต: ใช้ Soft Delete สำหรับรายการย่อยก่อน
-                // $purchaseOrder->items()->delete(); // <- แบบเก่า Hard Delete
-                $purchaseOrder->items()->delete(); // <- แบบใหม่ Soft Delete (ถ้า PurchaseOrderItem ใช้ SoftDeletes trait)
-                $purchaseOrder->delete();
+                // อัปเดต: ใช้ Soft Delete สำหรับรายการย่อยก่อน (จริงๆ item ลบจริงเพราะไม่มี SoftDeletes)
+                $purchaseOrder->items()->delete(); 
+                // ✅ Fix: Use forceDelete to permanently remove the record (User Request)
+                $purchaseOrder->forceDelete();
             });
             return redirect()->route('purchase-orders.index')->with('success', 'ลบใบสั่งซื้อเรียบร้อยแล้ว');
         } catch (\Exception $e) {
@@ -745,7 +745,7 @@ class PurchaseOrderController extends Controller
         }]);
         // --- ✅ END: แก้ไขการ Load ---
 
-        $defaultDeptKey = config('department_stocks.default_key', 'mm');
+        $defaultDeptKey = config('department_stocks.default_key', 'en');
         return view('purchase-orders.partials._po_items_table_glpi', compact('order', 'defaultDeptKey'));
     }
 
@@ -759,9 +759,27 @@ class PurchaseOrderController extends Controller
         }
 
         try {
-            // อัปเดต: ใช้ Soft Delete แทน Hard Delete
-            $item->delete(); // This performs a soft delete
-            return response()->json(['success' => true, 'message' => 'ลบรายการสำเร็จแล้ว']);
+            // อัปเดต: ใช้ Soft Delete แทน Hard Delete (แต่ PurchaseOrderItem ไม่มี SoftDeletes Trait ดังนั้นจะเป็น Delete จริง)
+            $item->delete(); 
+
+            // ✅ Fix: Auto-delete Purchase Order if it becomes empty
+            $remainingItems = $item->purchaseOrder->items()->count(); 
+            
+            $poDeleted = false;
+            if ($remainingItems === 0) {
+                // User Request: "Adjustment to not exist in database"
+                // PurchaseOrder uses SoftDeletes, so delete() just hides it.
+                // We use forceDelete() to physically remove it as requested.
+                $item->purchaseOrder->forceDelete(); 
+                $poDeleted = true;
+                Log::info("Purchase Order #{$item->purchase_order_id} force-deleted because it became empty.");
+            }
+
+            return response()->json([
+                'success' => true, 
+                'message' => 'ลบรายการสำเร็จแล้ว' . ($poDeleted ? ' (และลบใบสั่งซื้อว่างเปล่า)' : ''),
+                'po_deleted' => $poDeleted
+            ]);
         } catch (\Exception $e) {
             Log::error("Error AJAX removing PO Item #{$item->id}: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
