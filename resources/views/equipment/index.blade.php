@@ -62,7 +62,7 @@
     <div class="flex items-center justify-between mb-6">
         <div></div>
         @can('equipment:create')
-        <a href="#" onclick="event.preventDefault(); window.showAddModal ? window.showAddModal() : alert('showAddModal function not found');" class="flex items-center px-4 py-3 text-sm font-medium text-white transition-all bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl hover:shadow-lg button-soft gentle-shadow">
+        <a href="#" onclick="event.preventDefault(); window.showAddModal ? window.showAddModal() : Swal.fire({ icon: 'info', title: 'กำลังโหลด...', text: 'กรุณารอสักครู่ ระบบกำลังเตรียมความพร้อม', timer: 2000, showConfirmButton: false });" class="flex items-center px-4 py-3 text-sm font-medium text-white transition-all bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl hover:shadow-lg button-soft gentle-shadow">
             <i class="mr-2 text-sm fas fa-plus"></i><span>เพิ่มอุปกรณ์</span>
         </a>
         @endcan

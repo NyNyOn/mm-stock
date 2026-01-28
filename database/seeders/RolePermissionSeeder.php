@@ -14,25 +14,32 @@ class RolePermissionSeeder extends Seeder
     public function run()
     {
         // 1. Create User Groups (Roles)
-        $adminGroup = UserGroup::create([
-            'name' => 'Admin',
-            'hierarchy_level' => 99,
-            'description' => 'System Administrator'
-        ]);
+        $adminGroup = UserGroup::firstOrCreate(
+            ['name' => 'Admin'],
+            ['hierarchy_level' => 99, 'description' => 'System Administrator']
+        );
 
-        $userGroup = UserGroup::create([
-            'name' => 'User',
-            'hierarchy_level' => 1,
-            'description' => 'General User'
-        ]);
+        $userGroup = UserGroup::firstOrCreate(
+            ['name' => 'User'],
+            ['hierarchy_level' => 1, 'description' => 'General User']
+        );
+
+        // 🧹 CLEANUP: Remove old 'equipment:manage' assignment
+        $oldPerm = Permission::where('name', 'equipment:manage')->first();
+        if ($oldPerm) {
+            DB::table('group_permissions')->where('permission_id', $oldPerm->id)->delete();
+        }
 
         // 2. Create Permissions
         $permissions = [
             'dashboard:view',
             'equipment:view',
+            // 'equipment:manage', // ❌ REMOVED
             'equipment:borrow', // ✅ Critical for /user/equipment
             'transaction:view',
             'transaction:create',
+            'transaction:cancel', // ✅ ADDED
+            'transaction:confirm', // ✅ ADDED
             'transaction:approve',
             'report:view',
             'setting:view',
@@ -45,17 +52,17 @@ class RolePermissionSeeder extends Seeder
             
             // 3. Assign Permissions to Groups
             // Admin gets everything
-            DB::table('group_permissions')->insert([
-                'user_group_id' => $adminGroup->id,
-                'permission_id' => $perm->id
-            ]);
+            DB::table('group_permissions')->updateOrInsert(
+                ['user_group_id' => $adminGroup->id, 'permission_id' => $perm->id],
+                []
+            );
 
             // User gets basic stuff
             if (in_array($permName, ['dashboard:view', 'equipment:view', 'equipment:borrow', 'transaction:view', 'transaction:create'])) {
-                DB::table('group_permissions')->insert([
-                    'user_group_id' => $userGroup->id,
-                    'permission_id' => $perm->id
-                ]);
+                DB::table('group_permissions')->updateOrInsert(
+                    ['user_group_id' => $userGroup->id, 'permission_id' => $perm->id],
+                    []
+                );
             }
         }
 

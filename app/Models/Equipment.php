@@ -97,6 +97,72 @@ class Equipment extends Model
     {
         return $this->hasOne(EquipmentImage::class)->latest('id')->withDefault();
     }
+    
+    // ✅ Added Relation for Ratings
+    // ratings relation already exists or handled above
+
+
+    // transactions relation already exists or handled above
+
+
+    // ✅ Smart Rating Calculation Logic
+    public function calculateSmartRating()
+    {
+        // 1. Inventory Efficiency Score (50%)
+        // Concept: Frequent = 5, Deadstock (Expensive) = 1, Deadstock (Cheap) = 3
+        
+        $price = $this->price ?? 0;
+        
+        // Count withdrawals in last 90 days (Quarterly Activity)
+        $withdrawCount = $this->transactions()
+            ->whereIn('type', ['withdraw', 'consumable', 'returnable', 'partial_return'])
+            ->where('transaction_date', '>=', now()->subDays(90))
+            ->count();
+            
+        // Calculate Efficiency Score
+        $efficiencyScore = 3.0; // Default Neutral
+
+        if ($withdrawCount >= 3) {
+            // Frequent (Hot Item)
+            $efficiencyScore = 5.0;
+        } elseif ($withdrawCount > 0) {
+            // Normal Movement
+            $efficiencyScore = 4.0;
+        } else {
+            // No movement in 90 days (Slow/Deadstock)
+            if ($price <= 0) {
+                // No Price: Neutral / Safe
+                $efficiencyScore = 3.0;
+            } elseif ($price < 500) { 
+                // Cheap (< 500 THB): Neutral
+                $efficiencyScore = 3.0;
+            } else {
+                // Expensive (>= 500 THB) & Dead: Penalty!
+                $efficiencyScore = 1.0; 
+            }
+        }
+
+        // 2. User Satisfaction Score (50%)
+        // Average of user ratings (if any)
+        
+        $avgUserRating = $this->ratings()->avg('rating_score');
+        $userRatingCount = $this->ratings()->count();
+
+        if ($userRatingCount > 0) {
+            // Weighted Average: (Efficiency + User) / 2
+            $finalScore = ($efficiencyScore + $avgUserRating) / 2;
+        } else {
+            // Only efficiency available
+            $finalScore = $efficiencyScore;
+        }
+
+        // 3. Save to DB
+        $this->smart_rating = round($finalScore, 1);
+        $this->last_rating_update = now();
+        $this->saveQuietly(); // Don't trigger updated_at
+        
+        return $this->smart_rating;
+    }
 
     public function primaryImage(): HasOne
     {

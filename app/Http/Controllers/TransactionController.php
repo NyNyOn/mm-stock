@@ -121,7 +121,8 @@ class TransactionController extends Controller
             $myPendingCount = 0;
             $user = Auth::user();
 
-            if ($user->can('equipment:manage')) {
+            // ✅ Allow Confirmers OR Cancelers to see pending list counts
+            if ($user->can('transaction:confirm') || $user->can('transaction:cancel')) {
                 $adminPendingCount = Transaction::where('status', 'pending')->count();
             }
 
@@ -129,7 +130,8 @@ class TransactionController extends Controller
                 ->whereIn('status', ['shipped', 'user_confirm_pending'])
                 ->count();
 
-            $defaultTab = ($user->can('equipment:manage')) ? 'admin_pending' : 'my_history';
+            // ✅ Default tab priorities
+            $defaultTab = ($user->can('transaction:confirm') || $user->can('transaction:cancel')) ? 'admin_pending' : 'my_history';
             $statusFilter = $request->query('status', $defaultTab);
 
             $query = Transaction::with(['equipment.latestImage', 'user', 'handler', 'rating'])
@@ -139,7 +141,10 @@ class TransactionController extends Controller
                                 ->orderBy('transaction_date', 'desc');
 
             if ($statusFilter == 'admin_pending') {
-                $this->authorize('equipment:manage');
+                // ✅ Authorize either Confirm OR Cancel permission
+                if (!$user->can('transaction:confirm') && !$user->can('transaction:cancel')) {
+                    abort(403);
+                }
                 $query->where('status', 'pending');
 
             } elseif ($statusFilter == 'my_pending') {
@@ -811,7 +816,7 @@ class TransactionController extends Controller
 
     public function adminConfirmShipment(Request $request, Transaction $transaction)
     {
-        $this->authorize('equipment:manage');
+        $this->authorize('transaction:confirm'); // ✅ Changed from 'equipment:manage' to specific permission
         DB::beginTransaction();
         try {
             if (!in_array($transaction->status, ['pending', 'pending_approval'])) return back()->with('error', 'สถานะไม่ถูกต้อง');
@@ -918,7 +923,8 @@ class TransactionController extends Controller
     { 
         $user = Auth::user();
         $isOwner = $user->id === $transaction->user_id;
-        $isAdmin = $user->can('permission:manage');
+        // ✅ Use dedicated 'transaction:cancel' permission
+        $isAdmin = $user->can('permission:manage') || $user->can('transaction:cancel');
 
         if (!$isOwner && !$isAdmin) return back()->with('error', 'ไม่มีสิทธิ์');
         if ($transaction->status !== 'pending') return back()->with('error', 'ยกเลิกไม่ได้');
@@ -946,7 +952,7 @@ class TransactionController extends Controller
 
     public function adminCancelTransaction(Request $request, Transaction $transaction) 
     { 
-        $this->authorize('permission:manage');
+        $this->authorize('transaction:cancel');
         if ($transaction->status !== 'completed') return back()->with('error', 'ต้อง Completed เท่านั้น');
         
         DB::beginTransaction();
@@ -1023,7 +1029,7 @@ class TransactionController extends Controller
 
     public function rateTransaction(Request $request, Transaction $transaction)
     {
-        if (Auth::id() !== $transaction->user_id && !Auth::user()->can('equipment:manage')) {
+        if (Auth::id() !== $transaction->user_id && !Auth::user()->can('transaction:confirm')) {
             return response()->json(['success' => false, 'message' => 'ไม่มีสิทธิ์ทำรายการนี้'], 403);
         }
 

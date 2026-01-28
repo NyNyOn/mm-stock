@@ -472,20 +472,68 @@ async function initPopularTicker() {
             let index = 0;
             const updateText = () => {
                 const item = res.items[index];
+                const iconWrapper = document.getElementById('ticker-icon-wrapper');
+
                 el.style.opacity = '0';
                 el.style.transform = 'translateY(10px)';
 
+                // Animate Icon Wrapper (Fade/Scale)
+                if (iconWrapper) {
+                    iconWrapper.style.transform = 'scale(0.8)';
+                    iconWrapper.style.opacity = '0.5';
+                }
+
                 setTimeout(() => {
                     if (item.type === 'recent') {
-                        // New Recent Access Format
-                        el.innerHTML = `<span class="font-bold text-gray-700">${item.user}:</span> <span class="text-gray-600">${item.action}</span> <span class="font-bold text-indigo-600">${item.name}</span> <span class="text-xs text-gray-400 ml-1">(${item.time})</span>`;
+                        // ✅ CASE 1: Recent Activity
+                        if (iconWrapper) {
+                            if (item.user === 'PU System') {
+                                // 🚚 Special PU System Icon (Orange/Red Gradient)
+                                iconWrapper.className = "relative w-10 h-10 flex items-center justify-center bg-gradient-to-tr from-orange-400 to-red-500 text-white rounded-xl shadow-lg ring-2 ring-orange-100 group-hover:ring-orange-200 transition-all";
+                                iconWrapper.innerHTML = `<i class="fas fa-truck-loading text-lg"></i>`;
+                            } else if (item.user_avatar) {
+                                // User Avatar
+                                iconWrapper.className = "relative w-10 h-10 flex-shrink-0 rounded-xl overflow-hidden shadow-sm ring-2 ring-indigo-50 group-hover:ring-indigo-100 transition-all";
+                                iconWrapper.innerHTML = `<img src="${item.user_avatar}" class="w-full h-full object-cover">`;
+                            } else {
+                                // Fallback Avatar
+                                iconWrapper.className = "relative w-10 h-10 flex items-center justify-center bg-indigo-100 text-indigo-600 rounded-xl shadow-sm ring-2 ring-indigo-50 group-hover:ring-indigo-100 transition-all";
+                                iconWrapper.innerHTML = `<i class="fas fa-user text-sm"></i>`;
+                            }
+                            iconWrapper.style.transform = 'scale(1)';
+                            iconWrapper.style.opacity = '1';
+                        }
+
+                        // ✨ Rich Typography Content (Larger & Gradients)
+                        const userClass = item.user === 'PU System'
+                            ? 'text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-600 font-extrabold text-base'
+                            : 'font-bold text-gray-700 text-base';
+
+                        el.innerHTML = `
+                            <div class="flex items-center justify-center text-base">
+                                <span class="${userClass} mr-2">${item.user}:</span> 
+                                <span class="text-gray-500 mr-2 font-medium">${item.action}</span> 
+                                <span class="font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 drop-shadow-sm text-base">${item.name}</span> 
+                                <span class="text-xs text-gray-400 ml-2 font-light">(${item.time})</span>
+                            </div>`;
+
                     } else {
-                        // Fallback (or if reverted to count)
+                        // ✅ CASE 2: Generic / Fallback -> Revert to Bolt Icon
+                        if (iconWrapper) {
+                            iconWrapper.className = "relative w-8 h-8 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl shadow-sm ring-2 ring-indigo-50 group-hover:ring-indigo-100 transition-all";
+                            iconWrapper.innerHTML = `<i class="fas fa-bolt text-sm animate-pulse"></i>`;
+
+                            iconWrapper.style.transform = 'scale(1)';
+                            iconWrapper.style.opacity = '1';
+                        }
+
+                        // Text Content (Generic)
                         el.innerHTML = `<span class="font-bold text-gray-700">${item.name}</span> <span class="text-xs text-gray-400 ml-1">(${item.count} ครั้ง)</span>`;
                     }
 
                     el.style.opacity = '1';
                     el.style.transform = 'translateY(0)';
+
                     index = (index + 1) % res.items.length;
                 }, 300);
             };

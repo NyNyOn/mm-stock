@@ -226,20 +226,26 @@
         <td class="px-6 py-4 text-center">
             <div class="flex items-center justify-center gap-2">
                 
-                @if($txn->status == 'pending' && Auth::user()->can('equipment:manage'))
+                {{-- ✅ Show Actions if user has ANY specific transaction permission --}}
+                @if($txn->status == 'pending' && (Auth::user()->can('transaction:confirm') || Auth::user()->can('transaction:cancel')))
                     <div class="flex items-center gap-2">
+                        @can('transaction:confirm')
                         <form action="{{ route('transactions.adminConfirmShipment', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitConfirmShipment(this);">
                             @csrf 
                             <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition-all flex items-center gap-2 transform hover:scale-105 font-bold text-sm" title="ยืนยันส่งของ">
                                 <i class="fas fa-paper-plane"></i> <span>ยืนยันส่งของ</span>
                             </button>
                         </form>
+                        @endcan
+                        
+                        @can('transaction:cancel')
                         <form action="{{ route('transactions.userCancel', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitAdminReject(this);">
                             @method('PATCH') @csrf 
                             <button type="submit" class="px-4 py-2 bg-white border-2 border-red-100 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-200 transition-all flex items-center gap-2 font-bold text-sm" title="ปฏิเสธ">
                                 <i class="fas fa-times"></i> <span>ปฏิเสธ</span>
                             </button>
                         </form>
+                        @endcan
                     </div>
                 @endif
 
@@ -270,7 +276,7 @@
                 @endif
 
                 {{-- Admin Reversal --}}
-                @can('equipment:manage')
+                @can('transaction:cancel')
                     @if($txn->status == 'completed' && isset($txn->confirmed_at) && \Carbon\Carbon::parse($txn->confirmed_at)->diffInHours(now()) < 24 && $txn->quantity_change < 0)
                         <form action="{{ route('transactions.adminCancel', $txn->id) }}" method="POST" onsubmit="event.preventDefault(); window.submitAdminCancel(this);">
                             @method('PATCH') @csrf

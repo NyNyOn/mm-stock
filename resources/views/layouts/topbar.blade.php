@@ -12,18 +12,74 @@
             {{-- (โค้ดเดิมของคุณ: Auto-Confirm) --}}
             {{-- (Removed Auto-Confirm Badge from here) --}}
         </div>
-        
+
+        {{-- Custom Styles for RGB Border --}}
+        <style>
+            @keyframes border-spin {
+                100% { transform: rotate(360deg); }
+            }
+            .gradient-border-wrapper {
+                position: relative;
+                border-radius: 1rem; /* rounded-2xl */
+                z-index: 10;
+                overflow: hidden; /* Ensure overflow hidden for clean edges */
+                padding: 3px; /* Border Width */
+                display: flex; /* Fix layout */
+            }
+            .gradient-border-wrapper::before {
+                content: "";
+                position: absolute;
+                top: -50%;
+                left: -50%;
+                width: 200%;
+                height: 200%;
+                background: conic-gradient(
+                    transparent, 
+                    #38BDF8, 
+                    transparent 30%, 
+                    #F472B6,
+                    transparent 70%,
+                    #38BDF8
+                );
+                animation: border-spin 4s linear infinite;
+                z-index: -2;
+            }
+            /* Glowing Effect Layer */
+            .gradient-border-wrapper::after {
+                content: "";
+                position: absolute;
+                top: -50%;
+                left: -50%;
+                width: 200%;
+                height: 200%;
+                background: conic-gradient(
+                    transparent, 
+                    #38BDF8, 
+                    transparent 30%, 
+                    #F472B6, 
+                    transparent 70%,
+                    #38BDF8
+                );
+                animation: border-spin 4s linear infinite;
+                z-index: -1;
+                filter: blur(20px);
+                opacity: 0.8;
+            }
+        </style>
+
         {{-- Popular Items Ticker (Center) --}}
         <div class="hidden lg:flex flex-1 justify-center items-center px-4 overflow-hidden mx-4">
-            <div id="popular-ticker" class="group flex items-center space-x-3 bg-white border border-indigo-100 px-6 py-2.5 rounded-2xl shadow-md hover:shadow-lg hover:border-indigo-200 transition-all cursor-default select-none min-w-[320px] max-w-2xl">
-                 <div class="relative w-8 h-8 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl shadow-sm ring-2 ring-indigo-50 group-hover:ring-indigo-100 transition-all">
-                     <i class="fas fa-bolt text-sm animate-pulse"></i>
-                 </div>
-                 <div class="flex flex-col h-6 overflow-hidden justify-center flex-1">
-                      <span id="ticker-content" class="text-sm font-medium text-gray-700 whitespace-nowrap transition-transform duration-500 transform translate-y-0 text-center">
-                          <i class="fas fa-circle-notch fa-spin mr-2 text-indigo-400"></i>กำลังโหลดข้อมูลล่าสุด...
-                      </span>
-                 </div>
+            <div class="gradient-border-wrapper min-w-[350px] max-w-3xl transform hover:-translate-y-0.5 transition-all">
+                <div id="popular-ticker" class="group flex items-center space-x-4 bg-white px-6 py-3 rounded-2xl w-full h-full"> 
+                     <div id="ticker-icon-wrapper" class="relative w-10 h-10 flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl shadow-sm ring-2 ring-indigo-50 group-hover:ring-indigo-100 transition-all">
+                         <i class="fas fa-bolt text-lg animate-pulse"></i>
+                     </div>
+                     <div class="flex flex-col h-8 overflow-hidden justify-center flex-1">
+                          <span id="ticker-content" class="text-base font-medium text-gray-700 whitespace-nowrap transition-transform duration-500 transform translate-y-0 text-center">
+                              <i class="fas fa-circle-notch fa-spin mr-2 text-indigo-400"></i>กำลังโหลดข้อมูลล่าสุด...
+                          </span>
+                     </div>
+                </div>
             </div>
         </div>
 

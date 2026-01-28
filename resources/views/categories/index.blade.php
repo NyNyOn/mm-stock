@@ -166,12 +166,20 @@
                                     <i class="fas fa-calculator"></i>
                                 </div>
                                 <div class="text-sm text-blue-800">
-                                    <h4 class="font-bold mb-1">เกณฑ์การคำนวณคะแนน (System Logic)</h4>
+                                    <h4 class="font-bold mb-1">เกณฑ์การคำนวณคะแนนอัจฉริยะ (Smart Rating)</h4>
                                     <ul class="list-disc pl-4 space-y-1 text-blue-700/80">
-                                        <li><strong>ตัวเลือกที่ 1 (แย่/น้อย):</strong> คิดเป็น <strong>1.0 คะแนน</strong></li>
-                                        <li><strong>ตัวเลือกที่ 3 (ดี/มาก):</strong> คิดเป็น <strong>5.0 คะแนน</strong></li>
-                                        <li><strong>ตัวเลือกที่ 2 (ไม่ได้ใช้งาน):</strong> หากผู้ใช้เลือกข้อใดข้อหนึ่ง <u>ระบบจะไม่นำมาคำนวณคะแนน</u> (ถือว่าไม่ได้ประเมิน)</li>
-                                        <li><strong>สูตร:</strong> คะแนนเฉลี่ย = (ผลรวมคะแนน / จำนวนข้อ)</li>
+                                        <li><strong>คะแนนรวม (เต็ม 5):</strong> มาจาก (คะแนนสต๊อก + คะแนนความพึงพอใจ) ÷ 2</li>
+                                        <li><strong>1. คะแนนสต๊อก (Inventory Efficiency):</strong>
+                                            <ul class="list-disc pl-4 text-xs">
+                                                <li><strong>หมุนเวียนบ่อย (3+ ครั้ง/ไตรมาส):</strong> 5.0 คะแนน (Hot Item)</li>
+                                                <li><strong>หมุนเวียนปกติ:</strong> 4.0 คะแนน</li>
+                                                <li><strong>ไม่เคลื่อนไหว (Deadstock):</strong>
+                                                    <br>- สินค้าแพง (>=500): 1.0 คะแนน (เงินจม)
+                                                    <br>- สินค้าถูก/ไม่มีราคา: 3.0 คะแนน (เป็นกลาง)
+                                                </li>
+                                            </ul>
+                                        </li>
+                                        <li><strong>2. คะแนนความพึงพอใจ:</strong> มาจากแบบสอบถามเฉลี่ย (แย่=1, ดี=5)</li>
                                     </ul>
                                 </div>
                             </div>

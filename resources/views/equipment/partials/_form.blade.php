@@ -342,25 +342,25 @@
          - gap-2: เพิ่มระยะห่าง
     --}}
     <div class="px-4 py-3 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-2 bg-gray-50 border-t border-gray-200 rounded-b-xl">
-        {{-- Previous Button (เพิ่ม w-full sm:w-auto) --}}
-        <button type="button" id="prev-step-btn-{{ $uniqueSuffix }}" class="btn-secondary hidden w-full sm:w-auto">
-            <i class="fas fa-arrow-left mr-2"></i> ย้อนกลับ
+        {{-- Left Side: Cancel Button --}}
+        <button type="button" class="btn-secondary close-modal-btn w-full sm:w-auto">
+            ยกเลิก
         </button>
 
-        {{-- Spacer (ลบ div ว่างๆ ออก) --}}
+        {{-- Right Side: Navigation & Actions (Prev, Next, Save) --}}
+        <div class="flex flex-row gap-2 w-full sm:w-auto sm:justify-end">
+            {{-- Previous Button --}}
+            <button type="button" id="prev-step-btn-{{ $uniqueSuffix }}" class="btn-secondary hidden flex-1 sm:flex-none sm:w-auto">
+                <i class="fas fa-arrow-left mr-2"></i> ย้อนกลับ
+            </button>
 
-        {{-- Action Buttons (เพิ่ม flex-row, gap-2, w-full, sm:w-auto) --}}
-        <div class="flex flex-row gap-2 w-full sm:w-auto">
-            {{-- เพิ่ม flex-1 sm:flex-none เพื่อให้ปุ่มแบ่งพื้นที่เท่ากันบนมือถือ --}}
-            <button type="button" class="btn-secondary close-modal-btn flex-1 sm:flex-none">ยกเลิก</button>
-
-            {{-- Next Button (เพิ่ม flex-1 sm:flex-none) --}}
-            <button type="button" id="next-step-btn-{{ $uniqueSuffix }}" class="btn-primary flex-1 sm:flex-none">
+            {{-- Next Button --}}
+            <button type="button" id="next-step-btn-{{ $uniqueSuffix }}" class="btn-primary flex-1 sm:flex-none sm:w-auto">
                 ถัดไป <i class="fas fa-arrow-right ml-2"></i>
             </button>
 
-            {{-- Submit Button (Original) (เพิ่ม flex-1 sm:flex-none) --}}
-            <button type="submit" class="btn-primary hidden flex-1 sm:flex-none" id="submit-btn-{{ $uniqueSuffix }}">
+            {{-- Submit Button --}}
+            <button type="submit" class="btn-primary hidden flex-1 sm:flex-none sm:w-auto" id="submit-btn-{{ $uniqueSuffix }}">
                  <i class="fas fa-save mr-2"></i>บันทึกข้อมูล
             </button>
         </div>

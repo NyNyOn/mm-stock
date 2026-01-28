@@ -860,9 +860,17 @@ class AjaxController extends Controller
                  if(!$tx->equipment) return null;
                  
                  $action = 'ทำรายการ';
-                 if ($tx->type == 'borrow') $action = 'ยืม (Borrow)';
-                 else if ($tx->type == 'return') $action = 'คืน (Return)';
-                 else if ($tx->type == 'withdraw') $action = 'เบิก (Withdraw)';
+                 switch ($tx->type) {
+                     case 'withdraw': 
+                     case 'consumable': $action = 'ทำการเบิก'; break; // ✅ Cover both standard and consumable withdraw
+                     case 'borrow':     $action = 'ยืม (Borrow)'; break;
+                     case 'return':     $action = 'คืน (Return)'; break;
+                     case 'add':
+                     case 'receive':    $action = 'รับเข้าสต็อก'; break; // ✅ Cover Receive/Add
+                     case 'remove':     $action = 'ตัดสต็อก'; break;
+                     case 'adjust':     $action = 'ปรับปรุงยอด'; break;
+                     case 'transferred': $action = 'โอนย้าย'; break;
+                 }
                  
                  // User name (short)
                  $userName = $tx->user ? explode(' ', $tx->user->fullname)[0] : 'PU System';
@@ -871,6 +879,7 @@ class AjaxController extends Controller
                      'name' => $tx->equipment->name,
                      'action' => $action,
                      'user' => $userName,
+                     'user_avatar' => $tx->user ? $tx->user->photo_url : null, // ✅ Include Avatar URL
                      'time' => $tx->transaction_date ? $tx->transaction_date->diffForHumans() : 'เมื่อสักครู่', 
                      'type' => 'recent' 
                  ];

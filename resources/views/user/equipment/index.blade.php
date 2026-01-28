@@ -633,12 +633,28 @@
                              let otherHtml = `<div class="p-5 soft-card rounded-2xl gentle-shadow"><h2 class="mb-4 text-xl font-bold text-gray-800 dark:text-gray-100">พบในแผนกอื่น</h2><div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">`;
                              data.otherStock.forEach(item => {
                                  const unit = item.unit?.name || 'ชิ้น'; const imgUrl = item.live_search_image_url ? item.live_search_image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
+                                 
+                                 let avgRating = parseFloat(item.avg_rating) || 0;
+                                 let ratingCount = item.rating_count || 0;
+                                 let starsHtml = '';
+                                 if (avgRating === 0 && ratingCount > 0) {
+                                     starsHtml = '<div class="flex items-center mt-2 space-x-1" title="ประเมินแล้ว: ยังไม่เคยใช้งาน"><span class="text-[10px] text-gray-500 font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">📦 ยังไม่ใช้</span><span class="text-xs text-gray-400">('+ratingCount+')</span></div>';
+                                 } else {
+                                     starsHtml = '<div class="flex items-center mt-2 space-x-0.5" title="คะแนนเฉลี่ย: '+avgRating.toFixed(1)+'">';
+                                     for (let i = 1; i <= 5; i++) {
+                                         if (i <= avgRating) starsHtml += '<i class="fas fa-star text-yellow-400 text-xs"></i>';
+                                         else if (i - 0.5 <= avgRating) starsHtml += '<i class="fas fa-star-half-alt text-yellow-400 text-xs"></i>';
+                                         else starsHtml += '<i class="fas fa-star text-gray-300 dark:text-gray-600 text-xs"></i>';
+                                     }
+                                     starsHtml += `<span class="text-xs text-gray-400 ml-1">(${ratingCount})</span></div>`;
+                                 }
+
                                  otherHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800 opacity-70">
                                  <div class="relative flex items-center justify-center w-full h-32 bg-gray-100 dark:bg-gray-700 group">
                                      <img src="${imgUrl}" class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" onclick="openImageViewer('${imgUrl}')">
                                      <div class="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"><i class="fas fa-search-plus"></i></div>
                                  </div>
-                                 <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.dept_name}</p><span class="block mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">มี: ${item.quantity} ${unit}</span></div><div class="p-3 pt-0 mt-auto">
+                                 <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.dept_name}</p>${starsHtml}<span class="block mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">มี: ${item.quantity} ${unit}</span></div><div class="p-3 pt-0 mt-auto">
                                  <button onclick="handleOtherDeptClick('${item.dept_name}')" class="inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white border border-transparent rounded-md bg-gray-400 opacity-90 cursor-not-allowed"><i class="mr-1 fas fa-ban"></i> เบิกไม่ได้</button>
                                  </div></div>`;
                              });

@@ -67,6 +67,29 @@ return [
             ]) : [],
         ],
 
+        // ✅ Added Department Connections for Migrations
+        'it' => array_merge($default = [
+            'driver' => 'mysql',
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '3306'),
+            'username' => env('DB_USERNAME', 'root'),
+            'password' => env('DB_PASSWORD', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+        ], ['database' => 'it_stock_db']),
+
+        'hr' => array_merge($default, ['database' => 'hr_stock_db']),
+        'qa' => array_merge($default, ['database' => 'qa_stock_db']),
+        'pd' => array_merge($default, ['database' => 'pd_stock_db']),
+        'wh' => array_merge($default, ['database' => 'wh_stock_db']),
+        'en' => array_merge($default, ['database' => 'en_stock_db']),
+        'enmold' => array_merge($default, ['database' => 'enmold_stock_db']),
+
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DB_URL'),

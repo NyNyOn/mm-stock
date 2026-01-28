@@ -26,6 +26,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'equipment:edit', 'description' => 'แก้ไขจำนวนคงคลังได้'],
             ['name' => 'equipment:update', 'description' => 'อัปเดตข้อมูลอุปกรณ์ (ยกเว้นจำนวนคงคลัง)'],
             ['name' => 'equipment:delete', 'description' => 'ลบอุปกรณ์ออกจากระบบ'],
+            // ['name' => 'equipment:manage', 'description' => 'จัดการอุปกรณ์ (รวมถึงการอนุมัติ/ปฏิเสธ)'], // ❌ REMOVED
             ['name' => 'equipment:borrow', 'description' => 'เบิก-ยืมอุปกรณ์ (หน้า User)'],
 
             // === Receive (รับเข้า) ===
@@ -42,6 +43,9 @@ class PermissionSeeder extends Seeder
             // === Transactions (เบิก-ยืม) ===
             ['name' => 'transaction:view', 'description' => 'ดูประวัติการเบิก-ยืม'],
             ['name' => 'transaction:create', 'description' => 'สร้างรายการเบิก-ยืมใหม่'],
+            ['name' => 'transaction:cancel', 'description' => 'ยกเลิก/ปฏิเสธรายการเบิก (Admin/IT)'], // ✅ ADDED
+            ['name' => 'transaction:confirm', 'description' => 'ยืนยันการส่งของ/เบิกจ่าย (Admin/IT)'], // ✅ ADDED
+            ['name' => 'transaction:approve', 'description' => 'อนุมัติรายการเบิก (สำหรับผู้อนุมัติ)'], // ✅ ADDED
             ['name' => 'transaction:auto_confirm', 'description' => 'ข้ามขั้นตอนรอยืนยัน (อนุมัติอัตโนมัติ)'],
 
             // === Returns (คืน) ===
@@ -56,7 +60,9 @@ class PermissionSeeder extends Seeder
             // === System Management (จัดการระบบ) ===
             ['name' => 'user:manage', 'description' => 'จัดการผู้ใช้และกำหนดกลุ่ม'],
             ['name' => 'permission:manage', 'description' => 'จัดการสิทธิ์ของแต่ละกลุ่ม (Super Admin เท่านั้น)'],
+            ['name' => 'role:manage', 'description' => 'จัดการบทบาทและกำหนดสิทธิ์ผู้ใช้'], // ✅ ADDED
             ['name' => 'manage-groups', 'description' => 'สร้าง/แก้ไข/ลบ กลุ่มผู้ใช้ (Roles)'],
+            ['name' => 'setting:view', 'description' => 'ดูการตั้งค่าระบบ'], // ✅ ADDED
             ['name' => 'token:manage', 'description' => 'จัดการ API Tokens'],
             ['name' => 'master-data:manage', 'description' => 'จัดการข้อมูลหลัก (ประเภท, สถานที่, หน่วยนับ)'],
 
@@ -69,11 +75,16 @@ class PermissionSeeder extends Seeder
 
 
         // วนลูปสร้างหรืออัปเดต Permission
+        $definedPermissionNames = [];
         foreach ($permissions as $permission) {
             Permission::updateOrCreate(
                 ['name' => $permission['name']],
                 ['description' => $permission['description']]
             );
+            $definedPermissionNames[] = $permission['name'];
         }
+
+        // 🧹 CLEANUP: ลบสิทธิ์ที่ไม่อยู่ในรายการด้านบนออกให้หมด (เอาที่ไม่ใช้ออก)
+        Permission::whereNotIn('name', $definedPermissionNames)->delete();
     }
 }
