@@ -60,5 +60,8 @@ class AppServiceProvider extends ServiceProvider
         } catch (\Exception $e) {
             // ปล่อยผ่านกรณี Database ยังไม่พร้อม
         }
+
+        // ✅ Register Observer for PurchaseOrderItem
+        \App\Models\PurchaseOrderItem::observe(\App\Observers\PurchaseOrderItemObserver::class);
     }
 }

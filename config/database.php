@@ -49,7 +49,7 @@ return [
         ],
 
         'depart_it_db' => [
-            'driver' => 'mysql',
+            'driver' => env('DB_CONNECTION_IT', 'mysql'),
             'host' => env('DB_HOST_IT', '127.0.0.1'),
             'port' => env('DB_PORT_IT', '3306'),
             'database' => env('DB_DATABASE_IT', 'forge'),

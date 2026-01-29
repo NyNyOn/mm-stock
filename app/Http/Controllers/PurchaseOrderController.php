@@ -736,7 +736,12 @@ class PurchaseOrderController extends Controller
     public function getItemsView(PurchaseOrder $order)
     {
         $this->authorize('po:view');
+
+        // ✅ FIX: Force a fresh instance to ensure no stale data
+        $order = $order->fresh();
+
         // --- ✅ START: แก้ไขการ Load ตรงนี้ (เปลี่ยนเป็น images และใช้ withTrashed) ---
+        // ใช้ loadMissing หรือ load ก็ได้ แต่ fresh() ทำให้ชัวร์สุด
         $order->load(['items' => function ($query) {
             $query->with(['equipment' => function ($eqQuery) {
                 // โหลด Equipment ที่อาจถูกลบ และโหลด unit กับ images collection ของมัน
@@ -745,7 +750,7 @@ class PurchaseOrderController extends Controller
         }]);
         // --- ✅ END: แก้ไขการ Load ---
 
-        $defaultDeptKey = config('department_stocks.default_key', 'en');
+        $defaultDeptKey = config('department_stocks.default_key', 'mm');
         return view('purchase-orders.partials._po_items_table_glpi', compact('order', 'defaultDeptKey'));
     }
 
