@@ -199,6 +199,18 @@ class Equipment extends Model
         return $this->hasMany(EquipmentRating::class);
     }
 
+    /**
+     * ✅ นับจำนวนประเมินแต่ละประเภท (ถูกใจ/พอใช้/แย่)
+     */
+    public function feedbackCounts(): array
+    {
+        return [
+            'good' => $this->ratings()->where('feedback_type', 'good')->count(),
+            'neutral' => $this->ratings()->where('feedback_type', 'neutral')->count(),
+            'bad' => $this->ratings()->where('feedback_type', 'bad')->count(),
+        ];
+    }
+
     // --- ACCESSORS ---
 
     public function getModelNameAttribute($value)

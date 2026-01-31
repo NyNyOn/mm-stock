@@ -400,6 +400,12 @@ class PurchaseOrderController extends Controller
         // No explicit wipe of po_number here to be safe.
 
         $order->save();
+        
+        // ✅ บันทึก History Log: PR Sent to PU
+        $prCode = $order->pr_number ?? 'N/A';
+        $itemCount = $order->items()->count();
+        $isResubmit = ($order->pu_data['is_resubmit'] ?? false) ? 'ส่งใหม่' : 'ส่งครั้งแรก';
+        $this->addPuHistoryLog($order, 'PR Sent', "{$isResubmit} → PU (PR: {$prCode}, {$itemCount} รายการ)");
 
         // ✅ MAP PR ITEM IDs: Update pr_item_id from API Response
         if (isset($responseData['items']) && is_array($responseData['items'])) {
@@ -736,12 +742,7 @@ class PurchaseOrderController extends Controller
     public function getItemsView(PurchaseOrder $order)
     {
         $this->authorize('po:view');
-
-        // ✅ FIX: Force a fresh instance to ensure no stale data
-        $order = $order->fresh();
-
         // --- ✅ START: แก้ไขการ Load ตรงนี้ (เปลี่ยนเป็น images และใช้ withTrashed) ---
-        // ใช้ loadMissing หรือ load ก็ได้ แต่ fresh() ทำให้ชัวร์สุด
         $order->load(['items' => function ($query) {
             $query->with(['equipment' => function ($eqQuery) {
                 // โหลด Equipment ที่อาจถูกลบ และโหลด unit กับ images collection ของมัน
@@ -838,13 +839,20 @@ class PurchaseOrderController extends Controller
                 $purchaseOrder->pu_data = $puData;
                 $purchaseOrder->save();
 
-                // 3. Reset Items
+                // 3. Reset ONLY Rejected Code 3 Items (Not all items)
+                // ✅ FIX: รีเซ็ตเฉพาะรายการที่ถูกปฏิเสธและสามารถแก้ไขได้ (Code 3)
                 foreach ($purchaseOrder->items as $item) {
-                    $item->status = 'pending';
-                    $item->inspection_status = 'pending';
-                    $item->inspection_notes = null;
-                    $item->quantity_received = 0;
-                    $item->save();
+                    // รีเซ็ตเฉพาะรายการที่ถูกปฏิเสธและเป็น Code 3 (หรือไม่ระบุ Code ชัดเจน)
+                    $isRejected = $item->status === 'cancelled';
+                    $isFixable = !in_array((int)$item->rejection_code, [1, 2, 4]);
+                    
+                    if ($isRejected && $isFixable) {
+                        $item->status = 'pending';
+                        $item->inspection_status = 'pending';
+                        $item->inspection_notes = null;
+                        $item->quantity_received = 0;
+                        $item->save();
+                    }
                 }
             });
             
@@ -893,5 +901,189 @@ class PurchaseOrderController extends Controller
 
             return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
+    }
+
+    // =============================================
+    // Item-level Resubmit (ตอบกลับแยกรายอุปกรณ์)
+    // =============================================
+    
+    /**
+     * ✅ Resubmit เฉพาะรายการเดียว (Item-level)
+     * POST /po-items/{item}/resubmit
+     */
+    public function resubmitItem(Request $request, PurchaseOrderItem $item)
+    {
+        $this->authorize('po:create');
+        
+        $isAjax = $request->expectsJson() || $request->ajax();
+        
+        // 1. ตรวจสอบว่ารายการนี้ถูกปฏิเสธ
+        if ($item->status !== 'cancelled') {
+            $message = 'รายการนี้ไม่ได้อยู่ในสถานะถูกปฏิเสธ';
+            return $isAjax 
+                ? response()->json(['success' => false, 'message' => $message], 400)
+                : back()->with('error', $message);
+        }
+        
+        // 2. ตรวจสอบว่าเป็น Code ที่แก้ไขได้ (ไม่ใช่ 1, 2, 4)
+        if (in_array((int)$item->rejection_code, [1, 2, 4])) {
+            $message = 'รายการนี้ไม่สามารถแก้ไขและส่งใหม่ได้ (ต้องสร้างใบใหม่)';
+            return $isAjax 
+                ? response()->json(['success' => false, 'message' => $message], 400)
+                : back()->with('error', $message);
+        }
+        
+        try {
+            DB::transaction(function () use ($item, $request) {
+                // 3. รีเซ็ตสถานะรายการนี้
+                $item->status = 'pending';
+                $item->inspection_status = 'pending';
+                $item->inspection_notes = null;
+                $item->quantity_received = 0;
+                $item->save();
+            });
+            
+            // 4. ส่งเฉพาะรายการนี้ไป API
+            $this->sendSingleItemToApi($item, $request);
+            
+            $message = 'ส่งคำตอบกลับสำหรับ "' . ($item->item_description ?? 'รายการ') . '" เรียบร้อยแล้ว';
+            
+            return $isAjax 
+                ? response()->json(['success' => true, 'message' => $message])
+                : back()->with('success', $message);
+            
+        } catch (\Exception $e) {
+            Log::error("Resubmit Item Error: " . $e->getMessage());
+            $message = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
+            
+            return $isAjax 
+                ? response()->json(['success' => false, 'message' => $message], 500)
+                : back()->with('error', $message);
+        }
+    }
+    
+    /**
+     * ✅ ส่งเฉพาะรายการเดียวไป API
+     */
+    private function sendSingleItemToApi(PurchaseOrderItem $item, Request $request)
+    {
+        // 1. ตรวจสอบว่าเปิดใช้งาน API หรือไม่
+        $apiEnabled = config('services.pu_hub.enabled', true);
+        if ($apiEnabled === '0' || $apiEnabled === 0 || $apiEnabled === false || $apiEnabled === 'false') {
+            Log::warning("PU Hub API is DISABLED. Bypassing API call for Item #{$item->id}.");
+            $item->status = 'ordered';
+            $item->save();
+            return ['success' => true, 'message' => 'API is disabled. Item marked as ordered locally.'];
+        }
+        
+        // 2. Load PO และ Config
+        $order = $item->purchaseOrder;
+        $puApiBaseUrl = config('services.pu_hub.base_url');
+        $puApiToken = config('services.pu_hub.token');
+        $puApiIntakePath = config('services.pu_hub.intake_path');
+        
+        if (empty($puApiBaseUrl) || empty($puApiToken) || empty($puApiIntakePath)) {
+            throw new \Exception('ตั้งค่า API สำหรับ PU Hub ไม่ถูกต้อง');
+        }
+        
+        // 3. สร้าง Payload สำหรับ Item เดียว
+        $itemName = $item->item_description ?? $item->equipment?->name ?? 'N/A';
+        $unitName = $item->equipment?->unit?->name ?? 'ชิ้น';
+        $replyNote = $request->input('reply_note') ? '(' . $request->input('reply_note') . ')' : '';
+        
+        $itemPayload = [
+            'id' => $item->id,
+            'pr_item_id' => $item->pr_item_id,
+            
+            // ✅ Required by PU API
+            'item_name' => $itemName,
+            'item_name_custom' => $itemName,  // REQUIRED field
+            'quantity' => $item->quantity_ordered,
+            'unit' => $unitName,
+            'unit_name' => $unitName,  // Legacy field
+            
+            // ✅ ID References
+            'origin_item_id' => $item->equipment_id,
+            'equipment_id' => $item->equipment_id,
+            
+            // ✅ Notes
+            'note' => $replyNote,
+            'notes' => $replyNote,
+            'resubmit_reason' => $replyNote,
+        ];
+        
+        $payload = [
+            'is_resubmit' => true,
+            'is_item_level' => true, // ✅ Flag for PU to know this is per-item resubmit
+            'pr_code' => $order->pr_number,
+            'origin_department_id' => config('services.pu_hub.origin_department_id'),
+            'requestor_user_id' => $order->ordered_by_user_id ?? Auth::id(),
+            'priority' => ucfirst($order->type),
+            'note' => $request->input('reply_note') ? '(' . $request->input('reply_note') . ')' : null,
+            'items' => [$itemPayload],
+        ];
+        
+        // 4. ส่ง API
+        $fullApiUrl = rtrim($puApiBaseUrl, '/') . '/' . ltrim($puApiIntakePath, '/');
+        
+        Log::info("Sending Single Item #{$item->id} to PU API.", [
+            'pr_code' => $order->pr_number,
+            'item_name' => $itemPayload['item_name'],
+            'note' => $itemPayload['note'],
+        ]);
+        
+        $response = Http::withToken($puApiToken)
+            ->acceptJson()
+            ->timeout(15)
+            ->post($fullApiUrl, $payload);
+        
+        if (!$response->successful()) {
+            $status = $response->status();
+            $errorBody = $response->json() ? json_encode($response->json()) : $response->body();
+            throw new \Exception("ส่งข้อมูลไม่สำเร็จ (Status: {$status}): {$errorBody}");
+        }
+        
+        // 5. อัปเดตสถานะ Item
+        $item->status = 'ordered';
+        $item->save();
+        
+        // 6. อัปเดต PO pu_data
+        $puData = $order->pu_data ?? [];
+        $puData['is_resubmit'] = true;
+        $puData['last_item_resubmit'] = [
+            'item_id' => $item->id,
+            'at' => now()->toDateTimeString(),
+            'note' => $request->input('reply_note'),
+        ];
+        $order->pu_data = $puData;
+        $order->save();
+        
+        // ✅ บันทึก History Log
+        $itemName = $item->equipment ? $item->equipment->name : $item->item_description;
+        $this->addPuHistoryLog($order, 'Resubmit Sent', "ส่งตอบกลับ: {$itemName} - " . ($request->input('reply_note') ?? ''));
+        
+        return ['success' => true, 'data' => $response->json()];
+    }
+    
+    /**
+     * ✅ Helper: บันทึก History Log การสื่อสารกับ PU
+     * @param PurchaseOrder $order
+     * @param string $event ชื่อ Event (เช่น "PR Sent", "Resubmit Sent", "Item Rejected")
+     * @param string $details รายละเอียด
+     */
+    private function addPuHistoryLog(PurchaseOrder $order, string $event, string $details = ''): void
+    {
+        $puData = $order->pu_data ?? [];
+        $history = $puData['history'] ?? [];
+        
+        $history[] = [
+            'event' => $event,
+            'reason' => $details,
+            'at' => now()->toIso8601String(),
+        ];
+        
+        $puData['history'] = $history;
+        $order->pu_data = $puData;
+        $order->saveQuietly();
     }
 }

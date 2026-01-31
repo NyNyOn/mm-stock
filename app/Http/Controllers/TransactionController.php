@@ -223,7 +223,8 @@ class TransactionController extends Controller
 
     public function show(Transaction $transaction)
     {
-        $transaction->load(['user', 'equipment.latestImage', 'handler', 'glpiTicketRelation']);
+        // ✅ เพิ่ม 'rating' เพื่อส่งข้อมูลประเมิน (feedback_type, comment) ไปแสดงใน Modal
+        $transaction->load(['user', 'equipment.latestImage', 'handler', 'glpiTicketRelation', 'rating']);
         return response()->json(['success' => true, 'data' => $transaction]);
     }
 
@@ -405,7 +406,8 @@ class TransactionController extends Controller
                 };
 
                 if ($canAutoConfirm && $isSelfWithdrawal) {
-                    $equipment->decrement('quantity', $quantityToWithdraw);
+                    $equipment->quantity -= $quantityToWithdraw;
+                    $equipment->save(); // ✅ Trigger 'saving' event for status update
                     $transactionData = [
                         'equipment_id'    => $equipment->id, 'user_id' => $loggedInUser->id, 'handler_id' => $loggedInUser->id,
                         'type' => $request->type, 'quantity_change' => -$quantityToWithdraw,
@@ -581,7 +583,8 @@ class TransactionController extends Controller
             $transaction = null;
 
             if ($canAutoConfirm) {
-                $equipment->decrement('quantity', $quantityToTransact);
+                $equipment->quantity -= $quantityToTransact;
+                $equipment->save(); // ✅ Trigger 'saving' event for status update
                 $transactionData = [
                     'equipment_id'    => $equipment->id, 'user_id' => $userIdToAssign, 'handler_id' => $loggedInUser->id,
                     'type' => $transactionType, 'quantity_change' => -$quantityToTransact,
@@ -727,7 +730,8 @@ class TransactionController extends Controller
                 $isCompleted = ($canAutoConfirm && $isSelfWithdrawal);
 
                 if ($isCompleted) {
-                    $equipment->decrement('quantity', $itemData['quantity']);
+                    $equipment->quantity -= $itemData['quantity'];
+                    $equipment->save(); // ✅ Trigger 'saving' event for status update
                 }
 
                 // ✅ LOGIC แก้ไข: จัดการ Purpose และ Notes ไม่ให้ซ้ำกัน
@@ -1033,11 +1037,14 @@ class TransactionController extends Controller
             return response()->json(['success' => false, 'message' => 'ไม่มีสิทธิ์ทำรายการนี้'], 403);
         }
 
+        // ✅ ระบบใหม่: รับ feedback_type (good/neutral/bad)
+        // ✅ รองรับ Legacy: ถ้ามี q1, q2, q3 ก็ยังใช้ได้
         $validator = Validator::make($request->all(), [
-            'q1' => 'required|integer|in:1,2,3',
-            'q2' => 'required|integer|in:1,2,3',
-            'q3' => 'required|integer|in:1,2,3',
-            'answers' => 'nullable|array', // ✅ Dynamic
+            'feedback_type' => 'nullable|in:good,neutral,bad', // ✅ ระบบใหม่
+            'q1' => 'nullable|integer|in:1,2,3', // Legacy
+            'q2' => 'nullable|integer|in:1,2,3', // Legacy
+            'q3' => 'nullable|integer|in:1,2,3', // Legacy
+            'answers' => 'nullable|array', // Legacy Dynamic
             'comment' => 'nullable|string|max:500',
         ]);
 
@@ -1045,33 +1052,48 @@ class TransactionController extends Controller
             return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
         }
 
-        if (!method_exists(\App\Models\EquipmentRating::class, 'calculateDynamicScore')) {
-             return response()->json(['success' => false, 'message' => 'System Error: Method calculateDynamicScore not found'], 500);
+        // ✅ ถ้าไม่มี feedback_type และไม่มี q1 ด้วย = ไม่ได้ส่งอะไรมาเลย
+        if (!$request->filled('feedback_type') && !$request->filled('q1')) {
+            return response()->json(['success' => false, 'message' => 'กรุณาเลือกประเมิน'], 422);
         }
-
-        // Use answers array if available, otherwise fallback to q1-q3
-        $answersToCalc = $request->answers ?? [$request->q1, $request->q2, $request->q3];
-        // Ensure values are just the values (if associative array passed)
-        if (is_array($answersToCalc) && array_keys($answersToCalc) !== range(0, count($answersToCalc) - 1)) {
-            $answersToCalc = array_values($answersToCalc);
-        }
-        
-        $score = \App\Models\EquipmentRating::calculateDynamicScore($answersToCalc);
 
         DB::beginTransaction();
         try {
+            $dataToSave = [
+                'equipment_id' => $transaction->equipment_id,
+                'comment' => $request->comment,
+                'rated_at' => now(),
+            ];
+
+            // ✅ ระบบใหม่: ใช้ feedback_type
+            if ($request->filled('feedback_type')) {
+                $dataToSave['feedback_type'] = $request->feedback_type;
+                // ไม่ต้องคำนวณ rating_score แล้ว (Legacy)
+                $dataToSave['rating_score'] = null;
+                $dataToSave['q1_answer'] = null;
+                $dataToSave['q2_answer'] = null;
+                $dataToSave['q3_answer'] = null;
+                $dataToSave['answers'] = null;
+            } 
+            // ✅ Legacy: ใช้ q1, q2, q3
+            else if ($request->filled('q1')) {
+                $answersToCalc = $request->answers ?? [$request->q1, $request->q2, $request->q3];
+                if (is_array($answersToCalc) && array_keys($answersToCalc) !== range(0, count($answersToCalc) - 1)) {
+                    $answersToCalc = array_values($answersToCalc);
+                }
+                $score = \App\Models\EquipmentRating::calculateDynamicScore($answersToCalc);
+
+                $dataToSave['q1_answer'] = $request->q1;
+                $dataToSave['q2_answer'] = $request->q2;
+                $dataToSave['q3_answer'] = $request->q3;
+                $dataToSave['answers'] = $request->answers;
+                $dataToSave['rating_score'] = $score;
+                $dataToSave['feedback_type'] = null;
+            }
+
             EquipmentRating::updateOrCreate(
                 ['transaction_id' => $transaction->id],
-                [
-                    'equipment_id' => $transaction->equipment_id,
-                    'q1_answer' => $request->q1,
-                    'q2_answer' => $request->q2,
-                    'q3_answer' => $request->q3,
-                    'answers' => $request->answers, // ✅ Save Dynamic Answers
-                    'rating_score' => $score,
-                    'comment' => $request->comment,
-                    'rated_at' => now(), 
-                ]
+                $dataToSave
             );
 
             DB::commit();

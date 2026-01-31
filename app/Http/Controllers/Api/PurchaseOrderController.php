@@ -271,14 +271,7 @@ class PurchaseOrderController extends Controller
                 }
                 $puData['rejection_code'] = $mainRejectionCode; 
 
-                // ✅ Add Log Entry for History View
-                $history = $puData['history'] ?? [];
-                $history[] = [
-                    'event' => 'Rejected',
-                    'reason' => $reason,
-                    'at' => now()->toIso8601String()
-                ];
-                $puData['history'] = $history; 
+                // ✅ Note: History log is added at the end after processing all items 
                 
                 // ✅ Normalization: Support Single Item Payload (from PU Log)
                 if (empty($rejectedItemsList) && $request->has('pr_item_id')) {
@@ -376,9 +369,7 @@ class PurchaseOrderController extends Controller
                 $po->pu_data = $puData;
                 $po->save();
                 
-                // ✅ Log History (Summary with Item Names)
-                $itemsStr = !empty($rejectedItemNames) ? " (".implode(', ', $rejectedItemNames).")" : "";
-                $this->addPoHistoryLog($po, 'Rejected', "Reason: {$reason}{$itemsStr} (By {$rejectedBy})");
+                // ✅ Note: Per-item log is already added above (line 323)
 
                 // 🔔 Notify Rejection (Synology + In-App)
                 try {

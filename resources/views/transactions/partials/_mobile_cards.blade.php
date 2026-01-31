@@ -149,20 +149,45 @@
                 {{-- 1. Rating --}}
                  @if($txn->status === 'completed' && in_array($txn->type, ['consumable', 'returnable', 'partial_return', 'borrow', 'withdraw']))
                     @if($txn->rating)
-                         @if(is_null($txn->rating->rating_score))
-                             {{-- Not Used / N/A --}}
-                             <div class="flex items-center space-x-1 text-xs" title="ประเมินแล้ว: ยังไม่เคยใช้งาน">
-                                <span class="text-gray-400 font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">📦 ยังไม่ใช้</span>
-                             </div>
-                         @else
-                             {{-- Rated --}}
-                             <div class="flex text-yellow-400 space-x-0.5 text-xs" title="ให้คะแนนแล้ว">
+                        @php 
+                            $feedbackType = $txn->rating->feedback_type;
+                            $feedbackEmojis = ['good' => '👍', 'neutral' => '👌', 'bad' => '👎'];
+                            $feedbackLabels = ['good' => 'ถูกใจ', 'neutral' => 'พอใช้', 'bad' => 'แย่'];
+                            $feedbackColors = [
+                                'good' => 'text-green-600 bg-green-50 border-green-200',
+                                'neutral' => 'text-yellow-600 bg-yellow-50 border-yellow-200',
+                                'bad' => 'text-red-600 bg-red-50 border-red-200'
+                            ];
+                        @endphp
+                        
+                        @if($feedbackType)
+                            {{-- ✅ ระบบใหม่: 👍👌👎 --}}
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border {{ $feedbackColors[$feedbackType] ?? 'text-gray-500 bg-gray-50 border-gray-200' }}" 
+                                  title="ประเมินแล้ว: {{ $feedbackLabels[$feedbackType] ?? $feedbackType }}">
+                                {{ $feedbackEmojis[$feedbackType] ?? '❓' }} {{ $feedbackLabels[$feedbackType] ?? $feedbackType }}
+                            </span>
+                        @elseif(is_null($txn->rating->rating_score))
+                            {{-- Legacy: Not Used --}}
+                            <span class="text-gray-400 font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 text-xs">📦 ยังไม่ใช้</span>
+                        @else
+                            {{-- Legacy: Rated (Stars) --}}
+                            <div class="flex text-yellow-400 space-x-0.5 text-xs" title="คะแนนเก่า: {{ number_format($txn->rating->rating_score, 1) }}">
                                 <i class="fas fa-star"></i>
                                 <span class="text-gray-500 font-bold ml-1">{{ number_format($txn->rating->rating_score, 1) }}</span>
-                             </div>
-                         @endif
+                            </div>
+                        @endif
                     @elseif(Auth::id() === $txn->user_id)
-                        <button onclick="openRatingModal('{{ route('transactions.rate', $txn->id) }}', '{{ $txn->type == 'borrow' ? 'borrow' : (optional($txn->equipment)->is_consumable ? 'one_way' : 'return_consumable') }}')" 
+                        <button onclick="openRatingModal([{
+                                    id: {{ $txn->id }},
+                                    submit_url: '{{ route('transactions.rate', $txn->id) }}',
+                                    type: '{{ $txn->type == 'borrow' ? 'borrow' : (optional($txn->equipment)->is_consumable ? 'one_way' : 'return_consumable') }}',
+                                    equipment: {
+                                        name: '{{ addslashes(optional($txn->equipment)->name ?? '') }}',
+                                        serial_number: '{{ optional($txn->equipment)->serial_number }}',
+                                        category_id: {{ optional($txn->equipment)->category_id ?? 'null' }}
+                                    },
+                                    equipment_image_url: '{{ ($txn->equipment && $txn->equipment->latestImage) ? route('nas.image', ['deptKey' => 'mm', 'filename' => $txn->equipment->latestImage->file_name]) : asset('images/no-image.png') }}'
+                                }])" 
                                 class="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded text-xs font-bold transition-colors">
                             <i class="far fa-edit mr-1"></i> ประเมิน
                         </button>

@@ -16,13 +16,14 @@ class EquipmentRating extends Model
         'transaction_id',
         // 'user_id', // เอาออกแล้วตามที่แจ้ง (ใช้การดึงจาก Transaction แทน)
         'equipment_id',
-        'q1_answer',    // เก็บคำตอบข้อ 1 (1=แย่, 2=ไม่ได้ใช้, 3=ดี)
-        'q2_answer',    // เก็บคำตอบข้อ 2
-        'q3_answer',    // เก็บคำตอบข้อ 3
-        'rating_score', // เก็บค่าคะแนนเฉลี่ยเป็นทศนิยม (แทน rating เดิม)
+        'q1_answer',    // เก็บคำตอบข้อ 1 (1=แย่, 2=ไม่ได้ใช้, 3=ดี) - Legacy
+        'q2_answer',    // เก็บคำตอบข้อ 2 - Legacy
+        'q3_answer',    // เก็บคำตอบข้อ 3 - Legacy
+        'rating_score', // เก็บค่าคะแนนเฉลี่ยเป็นทศนิยม - Legacy
+        'feedback_type', // ✅ ระบบใหม่: good=ถูกใจ, neutral=พอใช้, bad=แย่
         'comment',
         'rated_at',     // วันที่ประเมิน
-        'answers',      // ✅ เก็บคำตอบ Dynamic JSON
+        'answers',      // เก็บคำตอบ Dynamic JSON - Legacy
     ];
 
     protected $casts = [
@@ -30,9 +31,36 @@ class EquipmentRating extends Model
         'q2_answer' => 'integer',
         'q3_answer' => 'integer',
         'rating_score' => 'float',
+        'feedback_type' => 'string', // ✅ ระบบใหม่
         'rated_at' => 'datetime',
-        'answers' => 'array', // ✅ Dynamic Answers
+        'answers' => 'array',
     ];
+
+    /**
+     * ✅ แปลง feedback_type เป็นข้อความไทย
+     */
+    public function getFeedbackLabel(): string
+    {
+        return match ($this->feedback_type) {
+            'good' => 'ถูกใจ',
+            'neutral' => 'พอใช้',
+            'bad' => 'แย่',
+            default => 'ยังไม่ประเมิน',
+        };
+    }
+
+    /**
+     * ✅ แปลง feedback_type เป็น Emoji
+     */
+    public function getFeedbackEmoji(): string
+    {
+        return match ($this->feedback_type) {
+            'good' => '👍',
+            'neutral' => '👌',
+            'bad' => '👎',
+            default => '❓',
+        };
+    }
 
     /**
      * Get the transaction that owns the rating.

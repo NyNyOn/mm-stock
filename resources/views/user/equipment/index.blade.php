@@ -177,17 +177,34 @@
                             <p class="text-sm text-gray-500 dark:text-gray-400">{{ $item->serial_number ?? 'N/A' }}</p>
                             
                             @php
-                                $avgRating = $item->ratings_avg_rating_score ?? $item->ratings->avg('rating_score') ?? 0;
-                                $ratingCount = $item->ratings_count ?? $item->ratings->count() ?? 0;
+                                // ✅ ระบบใหม่: นับจำนวนประเมินแต่ละประเภท
+                                $feedbackCounts = $item->feedbackCounts();
+                                $totalFeedback = $feedbackCounts['good'] + $feedbackCounts['neutral'] + $feedbackCounts['bad'];
                             @endphp
-                            <div class="flex items-center mt-2 space-x-0.5" title="คะแนนเฉลี่ย: {{ number_format($avgRating, 1) }}">
-                                @for ($i = 1; $i <= 5; $i++)
-                                    @if ($i <= $avgRating) <i class="fas fa-star text-yellow-400 text-xs"></i>
-                                    @elseif ($i - 0.5 <= $avgRating) <i class="fas fa-star-half-alt text-yellow-400 text-xs"></i>
-                                    @else <i class="fas fa-star text-gray-300 dark:text-gray-600 text-xs"></i> @endif
-                                @endfor
-                                <span class="text-xs text-gray-400 ml-1">({{ $ratingCount }})</span>
+                            @if($totalFeedback > 0)
+                            <div class="flex items-center gap-3 mt-2 text-sm" title="ผลประเมินจากผู้ใช้">
+                                <span class="flex items-center gap-1 text-green-600">
+                                    👍 <span class="font-bold">{{ $feedbackCounts['good'] }}</span>
+                                </span>
+                                <span class="flex items-center gap-1 text-yellow-600">
+                                    👌 <span class="font-bold">{{ $feedbackCounts['neutral'] }}</span>
+                                </span>
+                                <span class="flex items-center gap-1 text-red-600">
+                                    👎 <span class="font-bold">{{ $feedbackCounts['bad'] }}</span>
+                                </span>
+                                {{-- ✅ ปุ่มดูข้อเสนอแนะทั้งหมด --}}
+                                <button onclick="openFeedbacksModal({{ $item->id }})" 
+                                        class="ml-auto text-xs text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+                                        title="ดูข้อเสนอแนะทั้งหมด">
+                                    <i class="fas fa-comments"></i> ดูทั้งหมด
+                                </button>
                             </div>
+                            @else
+                            <div class="flex items-center gap-1 mt-2 text-xs text-gray-400">
+                                <i class="far fa-comment-dots"></i>
+                                <span>ยังไม่มีประเมิน</span>
+                            </div>
+                            @endif
 
                             <div class="flex-grow mt-2"><span class="text-sm font-semibold text-blue-600 dark:text-blue-400">คงเหลือ: {{ $item->quantity }} {{ optional($item->unit)->name }}</span></div>
                             
@@ -579,19 +596,17 @@
                                 const unit = item.unit?.name || 'ชิ้น';
                                 let imgUrl = item.live_search_image_url ? item.live_search_image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
                                 
-                                let avgRating = parseFloat(item.avg_rating) || 0;
-                                let ratingCount = item.rating_count || 0;
-                                let starsHtml = '';
-                                if (avgRating === 0 && ratingCount > 0) {
-                                    starsHtml = '<div class="flex items-center mt-2 space-x-1" title="ประเมินแล้ว: ยังไม่เคยใช้งาน"><span class="text-[10px] text-gray-500 font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">📦 ยังไม่ใช้</span><span class="text-xs text-gray-400">('+ratingCount+')</span></div>';
+                                let feedbackHtml = '';
+                                const fc = item.feedback_counts || {good: 0, neutral: 0, bad: 0};
+                                const totalFb = (fc.good || 0) + (fc.neutral || 0) + (fc.bad || 0);
+                                if (totalFb > 0) {
+                                    feedbackHtml = `<div class="flex items-center gap-2 mt-2 text-xs" title="ผลประเมินจากผู้ใช้">
+                                        <span class="text-green-600">👍 <b>${fc.good || 0}</b></span>
+                                        <span class="text-yellow-600">👌 <b>${fc.neutral || 0}</b></span>
+                                        <span class="text-red-600">👎 <b>${fc.bad || 0}</b></span>
+                                    </div>`;
                                 } else {
-                                    starsHtml = '<div class="flex items-center mt-2 space-x-0.5" title="คะแนนเฉลี่ย: '+avgRating.toFixed(1)+'">';
-                                    for (let i = 1; i <= 5; i++) {
-                                        if (i <= avgRating) starsHtml += '<i class="fas fa-star text-yellow-400 text-xs"></i>';
-                                        else if (i - 0.5 <= avgRating) starsHtml += '<i class="fas fa-star-half-alt text-yellow-400 text-xs"></i>';
-                                        else starsHtml += '<i class="fas fa-star text-gray-300 dark:text-gray-600 text-xs"></i>';
-                                    }
-                                    starsHtml += `<span class="text-xs text-gray-400 ml-1">(${ratingCount})</span></div>`;
+                                    feedbackHtml = '<div class="flex items-center gap-1 mt-2 text-xs text-gray-400"><i class="far fa-comment-dots"></i> <span>ยังไม่มีประเมิน</span></div>';
                                 }
 
                                 const btnStates = { 'consumable': { 'text': 'เบิก', 'icon': 'fas fa-box-open', 'class': 'bg-indigo-600 hover:bg-indigo-700', 'type': 'consumable', }, 'returnable': { 'text': 'ยืม', 'icon': 'fas fa-hand-holding', 'class': 'bg-purple-600 hover:bg-purple-700', 'type': 'returnable', }, 'partial_return': { 'text': 'เบิก', 'icon': 'fas fa-box-open', 'class': 'bg-blue-600 hover:bg-blue-700', 'type': 'partial_return', }, 'unset': { 'text': 'รอระบุ', 'icon': 'fas fa-clock', 'class': 'bg-gray-400 cursor-not-allowed', 'type': null, } };
@@ -616,7 +631,7 @@
                                         <img src="${imgUrl}" class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" onclick="openImageViewer('${imgUrl}')">
                                         <div class="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"><i class="fas fa-search-plus"></i></div>
                                     </div>
-                                    <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.serial_number||'N/A'}</p>${starsHtml}<span class="block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">คงเหลือ: ${item.quantity} ${unit}</span></div>
+                                    <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.serial_number||'N/A'}</p>${feedbackHtml}<span class="block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">คงเหลือ: ${item.quantity} ${unit}</span></div>
                                     <div class="p-3 pt-0 mt-auto flex gap-2">
                                         <button type="button" class="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-bold text-white transition duration-150 ease-in-out border border-transparent rounded-md ${buttonDisabled?'disabled:opacity-50 disabled:cursor-not-allowed':''} ${btnCls} ${btnTriggerClass}" 
                                             onclick="${!isSameDept ? `handleOtherDeptClick('${item.dept_name}')` : ''}"
@@ -634,19 +649,17 @@
                              data.otherStock.forEach(item => {
                                  const unit = item.unit?.name || 'ชิ้น'; const imgUrl = item.live_search_image_url ? item.live_search_image_url : 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image';
                                  
-                                 let avgRating = parseFloat(item.avg_rating) || 0;
-                                 let ratingCount = item.rating_count || 0;
-                                 let starsHtml = '';
-                                 if (avgRating === 0 && ratingCount > 0) {
-                                     starsHtml = '<div class="flex items-center mt-2 space-x-1" title="ประเมินแล้ว: ยังไม่เคยใช้งาน"><span class="text-[10px] text-gray-500 font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">📦 ยังไม่ใช้</span><span class="text-xs text-gray-400">('+ratingCount+')</span></div>';
+                                 let feedbackHtml = '';
+                                 const fc = item.feedback_counts || {good: 0, neutral: 0, bad: 0};
+                                 const totalFb = (fc.good || 0) + (fc.neutral || 0) + (fc.bad || 0);
+                                 if (totalFb > 0) {
+                                     feedbackHtml = `<div class="flex items-center gap-2 mt-2 text-xs" title="ผลประเมินจากผู้ใช้">
+                                         <span class="text-green-600">👍 <b>${fc.good || 0}</b></span>
+                                         <span class="text-yellow-600">👌 <b>${fc.neutral || 0}</b></span>
+                                         <span class="text-red-600">👎 <b>${fc.bad || 0}</b></span>
+                                     </div>`;
                                  } else {
-                                     starsHtml = '<div class="flex items-center mt-2 space-x-0.5" title="คะแนนเฉลี่ย: '+avgRating.toFixed(1)+'">';
-                                     for (let i = 1; i <= 5; i++) {
-                                         if (i <= avgRating) starsHtml += '<i class="fas fa-star text-yellow-400 text-xs"></i>';
-                                         else if (i - 0.5 <= avgRating) starsHtml += '<i class="fas fa-star-half-alt text-yellow-400 text-xs"></i>';
-                                         else starsHtml += '<i class="fas fa-star text-gray-300 dark:text-gray-600 text-xs"></i>';
-                                     }
-                                     starsHtml += `<span class="text-xs text-gray-400 ml-1">(${ratingCount})</span></div>`;
+                                     feedbackHtml = '<div class="flex items-center gap-1 mt-2 text-xs text-gray-400"><i class="far fa-comment-dots"></i> <span>ยังไม่มีประเมิน</span></div>';
                                  }
 
                                  otherHtml += `<div class="flex flex-col overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700 equipment-card bg-white dark:bg-gray-800 opacity-70">
@@ -654,7 +667,7 @@
                                      <img src="${imgUrl}" class="object-contain max-w-full max-h-full cursor-pointer hover:scale-105 transition-transform duration-300" onclick="openImageViewer('${imgUrl}')">
                                      <div class="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"><i class="fas fa-search-plus"></i></div>
                                  </div>
-                                 <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.dept_name}</p>${starsHtml}<span class="block mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">มี: ${item.quantity} ${unit}</span></div><div class="p-3 pt-0 mt-auto">
+                                 <div class="p-3"><h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100">${item.name}</h3><p class="text-xs text-gray-500">${item.dept_name}</p>${feedbackHtml}<span class="block mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">มี: ${item.quantity} ${unit}</span></div><div class="p-3 pt-0 mt-auto">
                                  <button onclick="handleOtherDeptClick('${item.dept_name}')" class="inline-flex items-center justify-center w-full px-3 py-2 text-xs font-bold text-white border border-transparent rounded-md bg-gray-400 opacity-90 cursor-not-allowed"><i class="mr-1 fas fa-ban"></i> เบิกไม่ได้</button>
                                  </div></div>`;
                              });
@@ -671,5 +684,119 @@
             });
         }
     });
+</script>
+
+{{-- ✅ FEEDBACKS MODAL: แสดงข้อเสนอแนะทั้งหมดของอุปกรณ์ --}}
+<div id="feedbacksModal" class="fixed inset-0 z-50 flex items-center justify-center hidden bg-gray-900 bg-opacity-60 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transform transition-all m-4 relative">
+        
+        {{-- Header --}}
+        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5 flex justify-between items-center flex-shrink-0 rounded-t-2xl">
+            <div class="flex items-center gap-3">
+                <div class="bg-white/20 p-2 rounded-lg text-white">
+                    <i class="fas fa-comments text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-white">ข้อเสนอแนะทั้งหมด</h3>
+                    <p class="text-xs text-indigo-100 opacity-90" id="feedbacksEquipmentName">-</p>
+                </div>
+            </div>
+            <button onclick="closeFeedbacksModal()" class="text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-1.5 transition-all focus:outline-none">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+
+        {{-- Summary --}}
+        <div id="feedbacksSummary" class="px-6 py-4 bg-gray-50 border-b flex items-center justify-center gap-6">
+            <span class="flex items-center gap-2 text-green-600 font-bold">
+                👍 <span id="feedbacksSummaryGood">0</span>
+            </span>
+            <span class="flex items-center gap-2 text-yellow-600 font-bold">
+                👌 <span id="feedbacksSummaryNeutral">0</span>
+            </span>
+            <span class="flex items-center gap-2 text-red-600 font-bold">
+                👎 <span id="feedbacksSummaryBad">0</span>
+            </span>
+            <span class="text-gray-500 text-sm ml-4">
+                รวม <span id="feedbacksSummaryTotal" class="font-bold">0</span> รายการ
+            </span>
+        </div>
+
+        {{-- Body (Scrollable List) --}}
+        <div class="p-6 space-y-3 overflow-y-auto max-h-[50vh]" id="feedbacksList">
+            <p class="text-center text-gray-400">กำลังโหลด...</p>
+        </div>
+
+        {{-- Footer --}}
+        <div class="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-100 flex-shrink-0 rounded-b-2xl">
+            <button onclick="closeFeedbacksModal()" class="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-100 hover:text-gray-900 transition-all shadow-sm focus:outline-none">
+                ปิดหน้าต่าง
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ✅ Feedbacks Modal Functions
+    window.openFeedbacksModal = async function(equipmentId) {
+        const modal = document.getElementById('feedbacksModal');
+        const list = document.getElementById('feedbacksList');
+        
+        // Reset & Show
+        list.innerHTML = '<p class="text-center text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i> กำลังโหลด...</p>';
+        document.getElementById('feedbacksEquipmentName').innerText = '-';
+        modal.classList.remove('hidden');
+
+        try {
+            const response = await fetch(`/equipment/${equipmentId}/feedbacks`);
+            const result = await response.json();
+
+            if(result.success) {
+                document.getElementById('feedbacksEquipmentName').innerText = `${result.equipment_name} (${result.equipment_serial || 'N/A'})`;
+                document.getElementById('feedbacksSummaryGood').innerText = result.summary.good;
+                document.getElementById('feedbacksSummaryNeutral').innerText = result.summary.neutral;
+                document.getElementById('feedbacksSummaryBad').innerText = result.summary.bad;
+                document.getElementById('feedbacksSummaryTotal').innerText = result.summary.total;
+
+                if(result.feedbacks.length === 0) {
+                    list.innerHTML = '<p class="text-center text-gray-400 py-8"><i class="far fa-comment-dots text-4xl mb-3 block"></i> ยังไม่มีข้อเสนอแนะ</p>';
+                } else {
+                    let html = '';
+                    result.feedbacks.forEach((fb, idx) => {
+                        const colorMap = {
+                            'good': 'border-green-200 bg-green-50',
+                            'neutral': 'border-yellow-200 bg-yellow-50',
+                            'bad': 'border-red-200 bg-red-50'
+                        };
+                        const borderColor = colorMap[fb.feedback_type] || 'border-gray-200 bg-gray-50';
+                        
+                        html += `
+                        <div class="p-4 rounded-xl border-2 ${borderColor}">
+                            <div class="flex items-start justify-between">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-2xl">${fb.feedback_emoji}</span>
+                                    <div>
+                                        <p class="font-bold text-gray-800">${fb.feedback_label}</p>
+                                        <p class="text-xs text-gray-500"><i class="far fa-user mr-1"></i>${fb.user_name} • ${fb.rated_at || '-'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            ${fb.comment ? `<p class="mt-3 text-sm text-gray-700 bg-white/60 p-3 rounded-lg border border-gray-100"><i class="fas fa-quote-left text-gray-300 mr-2"></i>${fb.comment}</p>` : '<p class="mt-2 text-xs text-gray-400 italic">ไม่มีข้อเสนอแนะเพิ่มเติม</p>'}
+                        </div>`;
+                    });
+                    list.innerHTML = html;
+                }
+            } else {
+                list.innerHTML = '<p class="text-center text-red-500">ไม่สามารถโหลดข้อมูลได้</p>';
+            }
+        } catch(e) {
+            console.error(e);
+            list.innerHTML = '<p class="text-center text-red-500">เกิดข้อผิดพลาด</p>';
+        }
+    };
+
+    window.closeFeedbacksModal = function() {
+        document.getElementById('feedbacksModal').classList.add('hidden');
+    };
 </script>
 @endpush

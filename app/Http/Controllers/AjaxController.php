@@ -393,7 +393,8 @@ class AjaxController extends Controller
                     DB::rollBack();
                     return response()->json(['success' => false, 'message' => "สต็อกของ {$equipment->name} ไม่เพียงพอ"], 422);
                 }
-                $equipment->decrement('quantity', $item['quantity']);
+                $equipment->quantity -= $item['quantity'];
+                $equipment->save(); // ✅ Trigger 'saving' event (Auto Update Status)
                 Transaction::create([
                     'equipment_id'    => $item['id'],
                     'user_id'         => Auth::id() ?? 1,

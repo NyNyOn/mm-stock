@@ -937,4 +937,48 @@ class EquipmentController extends Controller
         }
     }
 
+    /**
+     * ✅ ดึงข้อเสนอแนะทั้งหมดของอุปกรณ์ (สำหรับ Modal แสดงใน PU)
+     * GET /equipment/{equipment}/feedbacks
+     */
+    public function getFeedbacks(Equipment $equipment)
+    {
+        $equipment->load(['ratings' => function ($query) {
+            $query->with(['transaction.user'])
+                  ->whereNotNull('feedback_type')
+                  ->orderBy('rated_at', 'desc');
+        }]);
+
+        $feedbacks = $equipment->ratings->map(function ($rating) {
+            $feedbackLabels = ['good' => 'ถูกใจ', 'neutral' => 'พอใช้', 'bad' => 'แย่'];
+            $feedbackEmojis = ['good' => '👍', 'neutral' => '👌', 'bad' => '👎'];
+            
+            return [
+                'id' => $rating->id,
+                'feedback_type' => $rating->feedback_type,
+                'feedback_label' => $feedbackLabels[$rating->feedback_type] ?? $rating->feedback_type,
+                'feedback_emoji' => $feedbackEmojis[$rating->feedback_type] ?? '❓',
+                'comment' => $rating->comment,
+                'rated_at' => $rating->rated_at ? $rating->rated_at->format('d/m/Y H:i') : null,
+                'user_name' => $rating->transaction->user->fullname ?? 'ไม่ทราบชื่อ',
+            ];
+        });
+
+        // นับสรุป
+        $summary = [
+            'good' => $equipment->ratings->where('feedback_type', 'good')->count(),
+            'neutral' => $equipment->ratings->where('feedback_type', 'neutral')->count(),
+            'bad' => $equipment->ratings->where('feedback_type', 'bad')->count(),
+            'total' => $equipment->ratings->whereNotNull('feedback_type')->count(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'equipment_name' => $equipment->name,
+            'equipment_serial' => $equipment->serial_number,
+            'summary' => $summary,
+            'feedbacks' => $feedbacks,
+        ]);
+    }
+
 }

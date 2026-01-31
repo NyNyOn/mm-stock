@@ -301,60 +301,25 @@
                         </a>
                     @endif
 
-                    {{-- 2. Resubmit Button (For Rejected Only) --}}
-                    {{-- 2. Resubmit Logic (Advanced 4 Cases) --}}
-                     {{-- 2. Resubmit Logic (Advanced 4 Cases & Partial Rejection) --}}
+                     {{-- 2. Resubmit Logic (Item-level Only) --}}
                      @php
                         $hasRejectedItems = $po->items->contains('status', 'cancelled');
                         $isCancelled = $po->status === 'cancelled';
+                        $hasFixableItems = $po->items->where('status', 'cancelled')
+                            ->filter(fn($i) => !in_array((int)$i->rejection_code, [1, 2, 4]))
+                            ->isNotEmpty();
                      @endphp
 
                      @if($isCancelled || $hasRejectedItems)
-                        @php
-                            $rejectionCode = 0;
-                            // Priority 1: Check Item Level
-                            $rejectedItems = $po->items->where('status', 'cancelled');
-                            if ($rejectedItems->isNotEmpty()) {
-                                // If ANY item is 3 (Fixable), treat as Fixable
-                                if ($rejectedItems->contains('rejection_code', 3) || $rejectedItems->contains(fn($i) => str_contains($i->rejection_reason, 'ไม่ชัดเจน'))) {
-                                    $rejectionCode = 3;
-                                } else {
-                                    $rejectionCode = $rejectedItems->first()->rejection_code ?? 0;
-                                }
-                            }
-                            // Priority 2: PO Level (Legacy/Full Rejection)
-                            if ($rejectionCode == 0) {
-                                $rejectionCode = $po->pu_data['rejection_code'] ?? 0;
-                            }
-                            
-                            // Fallback: Keywords
-                            if ($rejectionCode === 0 && isset($po->pu_data['rejection_reason'])) {
-                                $r = $po->pu_data['rejection_reason'];
-                                if (str_contains($r, 'ไม่ชัดเจน')) $rejectionCode = 3;
-                                elseif (str_contains($r, 'ไม่จำเป็น') || str_contains($r, 'งบประมาณ') || str_contains($r, 'ทดแทน')) $rejectionCode = 1;
-                            }
-                        @endphp
-
-                        @if($rejectionCode == 3)
-                            {{-- Case 3: Allow Resubmit with Explanation --}}
-                            <form id="resubmit-form-{{$po->id}}" action="{{ route('purchase-orders.resubmit', $po->id) }}" method="POST">
-                                @csrf
-                                <input type="hidden" name="resubmit_note" id="resubmit-note-{{$po->id}}">
-                                <button type="button" onclick="triggerResubmit('{{$po->id}}')" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-indigo-600 text-indigo-700 hover:bg-indigo-50 text-sm font-bold rounded-lg shadow-sm transition-all whitespace-nowrap">
-                                    <i class="fas fa-edit"></i> แก้ไขและส่งใหม่
-                                </button>
-                            </form>
-                        @elseif($rejectionCode == 0)
-                            {{-- Case 0: Unknown - Allow but warn (Safe fallback) --}}
-                             <form id="resubmit-form-{{$po->id}}" action="{{ route('purchase-orders.resubmit', $po->id) }}" method="POST">
-                                @csrf
-                                <input type="hidden" name="resubmit_note" id="resubmit-note-{{$po->id}}">
-                                <button type="button" onclick="triggerResubmit('{{$po->id}}')" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-400 text-gray-700 hover:bg-gray-50 text-sm font-medium rounded-lg shadow-sm whitespace-nowrap">
-                                    <i class="fas fa-edit"></i> แก้ไขและส่งใหม่
-                                </button>
-                            </form>
+                        @if($hasFixableItems)
+                            {{-- ✅ มีรายการที่แก้ไขได้ → แนะนำให้ตอบกลับทีละรายการ --}}
+                            <div class="flex flex-col items-end">
+                                <span class="text-xs text-indigo-600 font-medium flex items-center gap-1">
+                                    <i class="fas fa-info-circle"></i> ตอบกลับแต่ละรายการด้านล่าง
+                                </span>
+                            </div>
                         @else
-                            {{-- Case 1, 2, 4: Block Resubmit --}}
+                            {{-- ❌ ไม่มีรายการที่แก้ไขได้ → ต้องสร้างใหม่ --}}
                             <div class="flex flex-col items-end">
                                 <a href="{{ route('user.equipment.index') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors whitespace-nowrap opacity-75">
                                     <i class="fas fa-shopping-cart"></i> เปิดขอซื้อใหม่
@@ -634,18 +599,45 @@
                                 
                                 {{-- Reason Box per Item --}}
                                 @if($itemIsRejected && $item->rejection_reason)
-                                    <div class="mt-2 bg-red-50 p-2 rounded text-xs text-red-700 border border-red-100">
+                                    <div class="mt-2 bg-red-50 p-2 rounded text-xs text-red-700 border border-red-100" id="item-box-{{ $item->id }}">
                                         <strong>เหตุผล:</strong> {{ $item->rejection_reason }}
-                                        @if($item->rejection_code == 3)
-                                            <div class="mt-1 text-blue-700 font-medium cursor-pointer underline" onclick="triggerResubmit('{{$po->id}}')">
-                                                <i class="fas fa-edit"></i> คลิกที่นี่เพื่อแก้ไขและส่งใหม่
-                                            </div>
+                                        
+                                        @if($item->rejection_code == 3 || !in_array((int)$item->rejection_code, [1,2,4]))
+                                            {{-- ✅ Item-level Resubmit Form (AJAX) --}}
+                                            <form onsubmit="submitItemReply(event, {{ $item->id }})" class="mt-2 item-reply-form" data-item-id="{{ $item->id }}">
+                                                @csrf
+                                                <div class="flex flex-col sm:flex-row gap-2">
+                                                    <input type="text" name="reply_note" id="reply-note-{{ $item->id }}" placeholder="พิมพ์ข้อความตอบกลับ PU..." 
+                                                           class="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400" 
+                                                           required>
+                                                    <button type="submit" id="submit-btn-{{ $item->id }}" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-bold shadow-sm transition-colors whitespace-nowrap">
+                                                        <i class="fas fa-paper-plane mr-1"></i> ส่งตอบกลับ
+                                                    </button>
+                                                </div>
+                                            </form>
                                         @elseif(in_array($item->rejection_code, [1,2,4]))
                                             <div class="mt-1 text-red-800 font-medium">
                                                 *ต้องสร้างรายการใหม่
                                             </div>
                                         @endif
                                     </div>
+                                @elseif($itemIsRejected && !$item->rejection_reason)
+                                    {{-- กรณีถูกปฏิเสธแต่ไม่มีเหตุผลระบุ --}}
+                                    @if(!in_array((int)$item->rejection_code, [1,2,4]))
+                                        <div id="item-box-{{ $item->id }}">
+                                            <form onsubmit="submitItemReply(event, {{ $item->id }})" class="mt-2 item-reply-form" data-item-id="{{ $item->id }}">
+                                                @csrf
+                                                <div class="flex flex-col sm:flex-row gap-2">
+                                                    <input type="text" name="reply_note" id="reply-note-{{ $item->id }}" placeholder="พิมพ์ข้อความตอบกลับ PU..." 
+                                                           class="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400" 
+                                                           required>
+                                                    <button type="submit" id="submit-btn-{{ $item->id }}" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded font-bold shadow-sm transition-colors whitespace-nowrap">
+                                                        <i class="fas fa-paper-plane mr-1"></i> ส่งตอบกลับ
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    @endif
                                 @endif
                             </div>
                         </div>
@@ -736,5 +728,67 @@
                 }
             });
         }
+    }
+
+    // ✅ AJAX Submit for Item-level Resubmit (No page reload)
+    window.submitItemReply = function(event, itemId) {
+        event.preventDefault();
+        
+        const replyNote = document.getElementById('reply-note-' + itemId).value;
+        const submitBtn = document.getElementById('submit-btn-' + itemId);
+        const itemBox = document.getElementById('item-box-' + itemId);
+        
+        if (!replyNote.trim()) {
+            Swal.fire('กรุณาพิมพ์ข้อความ', 'ต้องระบุข้อความตอบกลับก่อนส่ง', 'warning');
+            return;
+        }
+        
+        // Disable button and show loading
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> กำลังส่ง...';
+        
+        // Send AJAX request
+        fetch('/po-items/' + itemId + '/resubmit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ reply_note: replyNote })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // ✅ Success: Update UI without reload
+                itemBox.innerHTML = `
+                    <div class="flex items-center gap-2 text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                        <i class="fas fa-check-circle"></i>
+                        <span class="font-medium">ส่งตอบกลับเรียบร้อยแล้ว!</span>
+                    </div>
+                `;
+                
+                // Show success toast
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: data.message || 'ส่งตอบกลับเรียบร้อยแล้ว',
+                    showConfirmButton: false,
+                    timer: 3000
+                });
+            } else {
+                // ❌ Error
+                Swal.fire('เกิดข้อผิดพลาด', data.message || 'ไม่สามารถส่งข้อมูลได้', 'error');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> ส่งตอบกลับ';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้', 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> ส่งตอบกลับ';
+        });
     }
 </script>

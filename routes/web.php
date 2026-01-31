@@ -114,6 +114,10 @@ Route::middleware('auth')->group(function () {
     // --- Admin & Staff Routes ---
     Route::resource('equipment', EquipmentController::class)->middleware('can:equipment:view');
     
+    // ✅ API ดึงข้อเสนอแนะทั้งหมดของอุปกรณ์ (สำหรับ PU)
+    Route::get('/equipment/{equipment}/feedbacks', [EquipmentController::class, 'getFeedbacks'])
+        ->name('equipment.feedbacks');
+    
     // ✅ [FIXED] เปลี่ยนจาก rateTransaction เป็น rate ให้ตรงกับ Controller ใหม่
     Route::post('/transactions/{transaction}/rate', [TransactionController::class, 'rateTransaction'])
         ->name('transactions.rate');
@@ -239,6 +243,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/purchase-orders/{purchaseOrder}/resubmit', [PurchaseOrderController::class, 'resubmit'])->name('purchase-orders.resubmit');
         // ✅ Retry Send to PU Hub
         Route::post('/purchase-orders/{purchaseOrder}/retry-send', [PurchaseOrderController::class, 'retrySendApi'])->name('purchase-orders.retry-send');
+        // ✅ Item-level Resubmit (ตอบกลับแยกรายอุปกรณ์)
+        Route::post('/po-items/{item}/resubmit', [PurchaseOrderController::class, 'resubmitItem'])->name('po-items.resubmit');
     });
 
     // ✅ Purchase Inspection Routes (ตรวจสอบของที่มาถึง)

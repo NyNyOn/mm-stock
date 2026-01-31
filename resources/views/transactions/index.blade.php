@@ -231,6 +231,21 @@
                 </div>
             </div>
 
+            {{-- Feedback Section (ผลประเมินจากผู้ใช้) --}}
+            <div id="modalFeedbackSection" class="hidden">
+                <label class="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-2">
+                    <i class="fas fa-star text-yellow-400"></i> ผลการประเมิน
+                </label>
+                <div class="bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200 flex items-center gap-4">
+                    <span id="modalFeedbackBadge" class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-lg font-bold border-2">
+                        <!-- จะถูกเติมโดย JavaScript -->
+                    </span>
+                    <div id="modalFeedbackComment" class="flex-1 text-sm text-gray-600 italic">
+                        <!-- ข้อเสนอแนะ -->
+                    </div>
+                </div>
+            </div>
+
             {{-- Bottom Section: Notes --}}
             <div>
                 <label class="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-2">
@@ -394,7 +409,39 @@
                     }
                 }
                 
+
                 document.getElementById('modalNotes').innerText = displayText || '-';
+                
+                // ✅ Feedback Section (ผลประเมิน + ข้อเสนอแนะ)
+                const feedbackSection = document.getElementById('modalFeedbackSection');
+                const feedbackBadge = document.getElementById('modalFeedbackBadge');
+                const feedbackComment = document.getElementById('modalFeedbackComment');
+                
+                if(txn.rating && txn.rating.feedback_type) {
+                    // แสดงส่วน Feedback
+                    feedbackSection.classList.remove('hidden');
+                    
+                    const feedbackMap = {
+                        'good': { emoji: '👍', label: 'ถูกใจ', color: 'bg-green-50 text-green-700 border-green-200' },
+                        'neutral': { emoji: '👌', label: 'พอใช้', color: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+                        'bad': { emoji: '👎', label: 'แย่', color: 'bg-red-50 text-red-700 border-red-200' }
+                    };
+                    
+                    const fb = feedbackMap[txn.rating.feedback_type] || { emoji: '❓', label: txn.rating.feedback_type, color: 'bg-gray-50 text-gray-700 border-gray-200' };
+                    feedbackBadge.className = `inline-flex items-center gap-2 px-4 py-2 rounded-full text-lg font-bold border-2 ${fb.color}`;
+                    feedbackBadge.innerHTML = `${fb.emoji} <span>${fb.label}</span>`;
+                    
+                    // ข้อเสนอแนะ
+                    if(txn.rating.comment && txn.rating.comment.trim()) {
+                        feedbackComment.innerHTML = `<i class="fas fa-quote-left text-gray-300 mr-2"></i>${txn.rating.comment}`;
+                        feedbackComment.classList.remove('hidden');
+                    } else {
+                        feedbackComment.innerHTML = '<span class="text-gray-400">ไม่มีข้อเสนอแนะเพิ่มเติม</span>';
+                    }
+                } else {
+                    // ซ่อนถ้าไม่มีข้อมูลประเมิน
+                    feedbackSection.classList.add('hidden');
+                }
                 
                 // Image
                 if(txn.equipment?.latest_image?.image_url) {

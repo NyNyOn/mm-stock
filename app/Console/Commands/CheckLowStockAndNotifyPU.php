@@ -208,33 +208,45 @@ class CheckLowStockAndNotifyPU extends Command
             // ✅ TRIGGER API SUBMISSION (Like pressing "Submit PO")
             \Illuminate\Support\Facades\Log::info("STEP 7.5: Submitting PO to PU Hub API...");
             
-            try {
-                $controller = new \App\Http\Controllers\PurchaseOrderController();
-                $request = new \Illuminate\Http\Request(); // Empty request
-                
-            // Call the public method to send to API
-                // ✅ Pass TRUE to suppress the standard "PU Accepted" notification
-                // because we will send our own Custom "Automated Monthly Stock Check" notification below.
-                $controller->sendPurchaseOrderToApi($purchaseOrder, $request, true);
-                
-                // Refresh to get the assigned PO Number from API
-                $purchaseOrder->refresh();
-                $poNumber = $purchaseOrder->po_number; 
-                
-                $this->info("PO Submitted to API. Assigned Number: {$poNumber}");
-                \Illuminate\Support\Facades\Log::info("API Submission Success. PO Number: {$poNumber}");
+            $attempts = 0;
+            $maxAttempts = 3;
+            $success = false;
 
-            } catch (\Exception $e) {
-                $this->error("Failed to submit to API: " . $e->getMessage());
-                \Illuminate\Support\Facades\Log::error("API Submission Failed: " . $e->getMessage());
-                // Continue to notify Synology, but maybe warn about failure?
-                // The Synology msg shows $po->po_number. If NULL, it will show empty.
+            while (!$success && $attempts < $maxAttempts) {
+                $attempts++;
+                try {
+                    $controller = new \App\Http\Controllers\PurchaseOrderController();
+                    $request = new \Illuminate\Http\Request(); // Empty request
+                    
+                    // Call the public method to send to API
+                    // ✅ Pass TRUE to suppress the standard "PU Accepted" notification
+                    $controller->sendPurchaseOrderToApi($purchaseOrder, $request, true);
+                    
+                    // Refresh to get the assigned PO Number from API
+                    $purchaseOrder->refresh();
+                    $poNumber = $purchaseOrder->po_number; 
+                    
+                    $this->info("PO Submitted to API. Assigned Number: {$poNumber}");
+                    \Illuminate\Support\Facades\Log::info("API Submission Success. PO Number: {$poNumber}");
+                    $success = true;
+
+                } catch (\Exception $e) {
+                    $this->error("Attempt {$attempts} failed: " . $e->getMessage());
+                    \Illuminate\Support\Facades\Log::error("API Submission Failed (Attempt {$attempts}): " . $e->getMessage());
+                    
+                    if ($attempts < $maxAttempts) {
+                        sleep(5); // Wait 5 seconds before retry
+                    }
+                }
             }
             
             $this->info("Purchase Order processed successfully.");
 
             // 3. Notify Synology Chat
             \Illuminate\Support\Facades\Log::info("STEP 8: Sending Notification.");
+            // 3. Notify Synology Chat
+            \Illuminate\Support\Facades\Log::info("STEP 8: Sending Notification.");
+            sleep(2); // ✅ Prevent Rate Limit (411 Error)
             $this->notifySynology($purchaseOrder, $itemsList);
 
         } catch (\Exception $e) {
@@ -245,6 +257,8 @@ class CheckLowStockAndNotifyPU extends Command
             \Illuminate\Support\Facades\Log::error($e->getTraceAsString());
 
             // 🔴 แจ้งเตือน Error ไปยัง Synology Chat
+            // 🔴 แจ้งเตือน Error ไปยัง Synology Chat
+            sleep(2); // ✅ Prevent Rate Limit (411 Error)
             $this->notifySynologyError($e->getMessage());
         }
     }

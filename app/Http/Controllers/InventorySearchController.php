@@ -112,12 +112,19 @@ class InventorySearchController extends Controller
                             $item->live_search_image_url = 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image'; 
                         }
 
-                        // ✅ คะแนน (ใช้ Smart Rating ที่คำนวณไว้แล้ว)
+                        // ✅ Rating เดิม (Legacy - เก็บไว้เป็น fallback)
                         $item->avg_rating = isset($item->smart_rating) 
                             ? (float)$item->smart_rating 
                             : (isset($item->ratings_avg_rating) ? (float)$item->ratings_avg_rating : 0);
                             
                         $item->rating_count = $item->ratings_count ?? 0;
+                        
+                        // ✅ ระบบใหม่: นับจำนวน feedback (👍👌👎)
+                        try {
+                            $item->feedback_counts = $item->feedbackCounts();
+                        } catch (\Exception $e) {
+                            $item->feedback_counts = ['good' => 0, 'neutral' => 0, 'bad' => 0];
+                        }
                         
                         $item->dept_key = $key;
                     });
