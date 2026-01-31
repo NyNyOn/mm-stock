@@ -85,6 +85,7 @@
             </div>
         @endforelse
     </div>
+
 </div>
 
 {{-- Modal for Creating a New Group --}}

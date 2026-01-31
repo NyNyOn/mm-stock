@@ -27,6 +27,9 @@
 @php
     $myDepartment = 'mm'; 
     $defaultDeptKey = $myDepartment;
+    
+    // ✅ ตรวจสอบสิทธิ์ดูข้อเสนอแนะ (feedback)
+    $canViewFeedback = \App\Models\FeedbackViewer::canView(auth()->user());
 @endphp
 
 <div class="space-y-6 page animate-slide-up-soft">
@@ -95,6 +98,24 @@
                                             <h3 class="text-sm font-semibold text-gray-800 truncate dark:text-gray-100" title="{{ $item->name }}">{{ $item->name }}</h3>
                                             <p class="text-xs text-gray-500 dark:text-gray-400">{{ $item->serial_number ?? 'N/A' }}</p>
                                             <span class="block mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">คงเหลือ: {{ $item->stock_sum_quantity }} {{ optional($item->unit)->name }}</span>
+                                            
+                                            {{-- ✅ แสดงคะแนนประเมิน --}}
+                                            @php
+                                                $feedbackCounts = $item->feedbackCounts();
+                                                $totalFeedback = $feedbackCounts['good'] + $feedbackCounts['neutral'] + $feedbackCounts['bad'];
+                                            @endphp
+                                            @if($totalFeedback > 0)
+                                            <div class="flex items-center gap-2 mt-1 text-xs" title="ผลประเมินจากผู้ใช้">
+                                                <span class="text-green-600">👍 {{ $feedbackCounts['good'] }}</span>
+                                                <span class="text-yellow-600">👌 {{ $feedbackCounts['neutral'] }}</span>
+                                                <span class="text-red-600">👎 {{ $feedbackCounts['bad'] }}</span>
+                                                @if($canViewFeedback)
+                                                <button onclick="openFeedbacksModal({{ $item->id }})" class="text-indigo-600 hover:underline ml-auto" title="ดูข้อเสนอแนะทั้งหมด">
+                                                    <i class="fas fa-comments"></i>
+                                                </button>
+                                                @endif
+                                            </div>
+                                            @endif
                                             
                                             <div class="mt-auto pt-2 flex gap-1">
                                                 @php
@@ -192,12 +213,14 @@
                                 <span class="flex items-center gap-1 text-red-600">
                                     👎 <span class="font-bold">{{ $feedbackCounts['bad'] }}</span>
                                 </span>
-                                {{-- ✅ ปุ่มดูข้อเสนอแนะทั้งหมด --}}
+                                {{-- ✅ ปุ่มดูข้อเสนอแนะทั้งหมด (เฉพาะผู้มีสิทธิ์) --}}
+                                @if($canViewFeedback)
                                 <button onclick="openFeedbacksModal({{ $item->id }})" 
                                         class="ml-auto text-xs text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
                                         title="ดูข้อเสนอแนะทั้งหมด">
                                     <i class="fas fa-comments"></i> ดูทั้งหมด
                                 </button>
+                                @endif
                             </div>
                             @else
                             <div class="flex items-center gap-1 mt-2 text-xs text-gray-400">

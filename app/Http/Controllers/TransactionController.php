@@ -1061,35 +1061,11 @@ class TransactionController extends Controller
         try {
             $dataToSave = [
                 'equipment_id' => $transaction->equipment_id,
+                'user_id' => Auth::id(), // ✅ เพิ่ม user_id
+                'feedback_type' => $request->feedback_type,
                 'comment' => $request->comment,
                 'rated_at' => now(),
             ];
-
-            // ✅ ระบบใหม่: ใช้ feedback_type
-            if ($request->filled('feedback_type')) {
-                $dataToSave['feedback_type'] = $request->feedback_type;
-                // ไม่ต้องคำนวณ rating_score แล้ว (Legacy)
-                $dataToSave['rating_score'] = null;
-                $dataToSave['q1_answer'] = null;
-                $dataToSave['q2_answer'] = null;
-                $dataToSave['q3_answer'] = null;
-                $dataToSave['answers'] = null;
-            } 
-            // ✅ Legacy: ใช้ q1, q2, q3
-            else if ($request->filled('q1')) {
-                $answersToCalc = $request->answers ?? [$request->q1, $request->q2, $request->q3];
-                if (is_array($answersToCalc) && array_keys($answersToCalc) !== range(0, count($answersToCalc) - 1)) {
-                    $answersToCalc = array_values($answersToCalc);
-                }
-                $score = \App\Models\EquipmentRating::calculateDynamicScore($answersToCalc);
-
-                $dataToSave['q1_answer'] = $request->q1;
-                $dataToSave['q2_answer'] = $request->q2;
-                $dataToSave['q3_answer'] = $request->q3;
-                $dataToSave['answers'] = $request->answers;
-                $dataToSave['rating_score'] = $score;
-                $dataToSave['feedback_type'] = null;
-            }
 
             EquipmentRating::updateOrCreate(
                 ['transaction_id' => $transaction->id],

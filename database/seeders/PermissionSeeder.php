@@ -66,6 +66,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'token:manage', 'description' => 'จัดการ API Tokens'],
             ['name' => 'master-data:manage', 'description' => 'จัดการข้อมูลหลัก (ประเภท, สถานที่, หน่วยนับ)'],
 
+            // === Feedback (ข้อเสนอแนะ) ===
+            ['name' => 'feedback:view', 'description' => 'ดูข้อเสนอแนะจากผู้ใช้งาน (ในระบบประเมิน)'],
+
             // === System Maintenance ===
             ['name' => 'maintenance:mode', 'description' => 'เปิด/ปิด Maintenance Mode'],
         ];

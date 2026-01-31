@@ -76,15 +76,7 @@ class InventorySearchController extends Controller
                     ->where('quantity', '>', 0)
                     ->whereIn('status', ['available', 'low_stock']); 
 
-                // ✅ 3. เพิ่ม Rating (ใส่ try-catch ย่อย เพื่อกัน Error 500 ถ้าตารางไม่มี)
-                try {
-                    if (method_exists(Equipment::class, 'ratings')) {
-                        $query->withAvg('ratings', 'rating');
-                        $query->withCount('ratings');
-                    }
-                } catch (\Exception $e) {
-                    // ถ้า Error เรื่อง Rating ให้ปล่อยผ่าน (ดึงแค่ข้อมูลของ)
-                }
+                // ✅ 3. ลบ withAvg ratings ออกแล้ว (ใช้ feedbackCounts() แทน)
                 
                 $results = $query->limit(20)->get();
 

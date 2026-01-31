@@ -9,6 +9,7 @@
     @php
         // ✅ Fetch Settings Once
         $allowReturn = \App\Models\Setting::where('key', 'allow_user_return_request')->value('value') == '1';
+        $canViewFeedback = \App\Models\FeedbackViewer::canView(auth()->user());
     @endphp
 
     {{-- Alert Messages --}}
@@ -416,8 +417,9 @@
                 const feedbackSection = document.getElementById('modalFeedbackSection');
                 const feedbackBadge = document.getElementById('modalFeedbackBadge');
                 const feedbackComment = document.getElementById('modalFeedbackComment');
+                const canViewFeedback = @json($canViewFeedback);
                 
-                if(txn.rating && txn.rating.feedback_type) {
+                if(txn.rating && txn.rating.feedback_type && canViewFeedback) {
                     // แสดงส่วน Feedback
                     feedbackSection.classList.remove('hidden');
                     

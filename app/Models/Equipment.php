@@ -201,14 +201,20 @@ class Equipment extends Model
 
     /**
      * ✅ นับจำนวนประเมินแต่ละประเภท (ถูกใจ/พอใช้/แย่)
+     * ใช้ฐานข้อมูลที่กำลังเชื่อมต่ออยู่ (แต่ละแผนกมีตาราง equipment_ratings ของตัวเอง)
      */
     public function feedbackCounts(): array
     {
-        return [
-            'good' => $this->ratings()->where('feedback_type', 'good')->count(),
-            'neutral' => $this->ratings()->where('feedback_type', 'neutral')->count(),
-            'bad' => $this->ratings()->where('feedback_type', 'bad')->count(),
-        ];
+        try {
+            return [
+                'good' => $this->ratings()->where('feedback_type', 'good')->count(),
+                'neutral' => $this->ratings()->where('feedback_type', 'neutral')->count(),
+                'bad' => $this->ratings()->where('feedback_type', 'bad')->count(),
+            ];
+        } catch (\Exception $e) {
+            // ถ้าตารางไม่มี หรือ error อื่นๆ ให้ return 0 ทั้งหมด
+            return ['good' => 0, 'neutral' => 0, 'bad' => 0];
+        }
     }
 
     // --- ACCESSORS ---

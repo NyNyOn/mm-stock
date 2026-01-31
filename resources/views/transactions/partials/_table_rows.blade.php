@@ -164,51 +164,40 @@
         <td class="px-6 py-4 text-center whitespace-nowrap">
             @if($txn->status === 'completed' && in_array($txn->type, ['consumable', 'returnable', 'partial_return', 'borrow', 'withdraw']))
                 @if($txn->rating)
-                    @php 
-                        $feedbackType = $txn->rating->feedback_type;
-                        $feedbackEmojis = [
-                            'good' => '👍',
-                            'neutral' => '👌',
-                            'bad' => '👎'
-                        ];
-                        $feedbackLabels = [
-                            'good' => 'ถูกใจ',
-                            'neutral' => 'พอใช้',
-                            'bad' => 'แย่'
-                        ];
-                        $feedbackColors = [
-                            'good' => 'text-green-600 bg-green-50 border-green-200',
-                            'neutral' => 'text-yellow-600 bg-yellow-50 border-yellow-200',
-                            'bad' => 'text-red-600 bg-red-50 border-red-200'
-                        ];
-                    @endphp
-                    
-                    @if($feedbackType)
-                        {{-- ✅ ระบบใหม่: แสดง 👍👌👎 --}}
-                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold border {{ $feedbackColors[$feedbackType] ?? 'text-gray-500 bg-gray-50 border-gray-200' }}" 
-                              title="ประเมินแล้ว: {{ $feedbackLabels[$feedbackType] ?? $feedbackType }}">
-                            {{ $feedbackEmojis[$feedbackType] ?? '❓' }}
-                            <span>{{ $feedbackLabels[$feedbackType] ?? $feedbackType }}</span>
-                        </span>
-                    @elseif(is_null($txn->rating->rating_score))
-                        {{-- Legacy: กรณีเลือก \"ยังไม่เคยใช้งาน\" --}}
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                            📦 ยังไม่ใช้
-                        </span>
+                    {{-- ✅ ประเมินแล้ว: แสดงเฉพาะผู้มีสิทธิ์ --}}
+                    @if(\App\Models\FeedbackViewer::canView(auth()->user()))
+                        @php 
+                            $feedbackType = $txn->rating->feedback_type;
+                            $feedbackEmojis = [
+                                'good' => '👍',
+                                'neutral' => '👌',
+                                'bad' => '👎'
+                            ];
+                            $feedbackLabels = [
+                                'good' => 'ถูกใจ',
+                                'neutral' => 'พอใช้',
+                                'bad' => 'แย่'
+                            ];
+                            $feedbackColors = [
+                                'good' => 'text-green-600 bg-green-50 border-green-200',
+                                'neutral' => 'text-yellow-600 bg-yellow-50 border-yellow-200',
+                                'bad' => 'text-red-600 bg-red-50 border-red-200'
+                            ];
+                        @endphp
+                        
+                        @if($feedbackType)
+                            {{-- ✅ ระบบใหม่: แสดง 👍👌👎 --}}
+                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold border {{ $feedbackColors[$feedbackType] ?? 'text-gray-500 bg-gray-50 border-gray-200' }}" 
+                                  title="ประเมินแล้ว: {{ $feedbackLabels[$feedbackType] ?? $feedbackType }}">
+                                {{ $feedbackEmojis[$feedbackType] ?? '❓' }}
+                                <span>{{ $feedbackLabels[$feedbackType] ?? $feedbackType }}</span>
+                            </span>
+                        @else
+                            <span class="text-gray-400 text-xs">ประเมินแล้ว</span>
+                        @endif
                     @else
-                        {{-- Legacy: กรณีมีคะแนนเก่า (ดาว) --}}
-                        @php $score = $txn->rating->rating_score; @endphp
-                        <div class="flex text-yellow-400 space-x-0.5 justify-center" title="คะแนนเก่า: {{ number_format($score, 1) }}">
-                            @for($i=1; $i<=5; $i++)
-                                @if($score >= $i)
-                                    <i class="fas fa-star text-[10px]"></i>
-                                @elseif($score >= $i - 0.5)
-                                    <i class="fas fa-star-half-alt text-[10px]"></i>
-                                @else
-                                    <i class="far fa-star text-gray-300 text-[10px]"></i>
-                                @endif
-                            @endfor
-                        </div>
+                        {{-- ไม่มีสิทธิ์ดู: แสดงว่าประเมินแล้ว แต่ไม่แสดงรายละเอียด --}}
+                        <span class="text-gray-400 text-xs italic">ประเมินแล้ว</span>
                     @endif
                 @else
                     {{-- ยังไม่ได้ประเมิน (โชว์เฉพาะเจ้าของรายการ) --}}

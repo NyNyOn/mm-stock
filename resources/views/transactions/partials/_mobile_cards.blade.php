@@ -144,39 +144,35 @@
                 <i class="fas fa-info-circle"></i> รายละเอียด
             </button>
 
-            {{-- Action Buttons (Right) --}}
             <div class="flex items-center gap-2">
                 {{-- 1. Rating --}}
                  @if($txn->status === 'completed' && in_array($txn->type, ['consumable', 'returnable', 'partial_return', 'borrow', 'withdraw']))
                     @if($txn->rating)
-                        @php 
-                            $feedbackType = $txn->rating->feedback_type;
-                            $feedbackEmojis = ['good' => '👍', 'neutral' => '👌', 'bad' => '👎'];
-                            $feedbackLabels = ['good' => 'ถูกใจ', 'neutral' => 'พอใช้', 'bad' => 'แย่'];
-                            $feedbackColors = [
-                                'good' => 'text-green-600 bg-green-50 border-green-200',
-                                'neutral' => 'text-yellow-600 bg-yellow-50 border-yellow-200',
-                                'bad' => 'text-red-600 bg-red-50 border-red-200'
-                            ];
-                        @endphp
-                        
-                        @if($feedbackType)
-                            {{-- ✅ ระบบใหม่: 👍👌👎 --}}
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border {{ $feedbackColors[$feedbackType] ?? 'text-gray-500 bg-gray-50 border-gray-200' }}" 
-                                  title="ประเมินแล้ว: {{ $feedbackLabels[$feedbackType] ?? $feedbackType }}">
-                                {{ $feedbackEmojis[$feedbackType] ?? '❓' }} {{ $feedbackLabels[$feedbackType] ?? $feedbackType }}
-                            </span>
-                        @elseif(is_null($txn->rating->rating_score))
-                            {{-- Legacy: Not Used --}}
-                            <span class="text-gray-400 font-bold bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 text-xs">📦 ยังไม่ใช้</span>
+                        {{-- ✅ ประเมินแล้ว --}}
+                        @if(\App\Models\FeedbackViewer::canView(auth()->user()))
+                            @php 
+                                $feedbackType = $txn->rating->feedback_type;
+                                $feedbackEmojis = ['good' => '👍', 'neutral' => '👌', 'bad' => '👎'];
+                                $feedbackLabels = ['good' => 'ถูกใจ', 'neutral' => 'พอใช้', 'bad' => 'แย่'];
+                                $feedbackColors = [
+                                    'good' => 'text-green-600 bg-green-50 border-green-200',
+                                    'neutral' => 'text-yellow-600 bg-yellow-50 border-yellow-200',
+                                    'bad' => 'text-red-600 bg-red-50 border-red-200'
+                                ];
+                            @endphp
+                            @if($feedbackType)
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border {{ $feedbackColors[$feedbackType] ?? 'text-gray-500 bg-gray-50 border-gray-200' }}" 
+                                      title="ประเมินแล้ว: {{ $feedbackLabels[$feedbackType] ?? $feedbackType }}">
+                                    {{ $feedbackEmojis[$feedbackType] ?? '❓' }} {{ $feedbackLabels[$feedbackType] ?? $feedbackType }}
+                                </span>
+                            @else
+                                <span class="text-gray-400 text-xs">ประเมินแล้ว</span>
+                            @endif
                         @else
-                            {{-- Legacy: Rated (Stars) --}}
-                            <div class="flex text-yellow-400 space-x-0.5 text-xs" title="คะแนนเก่า: {{ number_format($txn->rating->rating_score, 1) }}">
-                                <i class="fas fa-star"></i>
-                                <span class="text-gray-500 font-bold ml-1">{{ number_format($txn->rating->rating_score, 1) }}</span>
-                            </div>
+                            <span class="text-gray-400 text-xs italic">ประเมินแล้ว</span>
                         @endif
                     @elseif(Auth::id() === $txn->user_id)
+                        {{-- ยังไม่ได้ประเมิน --}}
                         <button onclick="openRatingModal([{
                                     id: {{ $txn->id }},
                                     submit_url: '{{ route('transactions.rate', $txn->id) }}',

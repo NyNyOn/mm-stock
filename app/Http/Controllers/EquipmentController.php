@@ -943,6 +943,14 @@ class EquipmentController extends Controller
      */
     public function getFeedbacks(Equipment $equipment)
     {
+        // ✅ ตรวจสอบสิทธิ์: เฉพาะ ID9, IT หรือผู้ที่ได้รับสิทธิ์
+        if (!\App\Models\FeedbackViewer::canView(auth()->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'ไม่มีสิทธิ์ดูข้อเสนอแนะ'
+            ], 403);
+        }
+        
         $equipment->load(['ratings' => function ($query) {
             $query->with(['transaction.user'])
                   ->whereNotNull('feedback_type')
