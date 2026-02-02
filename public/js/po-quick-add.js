@@ -126,10 +126,19 @@ function renderCatalogGrid(items) {
     const $grid = $('#catalog-grid');
     $grid.empty();
 
+    // ✅ Update item count display
+    const countContainer = $('#catalog-item-count');
+    const countNumber = $('#catalog-count-number');
+
     if (!items || items.length === 0) {
         $('#catalog-empty').removeClass('hidden');
+        countContainer.addClass('hidden');
         return;
     }
+
+    // Show and update count
+    countNumber.text(items.length);
+    countContainer.removeClass('hidden').addClass('flex');
 
     items.forEach(item => {
         // Use a default image if image_url is missing or broken (handled by backend usually, but double safety)
@@ -375,9 +384,8 @@ window.clearCatalogSearch = function () {
 window.filterCatalogCategory = function (categoryId) {
     currentCategoryFilter = categoryId;
 
-    // Update Tabs
-    $('.category-btn').removeClass('bg-blue-600 text-white shadow-md').addClass('bg-white text-gray-600 hover:bg-gray-50');
-    $(`button[data-category="${categoryId}"]`).removeClass('bg-white text-gray-600 hover:bg-gray-50').addClass('bg-blue-600 text-white shadow-md');
+    // Update Dropdown selection (in case called programmatically)
+    $('#catalog-category-select').val(categoryId);
 
     loadCatalogItems();
 }
@@ -449,17 +457,12 @@ async function refreshItemsList(orderId) {
 
 function loadCategoryFilters() {
     $.get('/api/categories').then(cats => {
-        const container = $('#catalog-categories');
-        // Remove old dynamic buttons (keep 'All')
-        container.find('button:not([data-category="all"])').remove();
+        const $select = $('#catalog-category-select');
+        // Remove old dynamic options (keep 'All')
+        $select.find('option:not([value="all"])').remove();
 
         cats.forEach(c => {
-            container.append(`
-                    <button type="button" data-category="${c.id}" onclick="filterCatalogCategory(${c.id})"
-                        class="px-4 py-2 rounded-xl text-sm font-bold bg-white text-gray-600 hover:bg-gray-50 transition-all whitespace-nowrapflex-shrink-0 category-btn border border-gray-100 shadow-sm">
-                        ${c.name}
-                    </button>
-                 `);
+            $select.append(`<option value="${c.id}">${c.name}</option>`);
         });
     }).fail(function () {
         console.error("Failed to load categories. Endpoint might be 404.");

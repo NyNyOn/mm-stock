@@ -4,14 +4,33 @@
     {{-- Main Container: Full Screen on Mobile, Rounded on Desktop --}}
     <div class="w-full max-w-7xl h-full md:h-[90vh] bg-white md:soft-card md:rounded-2xl modal-content-wrapper animate-slide-up-soft flex flex-col overflow-hidden relative">
         
-        {{-- Header Section --}}
-        <div class="p-4 md:p-6 bg-white border-b border-gray-100 flex-none z-10">
+        {{-- Header Section - Premium Design --}}
+        <div class="p-4 md:p-6 bg-gradient-to-r from-slate-50 to-blue-50 border-b border-blue-100/50 flex-none z-10">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <span class="bg-blue-100 text-blue-600 p-2 rounded-lg"><i class="fas fa-boxes"></i></span>
-                    <span class="truncate">คลังสินค้า</span>
-                </h3>
-                <button type="button" class="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-100"
+                <div class="flex items-center gap-3">
+                    {{-- Premium Icon --}}
+                    <div class="relative">
+                        <span class="bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-blue-200/50 inline-flex items-center justify-center">
+                            <i class="fas fa-warehouse text-lg"></i>
+                        </span>
+                        <span class="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></span>
+                    </div>
+                    {{-- Title --}}
+                    <div>
+                        <h3 class="text-xl md:text-2xl font-extrabold bg-gradient-to-r from-gray-800 via-blue-800 to-indigo-700 bg-clip-text text-transparent tracking-tight">
+                            คลังสินค้า
+                        </h3>
+                        <p class="text-xs text-gray-500 font-medium hidden md:block">เลือกอุปกรณ์เพื่อเพิ่มในรายการ</p>
+                    </div>
+                    {{-- Count Badge - Premium --}}
+                    <span id="catalog-item-count" class="ml-2 px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-bold rounded-full shadow-md shadow-emerald-200/50 hidden items-center gap-1.5">
+                        <i class="fas fa-cubes text-xs"></i>
+                        <span id="catalog-count-number" class="tabular-nums">0</span>
+                        <span class="text-emerald-100 text-xs">รายการ</span>
+                    </span>
+                </div>
+                {{-- Close Button --}}
+                <button type="button" class="text-gray-400 hover:text-red-500 transition-all p-2 rounded-full hover:bg-red-50 hover:rotate-90 duration-200"
                     onclick="closeQuickAddModal()">
                     <i class="fas fa-times text-xl"></i>
                 </button>
@@ -29,13 +48,15 @@
                     </button>
                 </div>
 
-                {{-- Category Filters --}}
-                <div id="catalog-categories" class="flex gap-2 overflow-x-auto pb-2 scroll-smooth scrollbar-hide max-w-full md:max-w-3xl flex-nowrap mask-linear-fade items-center">
-                    <button type="button" data-category="all" onclick="filterCatalogCategory('all')"
-                        class="px-4 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white shadow-md transition-all whitespace-nowrap flex-shrink-0 category-btn">
-                        ทั้งหมด
-                    </button>
-                    {{-- Categories injected via JS --}}
+                {{-- Category Filter Dropdown --}}
+                <div class="relative flex-shrink-0 min-w-[200px]">
+                    <i class="fas fa-layer-group absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-500 pointer-events-none z-10"></i>
+                    <select id="catalog-category-select" onchange="filterCatalogCategory(this.value)"
+                        class="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all text-gray-700 font-bold text-sm appearance-none cursor-pointer shadow-sm hover:border-blue-300">
+                        <option value="all" selected>📦 ทั้งหมด</option>
+                        {{-- Categories injected via JS --}}
+                    </select>
+                    <i class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
                 </div>
             </div>
         </div>
@@ -169,6 +190,15 @@
 .scrollbar-soft::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-soft::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 .scrollbar-soft::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Hide Scrollbar but keep functionality */
+.scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+}
 
 /* Item Card Hover Effect */
 .item-card {
