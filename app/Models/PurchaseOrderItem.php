@@ -46,6 +46,8 @@ class PurchaseOrderItem extends Model
         'inspection_notes',
         'rejection_code', // New
         'rejection_reason', // New
+        'resubmit_count', // จำนวนครั้งที่ตอบกลับ PU
+        'last_resubmit_at', // เวลาที่ตอบกลับล่าสุด
         'origin_pr_number', // New - for tracking original PR in mixed PO
         // 'dept_key', // Removed
     ];

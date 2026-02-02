@@ -365,7 +365,14 @@ class PurchaseOrderController extends Controller
 
                 // ✅ Capture Actor Name
                 $rejectedBy = $request->rejected_by ?? $request->inspector ?? $request->user ?? 'PU Team';
+                
+                // ✅ FIX: Refresh puData หลังจาก loop เพื่อรวม history ที่เพิ่มโดย addPoHistoryLog
+                $po->refresh();
+                $puData = $po->pu_data ?? [];
                 $puData['rejected_by'] = $rejectedBy; // Save for View
+                $puData['rejection_reason'] = $reason;
+                $puData['rejected_at'] = now()->toDateTimeString();
+                $puData['rejection_code'] = $mainRejectionCode ?? 0;
                 $po->pu_data = $puData;
                 $po->save();
                 

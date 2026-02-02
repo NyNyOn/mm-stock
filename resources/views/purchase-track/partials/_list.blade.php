@@ -602,6 +602,16 @@
                                     <div class="mt-2 bg-red-50 p-2 rounded text-xs text-red-700 border border-red-100" id="item-box-{{ $item->id }}">
                                         <strong>เหตุผล:</strong> {{ $item->rejection_reason }}
                                         
+                                        {{-- ✅ แสดง indicator ว่าเคยตอบกลับแล้ว --}}
+                                        @if($item->resubmit_count > 0)
+                                            <div class="mt-2 flex items-center gap-2 bg-amber-50 text-amber-700 px-2 py-1 rounded border border-amber-200">
+                                                <i class="fas fa-reply-all"></i>
+                                                <span class="font-medium">เคยตอบกลับแล้ว {{ $item->resubmit_count }} ครั้ง</span>
+                                                @if($item->last_resubmit_at)
+                                                    <span class="text-amber-500">(ล่าสุด: {{ \Carbon\Carbon::parse($item->last_resubmit_at)->format('d/m/Y H:i') }})</span>
+                                                @endif
+                                            </div>
+                                        @endif
                                         @if($item->rejection_code == 3 || !in_array((int)$item->rejection_code, [1,2,4]))
                                             {{-- ✅ Item-level Resubmit Form (AJAX) --}}
                                             <form onsubmit="submitItemReply(event, {{ $item->id }})" class="mt-2 item-reply-form" data-item-id="{{ $item->id }}">
@@ -625,6 +635,16 @@
                                     {{-- กรณีถูกปฏิเสธแต่ไม่มีเหตุผลระบุ --}}
                                     @if(!in_array((int)$item->rejection_code, [1,2,4]))
                                         <div id="item-box-{{ $item->id }}">
+                                            {{-- ✅ แสดง indicator ว่าเคยตอบกลับแล้ว --}}
+                                            @if($item->resubmit_count > 0)
+                                                <div class="mt-2 flex items-center gap-2 bg-amber-50 text-amber-700 px-2 py-1 rounded border border-amber-200 text-xs">
+                                                    <i class="fas fa-reply-all"></i>
+                                                    <span class="font-medium">เคยตอบกลับแล้ว {{ $item->resubmit_count }} ครั้ง</span>
+                                                    @if($item->last_resubmit_at)
+                                                        <span class="text-amber-500">(ล่าสุด: {{ \Carbon\Carbon::parse($item->last_resubmit_at)->format('d/m/Y H:i') }})</span>
+                                                    @endif
+                                                </div>
+                                            @endif
                                             <form onsubmit="submitItemReply(event, {{ $item->id }})" class="mt-2 item-reply-form" data-item-id="{{ $item->id }}">
                                                 @csrf
                                                 <div class="flex flex-col sm:flex-row gap-2">

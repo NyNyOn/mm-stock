@@ -1034,6 +1034,11 @@ class PurchaseOrderController extends Controller
                 $item->inspection_status = 'pending';
                 $item->inspection_notes = null;
                 $item->quantity_received = 0;
+                
+                // ✅ เพิ่ม counter การตอบกลับ
+                $item->resubmit_count = ($item->resubmit_count ?? 0) + 1;
+                $item->last_resubmit_at = now();
+                
                 $item->save();
             });
             
