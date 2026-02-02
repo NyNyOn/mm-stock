@@ -39,7 +39,7 @@
                      {{-- ✅ Mobile View: Item & Stats --}}
                      <div class="block sm:hidden mt-2 border-t border-gray-100 pt-2">
                         <p class="text-sm font-bold text-gray-700 truncate w-full mb-1">
-                            {{ $po->items->first()?->item_description ?? $po->items->first()?->equipment?->name ?? 'ไม่มีรายการสินค้า' }}
+                            {{ $po->items->first()?->equipment?->name ?? $po->items->first()?->item_description ?? 'ไม่มีรายการสินค้า' }}
                         </p>
                         <div class="flex flex-wrap items-center gap-2">
                              @if($po->items->count() >= 1)
@@ -65,8 +65,8 @@
             <div class="flex items-center gap-3">
                  <div class="text-right hidden sm:block">
                      <div class="flex items-center justify-end gap-2">
-                         <span class="text-sm font-bold text-gray-700 truncate max-w-[300px]" title="{{ $po->items->first()?->item_description ?? $po->items->first()?->equipment?->name }}">
-                            {{ $po->items->first()?->item_description ?? $po->items->first()?->equipment?->name ?? 'ไม่มีรายการสินค้า' }}
+                         <span class="text-sm font-bold text-gray-700 truncate max-w-[300px]" title="{{ $po->items->first()?->equipment?->name ?? $po->items->first()?->item_description }}">
+                            {{ $po->items->first()?->equipment?->name ?? $po->items->first()?->item_description ?? 'ไม่มีรายการสินค้า' }}
                          </span>
                          @if($po->items->count() >= 1)
                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-pink-100 text-pink-600 border border-pink-200 shadow-sm animate-pulse whitespace-nowrap">
@@ -498,7 +498,7 @@
                         @php
                             $equip = $item->equipment;
                             $img = $equip ? $equip->image_url : asset('images/no-image.png');
-                            $itemName = $item->item_description ?? ($equip ? $equip->name : 'สินค้าไม่ระบุชื่อ');
+                            $itemName = ($equip ? $equip->name : null) ?? $item->item_description ?? 'สินค้าไม่ระบุชื่อ';
                             
                             // ✅ ITEM SEPARATION LOGIC
                             $isRejectedPage = request()->routeIs('purchase-track.rejected');
