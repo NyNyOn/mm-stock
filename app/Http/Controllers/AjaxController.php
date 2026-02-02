@@ -654,6 +654,80 @@ class AjaxController extends Controller
         }
     }
 
+    // =========================================================================
+    // 🛒 [NEW] Search Equipment for Purchase Order (Autocomplete)
+    // =========================================================================
+    public function searchEquipmentForPO(Request $request)
+    {
+        try {
+            $search = $request->input('q', '');
+            $categoryId = $request->input('category_id');
+            $stockStatus = $request->input('stock_status');
+            
+            $query = Equipment::select('id', 'name', 'serial_number', 'model', 'quantity', 'min_stock', 'category_id')
+                ->with(['category:id,name', 'latestImage']) // ✅ Load latestImage
+                ->where('status', '!=', 'inactive'); // ไม่แสดงอุปกรณ์ที่ไม่ใช้งาน
+            
+            // Search filter (name, serial, model)
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('name', 'LIKE', "%$search%")
+                      ->orWhere('serial_number', 'LIKE', "%$search%")
+                      ->orWhere('model', 'LIKE', "%$search%");
+                });
+            }
+            
+            // Category filter
+            if ($categoryId && $categoryId !== 'all') {
+                $query->where('category_id', $categoryId);
+            }
+            
+            // Stock status filter
+            if ($stockStatus === 'low') {
+                $query->whereRaw('quantity <= min_stock');
+            } elseif ($stockStatus === 'out') {
+                $query->where('quantity', '<=', 0);
+            }
+            
+            // Limit results for performance
+            $items = $query->orderBy('name', 'asc')->limit(100)->get();
+            
+            // Format for Frontend
+            $results = $items->map(function($item) {
+                $stockBadge = $item->quantity <= 0 ? '❌ หมด' : 
+                             ($item->quantity <= $item->min_stock ? '⚠️ ต่ำ' : "✅ {$item->quantity}");
+                             
+                // ✅ Use Accessor from EquipmentImage model
+                $imageUrl = $item->latestImage->image_url ?? asset('images/no-image.png');
+                
+                return [
+                    'id' => $item->id,
+                    'text' => "{$item->name} ({$item->serial_number})",
+                    'name' => $item->name,
+                    'serial' => $item->serial_number,
+                    'model' => $item->model ?? '-',
+                    'stock' => $item->quantity,
+                    'stock_badge' => $stockBadge,
+                    'category' => $item->category->name ?? 'N/A',
+                    'image_url' => $imageUrl
+                ];
+            });
+            
+            return response()->json([
+                'success' => true,
+                'items' => $results
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error in searchEquipmentForPO: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'items' => [],
+                'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
 
 
     private function getNotifications()

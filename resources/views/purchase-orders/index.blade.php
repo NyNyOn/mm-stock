@@ -54,6 +54,14 @@
                 @else
                     <div class="py-4 text-sm text-center text-gray-500">ไม่มีรายการในใบสั่งซื้อตามรอบ</div>
                 @endif
+                
+                {{-- ✅ NEW: Quick Add Button (Always show) --}}
+                @can('po:create')
+                <button type="button" onclick="openQuickAddModalScheduled()"
+                    class="w-full mt-4 px-4 py-3 text-sm font-bold text-blue-700 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl hover:from-blue-100 hover:to-blue-200 border border-blue-200 transition-all duration-200 shadow-sm hover:shadow-md">
+                    <i class="fas fa-plus-circle mr-2"></i>⚡ เพิ่มรายการด่วน (Quick Add)
+                </button>
+                @endcan
             </div>
         </div>
 
@@ -80,10 +88,19 @@
                         <div id="po-items-container-{{ $order->id }}">
                             @include('purchase-orders.partials._po_items_table_glpi', ['order' => $order])
                         </div>
+                        
                      @endif
                 @empty
                     <div class="py-4 text-sm text-center text-gray-500">ไม่มีใบสั่งซื้อด่วน</div>
                 @endforelse
+                
+                {{-- ✅ Quick Add Button for creating new Urgent PO --}}
+                @can('po:create')
+                <button type="button" onclick="openQuickAddModalUrgent()"
+                    class="w-full mt-4 px-4 py-3 text-sm font-bold text-orange-700 bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl hover:from-orange-100 hover:to-orange-200 border border-orange-200 transition-all duration-200 shadow-sm hover:shadow-md">
+                    <i class="fas fa-plus-circle mr-2"></i>⚡ เพิ่มรายการด่วน (Quick Add)
+                </button>
+                @endcan
                 @if($urgentOrders->isNotEmpty() && $urgentOrders->every(fn($order) => $order->items->isEmpty()))
                      <div class="py-4 text-sm text-center text-gray-500">ไม่มีรายการในใบสั่งซื้อด่วน</div>
                 @endif
@@ -384,7 +401,49 @@
         const pagination = document.getElementById('select-item-pagination');
         const tabInStock = document.getElementById('tab-in-stock');
         const tabOutOfStock = document.getElementById('tab-out-of-stock');
+        const stockSearchInput = document.getElementById('stock-search'); // Renamed to avoid conflict
+        const items = document.querySelectorAll('.stock-item');
 
+        if (tabInStock) {
+            tabInStock.addEventListener('click', () => {
+                tabInStock.classList.add('active', 'bg-blue-600', 'text-white');
+                tabInStock.classList.remove('bg-gray-200', 'text-gray-700');
+                if(tabOutOfStock) {
+                    tabOutOfStock.classList.remove('active', 'bg-blue-600', 'text-white');
+                    tabOutOfStock.classList.add('bg-gray-200', 'text-gray-700');
+                }
+                items.forEach(item => {
+                    if (item.dataset.status === 'in_stock') item.style.display = 'table-row';
+                    else item.style.display = 'none';
+                });
+            });
+        }
+
+        if (tabOutOfStock) {
+            tabOutOfStock.addEventListener('click', () => {
+                tabOutOfStock.classList.add('active', 'bg-blue-600', 'text-white');
+                tabOutOfStock.classList.remove('bg-gray-200', 'text-gray-700');
+                if(tabInStock) {
+                    tabInStock.classList.remove('active', 'bg-blue-600', 'text-white');
+                    tabInStock.classList.add('bg-gray-200', 'text-gray-700'); 
+                }
+                items.forEach(item => {
+                    if (item.dataset.status === 'out_of_stock') item.style.display = 'table-row';
+                    else item.style.display = 'none';
+                });
+            });
+        }
+
+        if (stockSearchInput) { // Using the renamed variable
+            stockSearchInput.addEventListener('keyup', () => {
+                const filter = stockSearchInput.value.toLowerCase();
+                items.forEach(item => {
+                    const text = item.innerText.toLowerCase();
+                    item.style.display = text.includes(filter) ? 'table-row' : 'none';
+                });
+            });
+        }
+        
         window.openAddItemModal = function(orderId) {
             currentPoId = orderId;
             searchInput.value = '';
@@ -425,24 +484,7 @@
             tabOutOfStock.className = `px-4 py-2 text-sm font-semibold text-center border-b-2 tab-button ${!isActive ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
         }
 
-        tabInStock.addEventListener('click', () => {
-            currentStockStatus = 'in_stock';
-            updateTabs();
-            fetchItemsForPO(1, searchInput.value);
-        });
 
-        tabOutOfStock.addEventListener('click', () => {
-            currentStockStatus = 'out_of_stock';
-            updateTabs();
-            fetchItemsForPO(1, searchInput.value);
-        });
-
-        searchInput.addEventListener('keyup', () => {
-            clearTimeout(searchDebounce);
-            searchDebounce = setTimeout(() => {
-                fetchItemsForPO(1, searchInput.value);
-            }, 300);
-        });
 
         document.addEventListener('click', function(event) {
             if (event.target.matches('#select-item-pagination a')) {
@@ -673,6 +715,9 @@
         });
     });
 </script>
+
+{{-- ✅ NEW: Load Quick Add JavaScript --}}
+<script src="{{ asset('js/po-quick-add.js') }}"></script>
 @endpush
 
 

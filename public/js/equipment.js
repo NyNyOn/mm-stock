@@ -11,6 +11,28 @@
 let currentDetailImages = [];
 let currentDetailName = '';
 let currentGalleryIndex = 0;
+let currentMsdsFileUrl = null; // Store current MSDS file URL
+
+// Global function for MSDS button click (called from inline onclick)
+function handleMsdsClick() {
+    if (currentMsdsFileUrl) {
+        // มีไฟล์ - เปิดในแท็บใหม่
+        window.open(currentMsdsFileUrl, '_blank');
+    } else {
+        // ไม่มีไฟล์ - แจ้งเตือน
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'ไม่พบเอกสาร MSDS',
+                text: 'รายการนี้ยังไม่มีการอัปโหลดเอกสาร MSDS',
+                confirmButtonText: 'ตกลง',
+                confirmButtonColor: '#3b82f6'
+            });
+        } else {
+            alert('ไม่พบเอกสาร MSDS สำหรับรายการนี้');
+        }
+    }
+}
 
 // ตรวจสอบว่ามีการโหลด SweetAlert2 แล้ว
 if (typeof Swal === 'undefined') {
@@ -863,7 +885,7 @@ function clearServerErrors(form) {
 // --- Stepper Logic ---
 function initializeStepper(form, suffix) {
     let step = 1;
-    const total = 3;
+    const total = 4;
     const updateUI = (s) => {
         step = s;
         for (let i = 1; i <= total; i++) {
@@ -1078,37 +1100,81 @@ function populateDetails(item) {
     setText('details-withdrawal-type', window.getWithdrawalTypeText(item.withdrawal_type));
     setText('details-category', item.category?.name);
     setText('details-location', item.location?.name);
-    setText('details-model', item.model);
-    setText('details-part-no', item.part_no);
-    setText('details-supplier', item.supplier);
 
-    setText('details-purchase-date', window.formatDate(item.purchase_date));
+    // ✅ Updated Mapping for Brand/Model
+    setText('details-brand', item.model_name);   // Brand (ยี่ห้อ)
+    setText('details-model', item.model_number); // Model (รุ่น)
+
+    // setText('details-part-no', item.part_no); // Removed
+    // setText('details-supplier', item.supplier); // Removed
+
     setText('details-warranty-date', window.formatDate(item.warranty_date));
     setText('details-created-at', window.formatDateTime(item.created_at));
     setText('details-updated-at', item.updated_at ? window.formatDateTime(item.updated_at) : '-');
     const updater = item.updater ? item.updater.fullname : (item.updated_by_name ? item.updated_by_name : '-');
     setText('details-updated-by', `โดย: ${updater}`);
 
+    // ✅ Handle Description Tab Visibility
+    const descTabBtn = document.getElementById('details-tab-btn-description');
+    // Ensure we check for valid string and non-empty content
+    const hasDesc = item.description && typeof item.description === 'string' && item.description.trim().length > 0;
+
+    if (hasDesc) {
+        setText('details-description-text', item.description);
+        if (descTabBtn) {
+            descTabBtn.classList.remove('hidden');
+            descTabBtn.style.display = ''; // Clear inline style to let CSS classes work
+        }
+    } else {
+        setText('details-description-text', '- ไม่มีรายละเอียด -');
+        if (descTabBtn) {
+            descTabBtn.classList.add('hidden');
+            descTabBtn.style.display = 'none'; // Force hide
+        }
+    }
+
+    // ✅ Handle MSDS Tab Visibility
+    const msdsTabBtn = document.getElementById('details-msds-tab');
+    const msdsDetailsEl = document.getElementById('details-msds-details');
+    const msdsLinkEl = document.getElementById('details-msds-file');
+
+    // Logic: Only show if there is actual MESSAGE details OR a FILE URL. 
+    // Ignore just the 'has_msds' flag for visibility purposes as requested.
+    const hasMsdsContent = (item.msds_details && item.msds_details.trim().length > 0) || (item.msds_file_url && item.msds_file_url.length > 0);
+
+    if (hasMsdsContent) {
+        if (msdsTabBtn) {
+            msdsTabBtn.classList.remove('hidden');
+            msdsTabBtn.style.display = ''; // Let CSS work (flex)
+        }
+        if (msdsDetailsEl) msdsDetailsEl.textContent = item.msds_details || '- ไม่ระบุข้อมูลความปลอดภัย -';
+
+        if (msdsLinkEl) {
+            if (item.msds_file_url) {
+                msdsLinkEl.onclick = function () { window.open(item.msds_file_url, '_blank'); };
+                msdsLinkEl.classList.remove('opacity-50', 'cursor-not-allowed', 'hidden');
+                msdsLinkEl.classList.add('inline-flex');
+                msdsLinkEl.innerHTML = '<i class="fas fa-file-pdf mr-2"></i> ดาวน์โหลดเอกสาร MSDS';
+            } else {
+                msdsLinkEl.onclick = null;
+                msdsLinkEl.classList.add('opacity-50', 'cursor-not-allowed');
+                msdsLinkEl.classList.remove('hidden');
+                msdsLinkEl.innerHTML = '<i class="fas fa-times-circle mr-2"></i> ไม่มีไฟล์เอกสารแนบ';
+            }
+        }
+        currentMsdsFileUrl = item.msds_file_url || null;
+    } else {
+        if (msdsTabBtn) {
+            msdsTabBtn.classList.add('hidden');
+            msdsTabBtn.style.display = 'none'; // Force hide
+        }
+        currentMsdsFileUrl = null;
+    }
+
     const statusWrapper = document.getElementById('details-status-container');
     if (statusWrapper) {
         statusWrapper.innerHTML = '';
         statusWrapper.appendChild(createStatusBadgeInternal(item.status));
-    }
-
-    const msdsTab = document.getElementById('details-msds-tab');
-    const msdsDetails = document.getElementById('details-msds-details');
-    const msdsLink = document.getElementById('details-msds-file');
-
-    if (item.has_msds) {
-        if (msdsTab) msdsTab.classList.remove('hidden');
-        if (msdsDetails) msdsDetails.textContent = item.msds_details || '-';
-        if (msdsLink && item.msds_file_url) {
-            msdsLink.href = item.msds_file_url;
-            msdsLink.classList.remove('hidden');
-            msdsLink.classList.add('inline-flex');
-        }
-    } else {
-        if (msdsTab) msdsTab.classList.add('hidden');
     }
 
     const firstTab = document.querySelector("[onclick*='details-tab-main']");

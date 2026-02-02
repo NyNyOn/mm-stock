@@ -933,6 +933,11 @@ class TransactionController extends Controller
         if (!$isOwner && !$isAdmin) return back()->with('error', 'ไม่มีสิทธิ์');
         if ($transaction->status !== 'pending') return back()->with('error', 'ยกเลิกไม่ได้');
 
+        // ✅ ลบ rating ก่อนยกเลิก (ถ้ามี)
+        if ($transaction->rating) {
+            $transaction->rating->delete();
+        }
+
         if ($isAdmin && !$isOwner) {
             // Admin Rejecting
             $transaction->update(['status' => 'cancelled', 'notes' => $transaction->notes . "\n[System: ปฏิเสธโดย Admin " . $user->fullname . "]"]);
@@ -961,6 +966,11 @@ class TransactionController extends Controller
         
         DB::beginTransaction();
         try {
+            // ✅ ลบ rating ก่อนยกเลิก (ถ้ามี)
+            if ($transaction->rating) {
+                $transaction->rating->delete();
+            }
+            
             Equipment::where('id', $transaction->equipment_id)->increment('quantity', abs($transaction->quantity_change));
             $transaction->update(['status' => 'cancelled', 'notes' => $transaction->notes . "\nยกเลิกโดย Admin (Reversed)"]);
             try { (new SynologyService())->notify(new TransactionReversedByAdmin($transaction, Auth::user())); } catch(\Exception $e) {}

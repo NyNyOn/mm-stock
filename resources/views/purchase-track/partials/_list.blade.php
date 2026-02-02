@@ -110,7 +110,7 @@
         @php
             $hasReturnedItems = $po->items->contains('status', 'returned');
         @endphp
-        <div class="bg-gray-50 px-6 py-4 border-b border-gray-200 flex flex-wrap items-center gap-4">
+        <div class="bg-gray-50 px-4 lg:px-6 py-4 border-b border-gray-200 flex flex-wrap items-start gap-3">
             <div class="flex items-center gap-4 w-full">
                 <div class="bg-white border border-gray-200 p-2.5 rounded-lg shadow-sm flex-shrink-0">
                     <span class="text-xs font-bold text-gray-500 block text-center leading-none">
@@ -118,8 +118,8 @@
                     </span>
                     <span class="text-sm font-bold text-indigo-600 block text-center leading-none mt-0.5">#{{ $po->id }}</span>
                 </div>
-                <div class="flex-grow">
-                        <div class="flex items-center flex-wrap gap-2">
+                <div class="flex-grow min-w-0">
+                        <div class="flex items-start flex-wrap gap-2">
                             {{-- 1. Show PR Number (if available) --}}
                             @if(!empty($po->pr_number))
                                 <div class="flex items-center gap-1.5">
@@ -134,7 +134,7 @@
                                             ->filter(fn($p) => $p !== $po->pr_number);
                                     @endphp
                                     @if($otherPrs->isNotEmpty())
-                                        <div class="hidden sm:flex items-center gap-1 ml-2 border-l border-gray-300 pl-2 flex-wrap max-w-[500px]">
+                                        <div class="hidden lg:flex items-center gap-1 ml-2 border-l border-gray-300 pl-2 flex-wrap max-w-[300px]">
                                             @foreach($otherPrs as $extraPr)
                                                 <span class="text-[10px] font-bold text-blue-600 bg-white px-1.5 py-0.5 rounded border border-blue-200 shadow-sm" title="รวมรายการจาก PR นี้">
                                                     + {{ $extraPr }}
@@ -182,7 +182,7 @@
                                 
                                 // Override Logic for Rejection/Cancellation Removed per user request
                             @endphp
-                            <span class="px-2 py-0.5 rounded text-xs font-bold self-center ml-2 {{ $badgeClasses }}">
+                            <span class="px-2 py-0.5 rounded text-xs font-bold self-start {{ $badgeClasses }}">
                                 {{ match($po->type) { 
                                     'urgent' => 'ด่วน', 
                                     'scheduled' => 'ตามรอบ', 
@@ -210,14 +210,14 @@
 
                             {{-- Status Badge (For Non-Cancelled) --}}
                             @if($po->status !== 'cancelled')
-                                <span class="px-3 py-1 ml-2 rounded text-xs font-bold {{ $statusConfig['bg'] }} {{ $statusConfig['text'] }} {{ $statusConfig['border'] }} {{ $po->status === 'completed' ? 'animate-pulse ring-2 ring-green-200' : '' }} border flex items-center shadow-sm whitespace-nowrap">
+                                <span class="px-2 lg:px-3 py-1 rounded text-xs font-bold {{ $statusConfig['bg'] }} {{ $statusConfig['text'] }} {{ $statusConfig['border'] }} {{ $po->status === 'completed' ? 'animate-pulse ring-2 ring-green-200' : '' }} border flex items-center shadow-sm">
                                     <div class="w-1.5 h-1.5 rounded-full {{ str_replace('text-', 'bg-', $statusConfig['text']) }} mr-2"></div>
                                     {{ $statusConfig['label'] }}
                                 </span>
                                 
                                 {{-- Partial Rejection Indicator --}}
                                 @if($hasRejectedItems)
-                                    <span class="px-3 py-1 ml-2 rounded text-xs font-bold bg-red-50 text-red-600 border border-red-200 flex items-center shadow-sm whitespace-nowrap" title="มีบางรายการถูกปฏิเสธ">
+                                    <span class="px-2 lg:px-3 py-1 rounded text-xs font-bold bg-red-50 text-red-600 border border-red-200 flex items-center shadow-sm" title="มีบางรายการถูกปฏิเสธ">
                                         <i class="fas fa-exclamation-circle mr-1.5"></i> บางรายการถูกปฏิเสธ
                                     </span>
                                 @endif
@@ -282,12 +282,12 @@
                 </div>
                 
                 {{-- Action Buttons --}}
-                <div class="ml-auto flex flex-col items-end gap-2">
+                <div class="ml-auto flex flex-col items-end gap-2 shrink-0">
                      {{-- 0. Manual Retry Send (For Pending/Stuck) --}}
                     @if($po->status === 'pending')
                          <form action="{{ route('purchase-orders.retry-send', $po->id) }}" method="POST">
                             @csrf
-                            <button type="submit" class="inline-flex items-center gap-2 px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg border border-gray-300 shadow-sm transition-colors whitespace-nowrap" title="กดปุ่มนี้หากรายการค้างอยู่นานเกินไป">
+                            <button type="submit" class="inline-flex items-center gap-1 lg:gap-2 px-2 lg:px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 text-xs lg:text-sm font-medium rounded-lg border border-gray-300 shadow-sm transition-colors" title="กดปุ่มนี้หากรายการค้างอยู่นานเกินไป">
                                 <i class="fas fa-paper-plane text-blue-500"></i> ยืนยันส่งข้อมูล (Retry)
                             </button>
                         </form>
@@ -295,7 +295,7 @@
 
                      {{-- 1. Receive Button (Hide on Rejected Page) --}}
                     @if(in_array($po->status, ['shipped_from_supplier', 'partial_receive']) && !request()->routeIs('purchase-track.rejected'))
-                        <a href="{{ route('receive.index') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors whitespace-nowrap">
+                        <a href="{{ route('receive.index') }}" class="inline-flex items-center gap-1 lg:gap-2 px-3 lg:px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs lg:text-sm font-medium rounded-lg shadow-sm transition-colors">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                             ไปตรวจรับของ
                         </a>
@@ -321,7 +321,7 @@
                         @else
                             {{-- ❌ ไม่มีรายการที่แก้ไขได้ → ต้องสร้างใหม่ --}}
                             <div class="flex flex-col items-end">
-                                <a href="{{ route('user.equipment.index') }}" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors whitespace-nowrap opacity-75">
+                                <a href="{{ route('user.equipment.index') }}" class="inline-flex items-center gap-1 lg:gap-2 px-3 lg:px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-xs lg:text-sm font-medium rounded-lg shadow-sm transition-colors opacity-75">
                                     <i class="fas fa-shopping-cart"></i> เปิดขอซื้อใหม่
                                 </a>
                                 <span class="text-[10px] text-red-500 mt-1">*กรณีนี้ต้องสร้างใหม่เท่านั้น</span>
@@ -493,7 +493,7 @@
                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
                     รายการสินค้า ({{ $po->items->count() }})
                 </h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                     @foreach($po->items as $item)
                         @php
                             $equip = $item->equipment;

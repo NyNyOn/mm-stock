@@ -45,6 +45,9 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                PDO::ATTR_TIMEOUT => 30,  // ตั้ง timeout 30 วินาที
+                PDO::ATTR_PERSISTENT => true,  // ใช้ persistent connections
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET SESSION wait_timeout=28800",  // 8 ชั่วโมง
             ]) : [],
         ],
 

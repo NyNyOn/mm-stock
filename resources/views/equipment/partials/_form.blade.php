@@ -38,12 +38,20 @@
                 <span class="ml-2 text-sm font-medium">สต็อก/จัดซื้อ</span>
             </li>
             {{-- Step 3 Indicator --}}
-            <li id="step-indicator-3-{{ $uniqueSuffix }}" class="stepper-indicator pending flex items-center text-gray-500">
+            <li id="step-indicator-3-{{ $uniqueSuffix }}" class="stepper-indicator pending flex w-full items-center text-gray-500 after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-200 after:border-1 after:inline-block">
                 <span class="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full shrink-0">
                     <span class="stepper-text">3</span>
                     <i class="fas fa-check stepper-check hidden"></i>
                 </span>
-                <span class="ml-2 text-sm font-medium">ไฟล์แนบ</span>
+                <span class="ml-2 text-sm font-medium">รูปภาพ</span>
+            </li>
+            {{-- Step 4 Indicator --}}
+            <li id="step-indicator-4-{{ $uniqueSuffix }}" class="stepper-indicator pending flex items-center text-gray-500">
+                <span class="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full shrink-0">
+                    <span class="stepper-text">4</span>
+                    <i class="fas fa-check stepper-check hidden"></i>
+                </span>
+                <span class="ml-2 text-sm font-medium">เอกสาร</span>
             </li>
         </ol>
     </div>
@@ -111,12 +119,12 @@
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         <div class="form-group">
-                            <label for="model_name-{{ $uniqueSuffix }}" class="form-label mb-1.5">ชื่อรุ่น</label>
+                            <label for="model_name-{{ $uniqueSuffix }}" class="form-label mb-1.5">ยี่ห้อ</label>
                             <input type="text" id="model_name-{{ $uniqueSuffix }}" name="model_name" value="{{ old('model_name', $equipment->model_name ?? '') }}" class="input-form">
                             <div class="invalid-feedback"></div>
                         </div>
                         <div class="form-group">
-                            <label for="model_number-{{ $uniqueSuffix }}" class="form-label mb-1.5">หมายเลขรุ่น</label>
+                            <label for="model_number-{{ $uniqueSuffix }}" class="form-label mb-1.5">รุ่น</label>
                             <input type="text" id="model_number-{{ $uniqueSuffix }}" name="model_number" value="{{ old('model_number', $equipment->model_number ?? '') }}" class="input-form">
                             <div class="invalid-feedback"></div>
                         </div>
@@ -229,12 +237,11 @@
             </div>
         </div>
 
-        {{-- === Step 3: Files & Notes === --}}
+        {{-- === Step 3: Images & Description === --}}
         <div id="step-3-panel-{{ $uniqueSuffix }}" class="step-panel hidden">
-            {{-- ... Step 3 content remains the same ... --}}
              <div class="space-y-8">
                 <fieldset class="p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
-                    <legend class="text-base font-semibold text-gray-700 mb-5 px-2">ขั้นตอนที่ 3: รูปภาพ</legend>
+                    <legend class="text-base font-semibold text-gray-700 mb-5 px-2">ขั้นตอนที่ 3: รูปภาพและรายละเอียด</legend>
                     
                     {{-- ✅ EDIT 1: Added clear-both --}}
                     <div class="space-y-5 clear-both">
@@ -292,8 +299,24 @@
                     </div>
                 </fieldset>
 
+                {{-- ✅ รายละเอียดอุปกรณ์ (อยู่ในขั้นตอนเดียวกับรูปภาพ) --}}
                 <fieldset class="p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
-                    <legend class="text-base font-semibold text-gray-700 mb-5 px-2">ข้อมูล MSDS</legend>
+                    <legend class="text-base font-semibold text-gray-700 mb-5 px-2">รายละเอียดอุปกรณ์</legend>
+                    
+                    <div class="form-group clear-both">
+                        <label for="description-{{ $uniqueSuffix }}" class="form-label mb-1.5">รายละเอียดอุปกรณ์</label>
+                        <textarea id="description-{{ $uniqueSuffix }}" name="description" rows="3" class="input-form" placeholder="ระบุรายละเอียดเพิ่มเติมเกี่ยวกับอุปกรณ์...">{{ old('description', $equipment->description ?? '') }}</textarea>
+                        <div class="invalid-feedback"></div>
+                    </div>
+                </fieldset>
+             </div>
+        </div>
+
+        {{-- === Step 4: Documents === --}}
+        <div id="step-4-panel-{{ $uniqueSuffix }}" class="step-panel hidden">
+             <div class="space-y-8">
+                <fieldset class="p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
+                    <legend class="text-base font-semibold text-gray-700 mb-5 px-2">ขั้นตอนที่ 4: ข้อมูล MSDS</legend>
                     
                     {{-- ✅ EDIT 1: Added clear-both --}}
                     <div class="form-group clear-both">
@@ -322,7 +345,7 @@
                 </fieldset>
 
                 <fieldset class="p-6 bg-white rounded-xl border border-gray-200 shadow-sm hidden">
-                    <legend class="text-base font-semibold text-gray-700 mb-5 px-2">หมายเหตุ</legend>
+                    <legend class="text-base font-semibold text-gray-700 mb-5 px-2">หมายเหตุเพิ่มเติม</legend>
                     
                     {{-- ✅ EDIT 1: Added clear-both --}}
                     <div class="form-group clear-both">

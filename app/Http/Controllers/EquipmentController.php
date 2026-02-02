@@ -339,8 +339,11 @@ class EquipmentController extends Controller
             'name' => $equipment->name,
             'part_no' => $equipment->part_no,
             'model' => $equipment->model,
+            'model_name' => $equipment->model_name, // ยี่ห้อ
+            'model_number' => $equipment->model_number, // รุ่น
             'serial_number' => $equipment->serial_number,
             'quantity' => $equipment->quantity,
+            'description' => $equipment->description, // ✅ เพิ่ม Description
             'min_stock' => $equipment->min_stock,
             'max_stock' => $equipment->max_stock,
             'price' => $equipment->price,
@@ -445,6 +448,7 @@ class EquipmentController extends Controller
 
         return [
             'name'          => 'required|string|max:255',
+            'description'   => 'nullable|string', // ✅ เพิ่ม Description Validation
             'part_no'       => 'nullable|string|max:100',
             'model_name'    => 'nullable|string|max:100',
             'model_number'  => 'nullable|string|max:100',
@@ -951,34 +955,44 @@ class EquipmentController extends Controller
             ], 403);
         }
         
-        $equipment->load(['ratings' => function ($query) {
-            $query->with(['transaction.user'])
-                  ->whereNotNull('feedback_type')
-                  ->orderBy('rated_at', 'desc');
-        }]);
-
-        $feedbacks = $equipment->ratings->map(function ($rating) {
-            $feedbackLabels = ['good' => 'ถูกใจ', 'neutral' => 'พอใช้', 'bad' => 'แย่'];
-            $feedbackEmojis = ['good' => '👍', 'neutral' => '👌', 'bad' => '👎'];
-            
-            return [
-                'id' => $rating->id,
-                'feedback_type' => $rating->feedback_type,
-                'feedback_label' => $feedbackLabels[$rating->feedback_type] ?? $rating->feedback_type,
-                'feedback_emoji' => $feedbackEmojis[$rating->feedback_type] ?? '❓',
-                'comment' => $rating->comment,
-                'rated_at' => $rating->rated_at ? $rating->rated_at->format('d/m/Y H:i') : null,
-                'user_name' => $rating->transaction->user->fullname ?? 'ไม่ทราบชื่อ',
-            ];
+        // ✅ 1. นับสรุปทั้งหมด (รวมที่ไม่มี comment ด้วย) - เฉพาะ transaction ที่ไม่ถูกยกเลิก
+        $validRatings = fn() => $equipment->ratings()->whereHas('transaction', function($q) {
+            $q->where('status', '!=', 'cancelled');
         });
-
-        // นับสรุป
         $summary = [
-            'good' => $equipment->ratings->where('feedback_type', 'good')->count(),
-            'neutral' => $equipment->ratings->where('feedback_type', 'neutral')->count(),
-            'bad' => $equipment->ratings->where('feedback_type', 'bad')->count(),
-            'total' => $equipment->ratings->whereNotNull('feedback_type')->count(),
+            'good' => $validRatings()->where('feedback_type', 'good')->count(),
+            'neutral' => $validRatings()->where('feedback_type', 'neutral')->count(),
+            'bad' => $validRatings()->where('feedback_type', 'bad')->count(),
+            'total' => $validRatings()->whereNotNull('feedback_type')->count(),
         ];
+
+        // ✅ 2. ดึงรายการ Comment (เฉพาะที่มีข้อความ + ล่าสุด 100 รายการ) - เฉพาะ transaction ที่ไม่ถูกยกเลิก
+        // รองรับ 100+ รายการโดยการ limit และแสดงเฉพาะที่มีประโยค
+        $feedbacks = $equipment->ratings()
+            ->with(['transaction.user'])
+            ->whereHas('transaction', function($q) {
+                $q->where('status', '!=', 'cancelled');
+            })
+            ->whereNotNull('feedback_type')
+            ->whereNotNull('comment')
+            ->where('comment', '!=', '') // ไม่เอา comment ว่าง
+            ->orderBy('rated_at', 'desc')
+            ->limit(100)
+            ->get()
+            ->map(function ($rating) {
+                $feedbackLabels = ['good' => 'ถูกใจ', 'neutral' => 'พอใช้', 'bad' => 'แย่'];
+                $feedbackEmojis = ['good' => '👍', 'neutral' => '👌', 'bad' => '👎'];
+                
+                return [
+                    'id' => $rating->id,
+                    'feedback_type' => $rating->feedback_type,
+                    'feedback_label' => $feedbackLabels[$rating->feedback_type] ?? $rating->feedback_type,
+                    'feedback_emoji' => $feedbackEmojis[$rating->feedback_type] ?? '❓',
+                    'comment' => $rating->comment,
+                    'rated_at' => $rating->rated_at ? $rating->rated_at->format('d/m/Y H:i') : null,
+                    'user_name' => $rating->transaction->user->fullname ?? 'ไม่ทราบชื่อ',
+                ];
+            });
 
         return response()->json([
             'success' => true,

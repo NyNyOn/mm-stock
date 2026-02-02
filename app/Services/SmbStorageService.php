@@ -18,12 +18,12 @@ class SmbStorageService
 
     public function __construct()
     {
-        $this->host = env('NAS_HOST');
-        $this->defaultShare = trim(env('NAS_SHARE'), "'\""); // Trim quotes from .env
+        $this->host = env('NAS_HOST', '');
+        $this->defaultShare = trim(env('NAS_SHARE', ''), "'\""); // Trim quotes from .env
         $this->currentShare = $this->defaultShare; // Initially use the default share
-        $this->username = env('NAS_USERNAME');
-        $this->password = env('NAS_PASSWORD');
-        $this->domain = env('NAS_DOMAIN');
+        $this->username = env('NAS_USERNAME', '');
+        $this->password = env('NAS_PASSWORD', '');
+        $this->domain = env('NAS_DOMAIN', '');
     }
 
     /**

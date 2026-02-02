@@ -18,6 +18,7 @@ class Equipment extends Model
 
     protected $fillable = [
         'name',
+        'description',
         'part_no',
         'model',
         'model_name',
@@ -206,10 +207,15 @@ class Equipment extends Model
     public function feedbackCounts(): array
     {
         try {
+            // ✅ เฉพาะ rating จาก transaction ที่ไม่ถูกยกเลิก
+            $validRatings = $this->ratings()->whereHas('transaction', function($q) {
+                $q->where('status', '!=', 'cancelled');
+            });
+
             return [
-                'good' => $this->ratings()->where('feedback_type', 'good')->count(),
-                'neutral' => $this->ratings()->where('feedback_type', 'neutral')->count(),
-                'bad' => $this->ratings()->where('feedback_type', 'bad')->count(),
+                'good' => (clone $validRatings)->where('feedback_type', 'good')->count(),
+                'neutral' => (clone $validRatings)->where('feedback_type', 'neutral')->count(),
+                'bad' => (clone $validRatings)->where('feedback_type', 'bad')->count(),
             ];
         } catch (\Exception $e) {
             // ถ้าตารางไม่มี หรือ error อื่นๆ ให้ return 0 ทั้งหมด

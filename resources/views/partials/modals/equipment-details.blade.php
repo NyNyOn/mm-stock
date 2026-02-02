@@ -108,9 +108,11 @@
                         {{-- Tabs --}}
                         <div class="px-8 mt-5 mb-2">
                             <div class="flex p-1.5 space-x-2 bg-gray-200/60 dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
-                                <button onclick="switchDetailsTab(this, 'details-tab-main')" class="details-tab-btn flex-1 py-2 px-4 text-sm font-bold rounded-lg shadow-sm bg-white dark:bg-gray-600 text-indigo-600 dark:text-white transition-all duration-200 ring-1 ring-black/5 flex items-center justify-center gap-2" aria-current="page"><i class="fas fa-info-circle"></i> ข้อมูลทั่วไป</button>
-                                <button onclick="switchDetailsTab(this, 'details-tab-history')" class="details-tab-btn flex-1 py-2 px-4 text-sm font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 transition-all duration-200 flex items-center justify-center gap-2"><i class="fas fa-history"></i> ประวัติ</button>
-                                <button id="details-msds-tab" onclick="switchDetailsTab(this, 'details-tab-msds')" class="details-tab-btn hidden flex-1 py-2 px-4 text-sm font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 transition-all duration-200 flex items-center justify-center gap-2"><i class="fas fa-shield-alt"></i> MSDS</button>
+                                <button onclick="switchDetailsTab(this, 'details-tab-main')" class="details-tab-btn flex-1 w-full py-2 px-4 text-sm font-bold rounded-lg shadow-sm bg-white dark:bg-gray-600 text-indigo-600 dark:text-white transition-all duration-200 ring-1 ring-black/5 flex items-center justify-center gap-2" aria-current="page"><i class="fas fa-info-circle"></i> ข้อมูลทั่วไป</button>
+                                {{-- ✅ Description Tab --}}
+                                <button id="details-tab-btn-description" onclick="switchDetailsTab(this, 'details-tab-description')" class="details-tab-btn flex-1 w-full py-2 px-4 text-sm font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 transition-all duration-200 flex items-center justify-center gap-2 hidden"><i class="fas fa-file-alt"></i> รายละเอียด</button>
+                                <button onclick="switchDetailsTab(this, 'details-tab-history')" class="details-tab-btn flex-1 w-full py-2 px-4 text-sm font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 transition-all duration-200 flex items-center justify-center gap-2"><i class="fas fa-history"></i> ประวัติ</button>
+                                <button id="details-msds-tab" onclick="switchDetailsTab(this, 'details-tab-msds')" class="details-tab-btn hidden flex-1 w-full py-2 px-4 text-sm font-medium rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 transition-all duration-200 flex items-center justify-center gap-2"><i class="fas fa-shield-alt"></i> MSDS</button>
                             </div>
                         </div>
 
@@ -132,17 +134,13 @@
                                             <div class="mt-0.5 text-orange-500 bg-orange-50 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-map-marker-alt text-xs"></i></div>
                                             <div><p class="text-[10px] text-gray-400 uppercase font-bold">สถานที่จัดเก็บ</p><p id="details-location" class="text-sm font-bold text-gray-700 dark:text-gray-200">...</p></div>
                                         </div>
-                                        <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-start gap-3 col-span-2 sm:col-span-1">
-                                            <div class="mt-0.5 text-cyan-500 bg-cyan-50 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-truck text-xs"></i></div>
-                                            <div class="overflow-hidden"><p class="text-[10px] text-gray-400 uppercase font-bold">Supplier</p><p id="details-supplier" class="text-sm font-bold text-gray-700 dark:text-gray-200 truncate">...</p></div>
+                                        <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-start gap-3">
+                                            <div class="mt-0.5 text-blue-500 bg-blue-50 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-tag text-xs"></i></div>
+                                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">ยี่ห้อ (Brand)</p><p id="details-brand" class="text-sm font-bold text-gray-700 dark:text-gray-200">...</p></div>
                                         </div>
                                         <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-start gap-3">
                                             <div class="mt-0.5 text-gray-500 bg-gray-100 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-cogs text-xs"></i></div>
-                                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Model</p><p id="details-model" class="text-sm font-bold text-gray-700 dark:text-gray-200">...</p></div>
-                                        </div>
-                                        <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-start gap-3">
-                                            <div class="mt-0.5 text-gray-500 bg-gray-100 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-barcode text-xs"></i></div>
-                                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">Part No.</p><p id="details-part-no" class="text-sm font-bold text-gray-700 dark:text-gray-200 font-mono">...</p></div>
+                                            <div><p class="text-[10px] text-gray-400 uppercase font-bold">รุ่น (Model)</p><p id="details-model" class="text-sm font-bold text-gray-700 dark:text-gray-200">...</p></div>
                                         </div>
                                     </div>
                                 </div>
@@ -170,6 +168,19 @@
                                     </div>
                                 </div>
                             </div>
+                            
+                            {{-- ✅ Description Tab Content --}}
+                            <div id="details-tab-description" class="details-tab-panel hidden animate-fade-in">
+                                <h4 class="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center mb-4">
+                                    <span class="w-8 h-8 rounded-lg bg-yellow-100 text-yellow-600 flex items-center justify-center mr-3 shadow-sm">
+                                        <i class="fas fa-file-alt"></i>
+                                    </span> รายละเอียดอุปกรณ์
+                                </h4>
+                                <div class="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-700 min-h-[100px] flex items-center justify-center">
+                                    <p id="details-description-text" class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap text-center">- ไม่มีรายละเอียด -</p>
+                                </div>
+                            </div>
+
                             <div id="details-tab-history" class="details-tab-panel hidden animate-fade-in">
                                 <h4 class="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4">รายการเคลื่อนไหวล่าสุด</h4>
                                 <div id="details-transactions" class="space-y-3"></div>
@@ -179,7 +190,7 @@
                                     <i class="fas fa-exclamation-triangle absolute -top-4 -right-4 text-9xl text-amber-100/50 rotate-12 pointer-events-none"></i>
                                     <h4 class="flex items-center text-amber-800 font-bold mb-4 text-lg relative z-10"><span class="bg-amber-200 text-amber-700 w-8 h-8 rounded-full flex items-center justify-center mr-3 shadow-sm"><i class="fas fa-file-medical-alt"></i></span> ข้อมูลความปลอดภัย (Safety Data)</h4>
                                     <div class="bg-white/80 p-4 rounded-xl border border-amber-100/50 text-sm text-gray-700 leading-relaxed mb-6 shadow-sm min-h-[100px] relative z-10 backdrop-blur-sm"><p id="details-msds-details" class="whitespace-pre-wrap">...</p></div>
-                                    <div class="text-center relative z-10"><a href="#" id="details-msds-file" target="_blank" class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 group"><i class="fas fa-file-pdf mr-2 group-hover:animate-bounce"></i> ดาวน์โหลดเอกสาร MSDS</a></div>
+                                    <div class="text-center relative z-10"><button type="button" id="details-msds-file" onclick="handleMsdsClick()" class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 group"><i class="fas fa-file-pdf mr-2 group-hover:animate-bounce"></i> ดาวน์โหลดเอกสาร MSDS</button></div>
                                 </div>
                             </div>
                         </div>

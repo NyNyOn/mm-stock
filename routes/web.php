@@ -239,7 +239,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/purchase-orders/scheduled/submit', [PurchaseOrderController::class, 'submitScheduled'])->name('purchase-orders.submitScheduled');
         Route::post('/purchase-orders/urgent/add-item/{equipment}', [PurchaseOrderController::class, 'addItemToUrgent'])->name('purchase-orders.addItemToUrgent');
         Route::post('/purchase-orders/scheduled/add-item/{equipment}', [PurchaseOrderController::class, 'addItemToScheduled'])->name('purchase-orders.addItemToScheduled');
-        // ✅ Resubmit Rejected PO
+        
+        // ✅ NEW: Auto-create PO routes for Quick Add
+        Route::post('/purchase-orders/create-scheduled', [PurchaseOrderController::class, 'createScheduledPO'])->name('purchase-orders.createScheduled');
+        Route::post('/purchase-orders/create-urgent', [PurchaseOrderController::class, 'createUrgentPO'])->name('purchase-orders.createUrgent');
+
         Route::post('/purchase-orders/{purchaseOrder}/resubmit', [PurchaseOrderController::class, 'resubmit'])->name('purchase-orders.resubmit');
         // ✅ Retry Send to PU Hub
         Route::post('/purchase-orders/{purchaseOrder}/retry-send', [PurchaseOrderController::class, 'retrySendApi'])->name('purchase-orders.retry-send');
@@ -290,5 +294,13 @@ Route::middleware('auth')->group(function () {
 
     // Generic handlers
     Route::post('/ajax-handler', [AjaxController::class, 'handleRequest'])->name('ajax.handler');
+    
+    // Equipment search for PO (autocomplete)
+Route::get('/api/categories', function() {
+    return \App\Models\Category::select('id', 'name')->orderBy('name')->get();
+});
+
+// ✅ Ajax Search for PO
+Route::post('/ajax/search-equipment-po', [AjaxController::class, 'searchEquipmentForPO'])->name('ajax.searchEquipmentPO');
 
 });

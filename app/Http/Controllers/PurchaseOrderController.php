@@ -23,9 +23,83 @@ class PurchaseOrderController extends Controller
 {
     use AuthorizesRequests;
 
-    /**
-     * Display a listing of the resource.
-     */
+
+     // =============================================
+    // ✅ Auto-Create PO Logic (Scheduled & Urgent)
+    // =============================================
+
+    public function createScheduledPO(Request $request)
+    {
+        $this->authorize('po:create');
+        
+        try {
+            // Check for existing pending scheduled PO
+            $existingPO = PurchaseOrder::where('type', 'scheduled')
+                ->where('status', 'pending')
+                ->latest()
+                ->first();
+                
+            if ($existingPO) {
+                return response()->json([
+                    'success' => true,
+                    'po_id' => $existingPO->id,
+                    'message' => 'Using existing scheduled PO'
+                ]);
+            }
+            
+            // Create new Scheduled PO
+            $poNumber = 'PO-SCH-' . date('Ymd') . '-' . strtoupper(uniqid());
+            
+            $po = PurchaseOrder::create([
+                'po_number' => $poNumber,
+                'type' => 'scheduled',
+                'status' => 'pending',
+                'ordered_by_user_id' => auth()->id() ?? 1, // Default or current user
+                'ordered_at' => now(),
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'po_id' => $po->id,
+                'message' => 'Created new scheduled PO'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Create Scheduled PO failed: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function createUrgentPO(Request $request)
+    {
+        $this->authorize('po:create');
+        
+        try {
+            // Urgent POs are always new (or you can logic to group them if needed)
+            // Here we assume create new one for specific urgent request
+            $poNumber = 'PO-URG-' . date('Ymd') . '-' . strtoupper(uniqid());
+            
+            $po = PurchaseOrder::create([
+                'po_number' => $poNumber,
+                'type' => 'urgent',
+                'status' => 'pending',
+                'ordered_by_user_id' => auth()->id() ?? 1,
+                'ordered_at' => now(),
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'po_id' => $po->id,
+                'message' => 'Created new urgent PO'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Create Urgent PO failed: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    // Display a listing of the resource.
     public function index()
     {
         $this->authorize('po:view');
@@ -644,9 +718,19 @@ class PurchaseOrderController extends Controller
                     'status' => 'pending',
                 ]);
             }
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'เพิ่ม "' . $equipment->name . '" ในใบสั่งซื้อด่วนสำเร็จ',
+                    'po_id' => $urgentPo->id
+                ]);
+            }
             return back()->with('success', 'เพิ่ม "' . $equipment->name . '" ในใบสั่งซื้อด่วนสำเร็จ');
         } catch (\Exception $e) {
             Log::error("Error adding item to urgent PO: " . $e->getMessage());
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
+            }
             return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
     }
@@ -675,9 +759,19 @@ class PurchaseOrderController extends Controller
                     'status' => 'pending',
                 ]);
             }
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'เพิ่ม "' . $equipment->name . '" จำนวน ' . $quantityToAdd . ' ชิ้น ในใบสั่งซื้อตามรอบสำเร็จ',
+                    'po_id' => $scheduledPo->id
+                ]);
+            }
             return back()->with('success', 'เพิ่ม "' . $equipment->name . '" จำนวน ' . $quantityToAdd . ' ชิ้น ในใบสั่งซื้อตามรอบสำเร็จ');
         } catch (\Exception $e) {
             Log::error("Error adding item to scheduled PO: " . $e->getMessage());
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()], 500);
+            }
             return back()->with('error', 'เกิดข้อผิดพลาด: ' . $e->getMessage());
         }
     }
