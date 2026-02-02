@@ -1145,6 +1145,13 @@ class PurchaseOrderController extends Controller
         // 5. อัปเดตสถานะ Item
         $item->status = 'ordered';
         $item->save();
+
+        // ✅ NEW: Update PO Status if it was Rejected (To remove from Rejected List)
+        if (in_array($order->status, ['rejected', 'cancelled'])) {
+            $order->status = 'ordered';
+            $order->ordered_at = now();
+            $order->save();
+        }
         
         // 6. อัปเดต PO pu_data
         $puData = $order->pu_data ?? [];
