@@ -167,6 +167,21 @@ class MaintenanceController extends Controller
         }
 
         try {
+            // ✅ 1. Save maintenance schedule to settings
+            \App\Models\Setting::updateOrCreate(
+                ['key' => 'maintenance_start'],
+                ['value' => $request->input('maintenance_start', now()->format('Y-m-d H:i:s'))]
+            );
+            \App\Models\Setting::updateOrCreate(
+                ['key' => 'maintenance_end'],
+                ['value' => $request->input('maintenance_end', now()->addHours(2)->format('Y-m-d H:i:s'))]
+            );
+            \App\Models\Setting::updateOrCreate(
+                ['key' => 'maintenance_message'],
+                ['value' => $request->input('maintenance_message', '')]
+            );
+
+            // ✅ 2. Enable maintenance mode
             Artisan::call('down', [
                 '--secret' => $secret,
             ]);

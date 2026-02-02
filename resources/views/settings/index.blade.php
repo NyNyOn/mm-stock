@@ -122,6 +122,51 @@
                     {{-- 1.1 เพิ่ม Input ลับสำหรับเก็บ Secret Key --}}
                     <input type="hidden" name="secret" id="maintenance-secret-input">
                     
+                    {{-- ✅ Maintenance Schedule Fields --}}
+                    <div class="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                        <h4 class="text-sm font-bold text-gray-700 mb-3">
+                            <i class="fas fa-calendar-alt mr-2 text-blue-500"></i>กำหนดการปิดปรับปรุง
+                        </h4>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            {{-- Start DateTime --}}
+                            <div>
+                                <label for="maintenance_start" class="block text-xs font-medium text-gray-600 mb-1">
+                                    <i class="fas fa-play-circle mr-1 text-red-400"></i>เริ่มปิดระบบ
+                                </label>
+                                <input type="datetime-local" 
+                                       id="maintenance_start" 
+                                       name="maintenance_start"
+                                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                                       value="{{ now()->format('Y-m-d\TH:i') }}">
+                            </div>
+                            
+                            {{-- End DateTime --}}
+                            <div>
+                                <label for="maintenance_end" class="block text-xs font-medium text-gray-600 mb-1">
+                                    <i class="fas fa-check-circle mr-1 text-green-400"></i>คาดว่าจะเปิด
+                                </label>
+                                <input type="datetime-local" 
+                                       id="maintenance_end" 
+                                       name="maintenance_end"
+                                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                                       value="{{ now()->addHours(2)->format('Y-m-d\TH:i') }}">
+                            </div>
+                        </div>
+                        
+                        {{-- Maintenance Message --}}
+                        <div>
+                            <label for="maintenance_message" class="block text-xs font-medium text-gray-600 mb-1">
+                                <i class="fas fa-comment-alt mr-1 text-yellow-500"></i>ข้อความประกาศ (ไม่บังคับ)
+                            </label>
+                            <textarea id="maintenance_message" 
+                                      name="maintenance_message"
+                                      rows="2"
+                                      class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                                      placeholder="เช่น ปรับปรุงระบบครั้งใหญ่ เพิ่มฟีเจอร์ใหม่..."></textarea>
+                        </div>
+                    </div>
+                    
                     {{-- 1.2 ปุ่มนี้จะไปเรียก JavaScript ก่อน --}}
                     <button type="button"
                             id="enable-maintenance-button"
@@ -204,19 +249,43 @@
                             throw new Error('ไม่ได้รับ Secret Key');
                         }
 
-                        // ขั้นตอนที่ 2: แสดง Popup พร้อม Key ที่ได้รับ
+                        // ขั้นตอนที่ 2: แสดง Popup พร้อม Key และกำหนดการ
+                        const startTime = document.getElementById('maintenance_start').value;
+                        const endTime = document.getElementById('maintenance_end').value;
+                        const message = document.getElementById('maintenance_message').value;
+                        
+                        // Format dates for display
+                        const startDisplay = startTime ? new Date(startTime).toLocaleString('th-TH') : 'ไม่ระบุ';
+                        const endDisplay = endTime ? new Date(endTime).toLocaleString('th-TH') : 'ไม่ระบุ';
+                        
                         Swal.fire({
-                            title: 'ขั้นตอนที่ 1: รับ Secret Key',
-                            icon: 'info',
+                            title: '🛠️ ยืนยันปิดปรับปรุงระบบ',
+                            icon: 'warning',
                             html: `
-                                <p class="text-left">เราได้สร้าง Secret Key สำหรับคุณแล้ว กรุณาคัดลอกและเก็บไว้ในที่ปลอดภัย <b>ก่อนกดยืนยัน</b></p>
-                                <input type="text" value="${newSecret}" class="w-full p-2 mt-2 font-mono text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md" readonly>
-                                <p class="mt-4 text-left text-red-600 font-bold">เมื่อคุณกดยืนยัน เว็บไซต์จะเข้าสู่โหมดปิดปรับปรุงทันที!</p>
+                                <div class="text-left space-y-3">
+                                    <div class="bg-gray-50 p-3 rounded-lg border">
+                                        <p class="text-sm text-gray-600 mb-1"><i class="fas fa-play-circle text-red-500 mr-1"></i> เริ่มปิดระบบ:</p>
+                                        <p class="font-bold text-gray-800">${startDisplay}</p>
+                                    </div>
+                                    <div class="bg-gray-50 p-3 rounded-lg border">
+                                        <p class="text-sm text-gray-600 mb-1"><i class="fas fa-check-circle text-green-500 mr-1"></i> คาดว่าจะเปิด:</p>
+                                        <p class="font-bold text-gray-800">${endDisplay}</p>
+                                    </div>
+                                    ${message ? `<div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                                        <p class="text-sm text-gray-600 mb-1"><i class="fas fa-comment-alt text-yellow-500 mr-1"></i> ข้อความ:</p>
+                                        <p class="text-gray-800">${message}</p>
+                                    </div>` : ''}
+                                    <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                        <p class="text-sm text-gray-600 mb-1"><i class="fas fa-key text-blue-500 mr-1"></i> Secret Key (คัดลอกเก็บไว้):</p>
+                                        <input type="text" value="${newSecret}" class="w-full p-2 font-mono text-xs text-gray-700 bg-white border rounded" readonly onclick="this.select()">
+                                    </div>
+                                    <p class="text-red-600 font-bold text-sm mt-3"><i class="fas fa-exclamation-triangle mr-1"></i> เมื่อกดยืนยัน ผู้ใช้จะไม่สามารถเข้าระบบได้ทันที!</p>
+                                </div>
                             `,
                             showCancelButton: true,
                             confirmButtonColor: '#d33',
                             cancelButtonColor: '#6c757d',
-                            confirmButtonText: 'ขั้นตอนที่ 2: ยืนยันและเปิดโหมด',
+                            confirmButtonText: '<i class="fas fa-power-off mr-1"></i> ยืนยัน ปิดระบบ',
                             cancelButtonText: 'ยกเลิก'
                         }).then((result) => {
                             if (result.isConfirmed) {
