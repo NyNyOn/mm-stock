@@ -305,7 +305,8 @@
                     
                     <div class="form-group clear-both">
                         <label for="description-{{ $uniqueSuffix }}" class="form-label mb-1.5">รายละเอียดอุปกรณ์</label>
-                        <textarea id="description-{{ $uniqueSuffix }}" name="description" rows="3" class="input-form" placeholder="ระบุรายละเอียดเพิ่มเติมเกี่ยวกับอุปกรณ์...">{{ old('description', $equipment->description ?? '') }}</textarea>
+                        <textarea id="description-{{ $uniqueSuffix }}" name="description" rows="3" class="input-form" placeholder="ตัวอย่าง
+เช่น ขนาด สี กลิ่น รสชาติ จำนวนต่อแพ็ค คุณลักษณะต่างๆ">{{ old('description', $equipment->description ?? '') }}</textarea>
                         <div class="invalid-feedback"></div>
                     </div>
                 </fieldset>
